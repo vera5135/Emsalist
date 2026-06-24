@@ -1,0 +1,14 @@
+
+.env
+backend/.env
+*.pyc
+__pycache__/
+.venv/
+
+
+.env
+backend/.env
+*.pyc
+__pycache__/
+.venv/
+

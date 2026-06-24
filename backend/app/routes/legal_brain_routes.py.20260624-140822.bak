@@ -1,0 +1,110 @@
+"""Legal Brain endpoints."""
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
+from app.models.legal_brain_models import (
+    BookIngestRequest,
+    BookIngestResponse,
+    BookUploadResponse,
+    DoctrineCardRequest,
+    DoctrineCardResponse,
+    LegalBrainChunksDebugResponse,
+    LegalBrainDocumentsResponse,
+    LegalBrainRetrieveForCaseRequest,
+    LegalBrainRetrieveForCaseResponse,
+    LegalBrainSearchRequest,
+    LegalBrainSearchResponse,
+    LegalBrainStatuteArticleResponse,
+)
+from app.services.legal_brain_service import legal_brain_service
+
+
+router = APIRouter(prefix="/legal-brain", tags=["Legal Brain"])
+
+
+@router.get("/documents", response_model=LegalBrainDocumentsResponse)
+def list_documents() -> LegalBrainDocumentsResponse:
+    return legal_brain_service.list_documents()
+
+
+@router.get("/books/{book_id}/chunks", response_model=LegalBrainChunksDebugResponse)
+def debug_book_chunks(book_id: str) -> LegalBrainChunksDebugResponse:
+    try:
+        return legal_brain_service.debug_book_chunks(book_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/statutes/{code}/articles/{article}", response_model=LegalBrainStatuteArticleResponse)
+def debug_statute_article(code: str, article: str) -> LegalBrainStatuteArticleResponse:
+    try:
+        return legal_brain_service.get_statute_article(code=code, article=article)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/books/upload", response_model=BookUploadResponse)
+async def upload_book(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    author: str = Form(""),
+    publisher: str = Form(""),
+    edition: str = Form(""),
+    publication_year: str = Form(""),
+    practice_area: str = Form(""),
+    topics: str = Form(""),
+    license_status: str = Form("user_confirmed"),
+    allowed_use: str = Form("internal_petition_support"),
+) -> BookUploadResponse:
+    try:
+        return await legal_brain_service.upload_book(
+            file=file,
+            title=title,
+            author=author,
+            publisher=publisher,
+            edition=edition,
+            publication_year=publication_year,
+            practice_area=practice_area,
+            topics=topics,
+            license_status=license_status,
+            allowed_use=allowed_use,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/books/ingest", response_model=BookIngestResponse)
+def ingest_book(request: BookIngestRequest) -> BookIngestResponse:
+    try:
+        return legal_brain_service.ingest_book(request.book_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/books/create-doctrine-cards", response_model=DoctrineCardResponse)
+def create_doctrine_cards(request: DoctrineCardRequest) -> DoctrineCardResponse:
+    try:
+        return legal_brain_service.create_doctrine_cards(
+            book_id=request.book_id,
+            practice_area=request.practice_area,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/search", response_model=LegalBrainSearchResponse)
+def search_legal_brain(request: LegalBrainSearchRequest) -> LegalBrainSearchResponse:
+    return legal_brain_service.search(
+        query=request.query,
+        practice_area=request.practice_area,
+        max_results=request.max_results,
+    )
+
+
+@router.post("/retrieve-for-case", response_model=LegalBrainRetrieveForCaseResponse)
+def retrieve_for_case(request: LegalBrainRetrieveForCaseRequest) -> LegalBrainRetrieveForCaseResponse:
+    return legal_brain_service.retrieve_for_case(
+        case_text=request.case_text,
+        practice_area=request.practice_area,
+        max_sources=request.max_sources,
+    )

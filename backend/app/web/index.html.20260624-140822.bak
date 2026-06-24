@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Emsalist Arama</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Emsalist ana sayfa">
+        <span class="brand-mark" aria-hidden="true">E</span>
+        <span>
+          <strong>Emsalist</strong>
+          <small>Legal Brain</small>
+        </span>
+      </a>
+      <nav class="top-actions" aria-label="Bağlantılar">
+        <span id="healthPill" class="status-pill">Bağlanıyor</span>
+        <a href="/docs" data-api-link="/docs">API Docs</a>
+        <a href="/legal-brain/documents" data-api-link="/legal-brain/documents">Kaynaklar</a>
+      </nav>
+    </header>
+
+    <main class="app-shell">
+      <section class="search-band" aria-label="Hukuki arama">
+        <div class="search-box">
+          <label for="caseText">Olay veya hukuki konu</label>
+          <textarea
+            id="caseText"
+            rows="7"
+            placeholder="Örneğin: Kiralanan konuta müvekkilin evlenen oğlu için gerçek ve zorunlu ihtiyaç doğdu; kiracı tahliyeyi kabul etmiyor."
+          ></textarea>
+          <div class="search-controls">
+            <label>
+              Alan
+              <select id="practiceArea">
+                <option value="">Otomatik</option>
+                <option value="Aile hukuku">Aile hukuku</option>
+                <option value="Kira hukuku">Kira hukuku</option>
+                <option value="İcra hukuku">İcra hukuku</option>
+                <option value="İş hukuku">İş hukuku</option>
+                <option value="Ceza hukuku">Ceza hukuku</option>
+                <option value="Ticaret hukuku">Ticaret hukuku</option>
+                <option value="Borçlar hukuku">Borçlar hukuku</option>
+              </select>
+            </label>
+            <label>
+              Sonuç
+              <input id="maxResults" type="number" min="1" max="20" value="5" />
+            </label>
+            <button id="sampleBtn" class="ghost-btn" type="button">Örnek</button>
+          </div>
+        </div>
+
+        <aside class="quick-panel" aria-label="Dilekçe soruları">
+          <div class="panel-title">
+            <span>Dilekçe soruları</span>
+            <div class="panel-actions">
+              <button id="questionsBtn" class="ghost-btn small-btn" type="button">Sorular</button>
+              <button id="clearBtn" class="icon-btn" type="button" title="Temizle" aria-label="Temizle">×</button>
+            </div>
+          </div>
+          <label>
+            Talep
+            <input id="requestType" value="Talebimizin kabulü" />
+          </label>
+          <div id="strategyOutput" class="strategy-output"></div>
+          <div id="questionFields" class="question-fields">
+            <div class="question-empty">Sorular henüz hazırlanmadı.</div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="toolbar" aria-label="İşlemler">
+        <button id="analyzeBtn" type="button"><span aria-hidden="true">⌕</span> Analiz</button>
+        <button id="brainBtn" type="button"><span aria-hidden="true">§</span> Legal Brain</button>
+        <button id="yargitayBtn" type="button"><span aria-hidden="true">Y</span> Yargıtay</button>
+        <button id="draftBtn" class="primary-btn" type="button"><span aria-hidden="true">D</span> Dilekçe</button>
+      </section>
+
+      <section id="statusLine" class="status-line" aria-live="polite"></section>
+
+      <section class="results-grid" aria-label="Sonuçlar">
+        <article class="result-column">
+          <div class="section-head">
+            <h2>Analiz</h2>
+            <span id="analysisCount">0</span>
+          </div>
+          <div id="analysisOutput" class="empty-state">Henüz analiz yok.</div>
+        </article>
+
+        <article class="result-column">
+          <div class="section-head">
+            <h2>Legal Brain</h2>
+            <span id="brainCount">0</span>
+          </div>
+          <div id="brainOutput" class="empty-state">Henüz kaynak sonucu yok.</div>
+        </article>
+
+        <article class="result-column wide-column">
+          <div class="section-head">
+            <h2>Yargıtay</h2>
+            <span id="decisionCount">0</span>
+          </div>
+          <div id="decisionOutput" class="empty-state">Henüz karar sonucu yok.</div>
+        </article>
+      </section>
+
+      <section class="draft-panel" aria-label="Dilekçe taslağı">
+        <div class="section-head">
+          <h2>Dilekçe Taslağı</h2>
+          <div class="draft-actions">
+            <button id="copyDraftBtn" class="ghost-btn" type="button">Kopyala</button>
+            <button id="downloadDraftBtn" class="ghost-btn" type="button">TXT</button>
+          </div>
+        </div>
+        <pre id="draftOutput">Henüz dilekçe taslağı yok.</pre>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,150 @@
+"""Audit Yargıtay precedents for duplication, alignment and petition-safe wording."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from app.models.ai_models import AuditedPrecedent, PrecedentAuditResponse
+from app.services.ai_output_validator import ai_output_validator
+from app.services.gemini_client import gemini_client
+
+
+class PrecedentQualityAgent:
+    def audit(
+        self,
+        *,
+        case_text: str,
+        case_enrichment: dict[str, Any],
+        precedents: list[dict[str, Any]],
+        use_gemini: bool = True,
+    ) -> PrecedentAuditResponse:
+        fallback = self._fallback(precedents=precedents)
+        gemini_result = gemini_client.generate_json(
+            system_instruction=(
+                "Sen Yargıtay kararlarını somut uyuşmazlığa göre lehe/aleyhe/riskli/nötr olarak ayıran hukuk ajanısın. "
+                "Aynı kararı tekilleştir. Riskli kararı talebi destekler gibi yazma. Sadece JSON döndür."
+            ),
+            prompt=(
+                "Aşağıdaki kararları denetle ve audited_precedents üret. "
+                "Her karar decision_id, is_duplicate, alignment, use_in_petition, similarity_reason, risk_reason, petition_usage_paragraph içersin.\n"
+                f"Olay: {case_text}\n"
+                f"Zenginleştirme: {json.dumps(case_enrichment, ensure_ascii=False)}\n"
+                f"Kararlar: {json.dumps(precedents[:20], ensure_ascii=False)}"
+            ),
+            fallback=fallback.model_dump(),
+            use_gemini=use_gemini,
+        )
+        if not gemini_result.ai_used:
+            fallback.warnings.extend(gemini_result.warnings)
+            return fallback
+
+        audited: list[AuditedPrecedent] = []
+        for item in gemini_result.data.get("audited_precedents") or []:
+            if not isinstance(item, dict):
+                continue
+            paragraph = self._clean_paragraph(str(item.get("petition_usage_paragraph") or ""))
+            alignment = str(item.get("alignment") or "nötr").casefold()
+            if alignment not in {"lehe", "aleyhe", "riskli", "nötr"}:
+                alignment = "nötr"
+            audited.append(
+                AuditedPrecedent(
+                    decision_id=str(item.get("decision_id") or ""),
+                    is_duplicate=bool(item.get("is_duplicate")),
+                    alignment=alignment,  # type: ignore[arg-type]
+                    use_in_petition=bool(item.get("use_in_petition")),
+                    similarity_reason=" ".join(str(item.get("similarity_reason") or "").split()),
+                    risk_reason=" ".join(str(item.get("risk_reason") or "").split()),
+                    petition_usage_paragraph=paragraph,
+                )
+            )
+        if not audited:
+            fallback.warnings.append("Gemini emsal denetimi boş döndü; fallback kullanıldı.")
+            return fallback
+        return self._hard_dedupe(PrecedentAuditResponse(ai_used=True, audited_precedents=audited, warnings=gemini_result.warnings))
+
+    def _fallback(self, *, precedents: list[dict[str, Any]]) -> PrecedentAuditResponse:
+        audited: list[AuditedPrecedent] = []
+        seen: set[str] = set()
+        for index, decision in enumerate(precedents):
+            identity = ai_output_validator.decision_identity(decision)
+            key = ai_output_validator.plain(identity)
+            duplicate = key in seen
+            seen.add(key)
+            paragraph = str(
+                decision.get("petition_usage_paragraph")
+                or decision.get("petition_paragraph")
+                or decision.get("legal_principle")
+                or decision.get("short_summary")
+                or ""
+            )
+            plain = ai_output_validator.plain(" ".join([paragraph, str(decision.get("lehe_aleyhe") or ""), str(decision.get("usefulness_score") or "")]))
+            alignment = "nötr"
+            use_in_petition = not duplicate
+            risk_reason = ""
+            if any(marker in plain for marker in ("aleyhe", "riskli", "usulden", "suresinde yapilmadigi", "reddine")):
+                alignment = "riskli"
+                risk_reason = "Karar davalı savunması veya usuli risk bakımından sınırlı kullanılmalıdır."
+                use_in_petition = False
+            elif any(marker in plain for marker in ("lehe", "kabulune", "bozulmasina", "bedel indirimi", "gizli ayip")):
+                alignment = "lehe"
+            audited.append(
+                AuditedPrecedent(
+                    decision_id=identity or f"decision_{index + 1}",
+                    is_duplicate=duplicate,
+                    alignment=alignment,  # type: ignore[arg-type]
+                    use_in_petition=use_in_petition,
+                    similarity_reason="Karar kimliği, olay kavramları ve dilekçe kullanımı yönünden denetlendi.",
+                    risk_reason=risk_reason,
+                    petition_usage_paragraph=self._petition_usage(identity=identity, paragraph=paragraph, alignment=alignment),
+                )
+            )
+        return PrecedentAuditResponse(ai_used=False, audited_precedents=audited, warnings=[])
+
+    def _hard_dedupe(self, response: PrecedentAuditResponse) -> PrecedentAuditResponse:
+        seen: set[str] = set()
+        audited: list[AuditedPrecedent] = []
+        for item in response.audited_precedents:
+            key = ai_output_validator.plain(item.decision_id)
+            if key in seen:
+                item.is_duplicate = True
+                item.use_in_petition = False
+            seen.add(key)
+            item.petition_usage_paragraph = self._clean_paragraph(item.petition_usage_paragraph)
+            if item.alignment in {"riskli", "aleyhe"} and "destek" in ai_output_validator.plain(item.petition_usage_paragraph):
+                item.petition_usage_paragraph = (
+                    "Bu karar doğrudan lehe emsal gibi sunulmamalı; karşı tarafın muhtemel savunmasını ve somut olayın ayrılan yönlerini "
+                    "açıklamak için sınırlı kullanılmalıdır."
+                )
+            audited.append(item)
+        response.audited_precedents = audited
+        return response
+
+    @staticmethod
+    def _petition_usage(*, identity: str, paragraph: str, alignment: str) -> str:
+        paragraph = PrecedentQualityAgent._clean_paragraph(paragraph)
+        if alignment in {"riskli", "aleyhe"}:
+            return (
+                f"{identity} sayılı karar doğrudan lehe emsal gibi sunulmamalı; davalı tarafın ileri sürebileceği savunma ve "
+                "somut olayın ayrılan yönleri bakımından sınırlı değerlendirilmelidir."
+            )
+        return (
+            f"{identity} sayılı karar, somut olayla benzer maddi ve hukuki yönleri karar kimliğiyle birlikte gösterilerek "
+            "destekleyici emsal olarak kullanılabilir. {paragraph}"
+        ).strip()
+
+    @staticmethod
+    def _clean_paragraph(paragraph: str) -> str:
+        cleaned = " ".join(str(paragraph or "").split())
+        replacements = {
+            "içtihat sinyalleri": "içtihat değerlendirmesi",
+            "içtihat sinyali": "içtihat değerlendirmesi",
+            "alıcının, aracın, araç": "alıcının ve aracın somut durumu",
+            "aracın, araç, araçtaki": "aracın ve araçtaki ayıbın",
+        }
+        for old, new in replacements.items():
+            cleaned = cleaned.replace(old, new)
+        return cleaned
+
+
+precedent_quality_agent = PrecedentQualityAgent()

@@ -1,0 +1,17 @@
+fastapi>=0.115,<1.0
+pydantic>=2.9,<3.0
+uvicorn[standard]>=0.30,<1.0
+playwright>=1.49,<2.0
+beautifulsoup4>=4.12,<5.0
+lxml>=5.0,<7.0
+pymupdf>=1.24,<2.0
+pdfplumber>=0.11,<1.0
+pypdf>=5.0,<7.0
+python-multipart>=0.0.9,<1.0
+
+# Optional Legal Brain acceleration packages:
+# chromadb>=0.5,<1.0
+# sentence-transformers>=3.0,<6.0
+#
+# They are intentionally not required for local startup. On Python 3.14,
+# chromadb may try to compile chroma-hnswlib and require Microsoft C++ Build Tools.

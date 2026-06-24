@@ -1,0 +1,389 @@
+"""Petition profiles used for strategy questions and draft structure."""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class PetitionProfile:
+    key: str
+    petition_type: str
+    draft_title: str
+    court_heading: str
+    practice_area: str
+    legal_basis: tuple[str, ...]
+    questions: tuple[str, ...]
+    skeleton: tuple[str, ...]
+    evidence: tuple[str, ...]
+    checklist: tuple[str, ...]
+    risk_notes: tuple[str, ...]
+    legal_assessment: str
+    triggers: tuple[str, ...]
+
+
+PROFILES: tuple[PetitionProfile, ...] = (
+    PetitionProfile(
+        key="eviction_need",
+        petition_type="İhtiyaç nedeniyle kiralananın tahliyesi davası",
+        draft_title="İHTİYAÇ NEDENİYLE KİRALANANIN TAHLİYESİ TALEPLİ DAVA DİLEKÇESİ",
+        court_heading="NÖBETÇİ SULH HUKUK MAHKEMESİ'NE",
+        practice_area="Kira hukuku",
+        legal_basis=("TBK 350", "TBK 351", "HMK", "Dürüstlük kuralı"),
+        questions=(
+            "Kiralananın açık adresi ve kira sözleşmesinin başlangıç tarihi nedir?",
+            "Konut veya işyeri ihtiyacı kimin için doğmuştur?",
+            "İhtiyacın gerçek, samimi ve zorunlu olduğunu gösteren somut olgular nelerdir?",
+            "Müvekkilin veya ihtiyaç sahibinin aynı bölgede kullanabileceği başka uygun taşınmazı var mı?",
+            "Kiracıya yazılı bildirim veya ihtar gönderildi mi; gönderildiyse tarihi nedir?",
+            "Sözleşme dönemi ve dava açma süresi bakımından kritik tarih nedir?",
+            "İhtiyacı destekleyen belgeler, tanıklar veya resmi kayıtlar nelerdir?",
+        ),
+        skeleton=(
+            "Görevli ve yetkili mahkeme",
+            "Taraflar",
+            "Konu",
+            "Kira ilişkisi ve taşınmaz bilgisi",
+            "İhtiyacın gerçek, samimi ve zorunlu niteliği",
+            "Süre, bildirim ve dava şartı değerlendirmesi",
+            "Emsal kararlar",
+            "Deliller",
+            "Sonuç ve istem",
+        ),
+        evidence=(
+            "kira sözleşmesi",
+            "tapu kaydı",
+            "ihtarname ve tebliğ şerhi",
+            "nüfus kayıt örneği",
+            "ikametgah kayıtları",
+            "tanık beyanları",
+            "bilirkişi incelemesi ve her türlü yasal delil",
+        ),
+        checklist=(
+            "Kira sözleşmesi ve dönem başlangıcı kontrol edildi mi?",
+            "İhtiyaç sahibi kişi ve ihtiyaç sebebi somutlaştırıldı mı?",
+            "Dava açma süresi ve bildirim tarihi kontrol edildi mi?",
+            "Aynı bölgede başka uygun taşınmaz bulunmadığı açıklanabildi mi?",
+        ),
+        risk_notes=(
+            "İhtiyaç gerçek, samimi ve zorunlu olgularla desteklenmezse tahliye talebi zayıflayabilir.",
+            "Süre ve bildirim şartları somut olay özelinde ayrıca kontrol edilmelidir.",
+        ),
+        legal_assessment=(
+            "Türk Borçlar Kanunu'nun ihtiyaç nedeniyle tahliyeye ilişkin hükümleri uyarınca "
+            "kiraya verenin veya kanunda sayılan yakınlarının gerçek, samimi ve zorunlu konut ya da işyeri ihtiyacı "
+            "bulunması halinde kiralananın tahliyesi talep edilebilir. Değerlendirme yapılırken ihtiyaç iddiasının "
+            "soyut beyan düzeyinde kalmaması, taşınmaz durumu, aile düzeni, iş veya konut zorunluluğu ve dava açma "
+            "süresine ilişkin olgularla birlikte ele alınması gerekir."
+        ),
+        triggers=("tahliye", "kiralanan", "kiracı", "kira sözleşmesi", "konut ihtiyacı", "ihtiyaç nedeniyle"),
+    ),
+    PetitionProfile(
+        key="poverty_alimony",
+        petition_type="Yoksulluk nafakasının kaldırılması, mümkün değilse indirilmesi davası",
+        draft_title="YOKSULLUK NAFAKASININ KALDIRILMASI, AKSİ HALDE İNDİRİLMESİ TALEPLİ DAVA DİLEKÇESİ",
+        court_heading="NÖBETÇİ AİLE MAHKEMESİ'NE",
+        practice_area="Aile hukuku",
+        legal_basis=("TMK 176", "TMK 4", "Hakkaniyet ilkesi", "Tarafların sosyal ve ekonomik durumları"),
+        questions=(
+            "Müvekkilin mevcut aylık geliri ve düzenli giderleri nelerdir?",
+            "Ödenen aylık nafaka miktarı ve ödeme başlangıç tarihi nedir?",
+            "Nafaka alacaklısının çalıştığına veya gelir elde ettiğine dair deliller nelerdir?",
+            "Tarafların sosyal ve ekonomik durumunda nafaka kararından sonra hangi değişiklikler oldu?",
+            "Müvekkilin sağlık, kira, çocuk veya aile yükümlülükleri var mı?",
+            "Talep öncelikle kaldırma mı, terditli olarak indirim mi olacak?",
+        ),
+        skeleton=(
+            "Görevli ve yetkili mahkeme",
+            "Taraflar",
+            "Konu",
+            "Nafaka kararının geçmişi",
+            "Sosyal ve ekonomik durum değişikliği",
+            "Hukuki değerlendirme",
+            "Emsal kararlar",
+            "Deliller",
+            "Sonuç ve istem",
+        ),
+        evidence=(
+            "nüfus kayıt örneği",
+            "nafaka kararına ilişkin ilam",
+            "nafaka ödeme dekontları",
+            "maaş bordrosu veya banka kayıtları",
+            "kira ve sağlık gider belgeleri",
+            "SGK, banka, tapu ve araç kayıtları",
+            "tanık beyanları ve her türlü yasal delil",
+        ),
+        checklist=(
+            "Nafaka kararına ilişkin ilam eklendi mi?",
+            "Müvekkilin gelir ve gider belgeleri eklendi mi?",
+            "Davalının gelir durumuna ilişkin deliller somutlaştırıldı mı?",
+            "Kaldırma ve indirim talepleri terditli kuruldu mu?",
+        ),
+        risk_notes=(
+            "Gelir değişikliği somut delillerle ispatlanmazsa kaldırma talebi zayıflayabilir.",
+            "Mahkeme kaldırma yerine hakkaniyete uygun indirim yoluna gidebilir.",
+        ),
+        legal_assessment=(
+            "TMK 176 ve TMK 4 uyarınca nafaka yükümlülüğü, tarafların güncel sosyal ve ekonomik durumları ile "
+            "hakkaniyet ilkesi birlikte değerlendirilerek ele alınmalıdır. Nafakanın amacı taraflardan biri bakımından "
+            "ölçüsüz ve sürdürülemez bir yük oluşturmak değildir; koşullardaki esaslı değişiklik kaldırma veya indirim "
+            "talebinin hukuki temelini oluşturur."
+        ),
+        triggers=("nafaka", "yoksulluk", "iştirak", "tmk 176", "nafakanın kaldırılması", "nafaka indirimi"),
+    ),
+    PetitionProfile(
+        key="labor_receivable",
+        petition_type="İşçilik alacakları davası",
+        draft_title="İŞÇİLİK ALACAKLARI TALEPLİ DAVA DİLEKÇESİ",
+        court_heading="NÖBETÇİ İŞ MAHKEMESİ'NE",
+        practice_area="İş hukuku",
+        legal_basis=("4857 sayılı İş Kanunu", "7036 sayılı İş Mahkemeleri Kanunu", "TBK", "HMK"),
+        questions=(
+            "İşçinin işe giriş ve işten çıkış tarihleri nelerdir?",
+            "Son ücret, çalışma düzeni ve fiili görev tanımı nedir?",
+            "İş akdi hangi nedenle sona erdi ve fesih bildirimi var mı?",
+            "Talep edilecek alacak kalemleri nelerdir?",
+            "Fazla çalışma, hafta tatili veya ulusal bayram genel tatil çalışması nasıl ispatlanacak?",
+            "Arabuluculuk son tutanağı tarihi ve kapsamı nedir?",
+        ),
+        skeleton=(
+            "Görevli ve yetkili mahkeme",
+            "Taraflar",
+            "Konu",
+            "Çalışma süresi ve ücret",
+            "Fesih ve alacak kalemleri",
+            "Hukuki değerlendirme",
+            "Deliller",
+            "Sonuç ve istem",
+        ),
+        evidence=(
+            "SGK hizmet dökümü",
+            "ücret bordroları",
+            "banka kayıtları",
+            "puantaj ve vardiya kayıtları",
+            "arabuluculuk son tutanağı",
+            "tanık beyanları",
+            "bilirkişi incelemesi ve her türlü yasal delil",
+        ),
+        checklist=(
+            "Arabuluculuk dava şartı tamamlandı mı?",
+            "Talep edilen alacak kalemleri tek tek ayrıldı mı?",
+            "Ücret ve çalışma süresi delilleri belirlendi mi?",
+            "Zamanaşımı bakımından dönemler kontrol edildi mi?",
+        ),
+        risk_notes=(
+            "Arabuluculuk tutanağında yer almayan alacak kalemleri dava şartı yönünden sorun çıkarabilir.",
+            "Fazla çalışma iddiası tanık ve kayıtlarla desteklenmelidir.",
+        ),
+        legal_assessment=(
+            "İşçilik alacaklarında çalışma süresi, ücret, fesih nedeni ve talep edilen her alacak kalemi ayrı ayrı "
+            "somutlaştırılmalıdır. Mahkeme değerlendirmesi çoğunlukla SGK kayıtları, bordrolar, banka hareketleri, "
+            "işyeri kayıtları ve tanık beyanlarının birlikte değerlendirilmesine dayanır."
+        ),
+        triggers=("işçi", "kıdem", "ihbar", "fazla mesai", "işçilik alacağı", "arabuluculuk", "iş akdi"),
+    ),
+    PetitionProfile(
+        key="enforcement_objection",
+        petition_type="İtirazın iptali ve takibin devamı davası",
+        draft_title="İTİRAZIN İPTALİ VE TAKİBİN DEVAMI TALEPLİ DAVA DİLEKÇESİ",
+        court_heading="NÖBETÇİ ASLİYE HUKUK MAHKEMESİ'NE",
+        practice_area="İcra hukuku",
+        legal_basis=("İİK 67", "TBK", "HMK"),
+        questions=(
+            "İcra dosyası numarası, takip tarihi ve takip miktarı nedir?",
+            "Borcun dayanağı sözleşme, fatura, senet veya başka belge nedir?",
+            "Borçlu itirazını hangi tarihte ve hangi gerekçeyle yaptı?",
+            "Alacağın likit olduğunu gösteren belgeler nelerdir?",
+            "İcra inkar tazminatı talep edilecek mi?",
+            "Yetki veya zamanaşımı riski var mı?",
+        ),
+        skeleton=(
+            "Görevli ve yetkili mahkeme",
+            "Taraflar",
+            "Konu",
+            "Takip ve itiraz süreci",
+            "Alacağın dayanağı",
+            "Hukuki değerlendirme",
+            "Deliller",
+            "Sonuç ve istem",
+        ),
+        evidence=(
+            "icra takip dosyası",
+            "ödeme emri ve itiraz dilekçesi",
+            "sözleşme",
+            "fatura ve cari hesap kayıtları",
+            "banka kayıtları",
+            "ticari defter ve kayıtlar",
+            "bilirkişi incelemesi ve her türlü yasal delil",
+        ),
+        checklist=(
+            "İtirazın tebliği ve dava süresi kontrol edildi mi?",
+            "Alacağın dayanak belgeleri eklendi mi?",
+            "İcra inkar tazminatı koşulları değerlendirildi mi?",
+            "Yetki itirazı riski kontrol edildi mi?",
+        ),
+        risk_notes=(
+            "Alacağın likitliği ve dayanak belgeleri açık değilse icra inkar tazminatı talebi zayıflayabilir.",
+            "Süre ve yetki itirazları somut dosya üzerinden kontrol edilmelidir.",
+        ),
+        legal_assessment=(
+            "İtirazın iptali davasında temel mesele, takibe konu alacağın varlığı, muacceliyeti ve borçlunun itirazının "
+            "haksızlığıdır. Alacak likit ve belgelerle belirlenebilir ise icra inkar tazminatı koşulları ayrıca "
+            "değerlendirilmelidir."
+        ),
+        triggers=("icra", "itirazın iptali", "takip", "ödeme emri", "borçlu", "alacaklı", "inkar tazminatı"),
+    ),
+    PetitionProfile(
+        key="defective_vehicle",
+        petition_type="Gizli ayıplı araç satışı nedeniyle seçimlik hakların kullanılması davası",
+        draft_title="GİZLİ AYIPLI ARAÇ SATIŞI NEDENİYLE SÖZLEŞMEDEN DÖNME, BEDEL İNDİRİMİ VE TAZMİNAT TALEPLİ DAVA DİLEKÇESİ",
+        court_heading="NÖBETÇİ ASLİYE HUKUK MAHKEMESİ'NE",
+        practice_area="Borçlar hukuku",
+        legal_basis=("TBK 219", "TBK 223", "TBK 227", "TBK 229", "6502 sayılı TKHK", "HMK", "dürüstlük kuralı"),
+        questions=(
+            "Satıcı gerçek kişi mi, galeri/şirket/tacir mi; satış tüketici işlemi niteliğinde mi?",
+            "Aracın marka-modeli, plaka/şasi bilgisi, satış tarihi ve satış bedeli nedir?",
+            "Satış sırasında araç için hangi beyanlar verildi; ekspertiz raporu veya ilan kaydı var mı?",
+            "Ortaya çıkan ayıp nedir; ağır hasar, kilometre, motor-mekanik arıza veya onarım izi nasıl tespit edildi?",
+            "Ayıp olağan muayene ile fark edilebilir nitelikte miydi, yoksa gizli ayıp mı?",
+            "Ayıp öğrenilir öğrenilmez satıcıya bildirim yapıldı mı; bildirim tarihi ve yöntemi nedir?",
+            "Seçimlik hak olarak öncelikle sözleşmeden dönme mi, bedel indirimi/onarıma ilişkin parasal talep mi isteniyor?",
+            "Ödenen bedel, ayıplı değer, onarım gideri, ekspertiz/servis masrafı ve diğer zarar kalemleri nelerdir?",
+            "Araç üzerindeki ayıbı destekleyen servis raporu, ekspertiz, hasar kaydı, ilan görüntüsü, yazışma veya tanık var mı?",
+        ),
+        skeleton=(
+            "Görevli ve yetkili mahkeme",
+            "Taraflar",
+            "Konu",
+            "Satış ilişkisi ve satıcının beyanları",
+            "Gizli ayıp ve ayıbın öğrenilmesi",
+            "Ayıp ihbarı ve seçimlik hakların kullanılması",
+            "Zarar ve bedel farkı",
+            "Hukuki değerlendirme",
+            "Deliller",
+            "Sonuç ve istem",
+        ),
+        evidence=(
+            "noter satış sözleşmesi",
+            "araç ruhsat ve tescil kayıtları",
+            "satış ilanı ve satıcı beyanlarını gösteren yazışmalar",
+            "ekspertiz raporu",
+            "servis raporu ve onarım kayıtları",
+            "TRAMER/hasar kaydı",
+            "ödeme dekontları",
+            "bilirkişi incelemesi",
+            "tanık beyanları ve her türlü yasal delil",
+        ),
+        checklist=(
+            "Satıcının sıfatı ve görevli mahkeme kontrol edildi mi?",
+            "Ayıbın gizli ayıp niteliği servis/ekspertiz raporuyla desteklendi mi?",
+            "Ayıp ihbarı tarihi ve yöntemi somutlaştırıldı mı?",
+            "Seçimlik hak ve terditli talep açık kuruldu mu?",
+            "Satış bedeli, ayıplı değer ve zarar kalemleri ayrıştırıldı mı?",
+        ),
+        risk_notes=(
+            "Satıcının tacir/galeri olup olmadığı görevli mahkemeyi değiştirebilir.",
+            "Ayıp ihbarı makul sürede yapıldığının ispatı önemlidir.",
+            "Ayıbın satıştan sonra doğduğu savunmasına karşı bilirkişi incelemesi belirleyici olabilir.",
+        ),
+        legal_assessment=(
+            "Satılanın ayıplı olması halinde satıcının ayıba karşı tekeffül sorumluluğu gündeme gelir. Araç satışında "
+            "ağır hasar kaydı, kilometre gerçeğe aykırılığı, motor-mekanik arıza, gizli onarım veya satış sırasında "
+            "bildirilmeyen değer düşürücü nitelikler; alıcının sözleşmeden dönme, bedel indirimi, ücretsiz onarım veya "
+            "zarar kalemlerinin tazmini gibi seçimlik haklarını kullanmasına dayanak oluşturabilir. Satıcının galeri, "
+            "şirket veya tacir olması ve işlemin tüketici işlemi niteliği taşıması halinde 6502 sayılı TKHK hükümleri "
+            "ayrıca değerlendirilmelidir. HMK bakımından ispat yükü, delillerin toplanması ve bilirkişi incelemesi "
+            "özellikle önem taşır. Değerlendirmede satıcının beyanları, ayıbın gizli niteliği, ihbar süresi, araçtaki "
+            "değer kaybı ve bilirkişi incelemesi birlikte ele alınmalıdır."
+        ),
+        triggers=(
+            "ayıplı araç",
+            "gizli ayıp",
+            "ayıp",
+            "araç satışı",
+            "ikinci el araç",
+            "ağır hasar",
+            "motor arızası",
+            "ekspertiz",
+            "tramer",
+            "bedel indirimi",
+            "sözleşmeden dönme",
+        ),
+    ),
+)
+
+
+GENERIC_PROFILE = PetitionProfile(
+    key="generic",
+    petition_type="Genel dava dilekçesi",
+    draft_title="DAVA DİLEKÇESİ TASLAĞI",
+    court_heading="NÖBETÇİ GÖREVLİ VE YETKİLİ MAHKEME'YE",
+    practice_area="Genel hukuk",
+    legal_basis=("HMK", "TBK", "ilgili mevzuat", "dürüstlük kuralı"),
+    questions=(
+        "Tarafların sıfatı ve uyuşmazlıktaki rolleri nelerdir?",
+        "Somut talep ve dava türü nedir?",
+        "Talebi doğuran olayların tarih sırası nasıldır?",
+        "Talebi destekleyen belge, kayıt, tanık veya diğer deliller nelerdir?",
+        "Karşı tarafın muhtemel savunması veya riskli nokta nedir?",
+        "Mahkemeden istenecek sonuç tam olarak nasıl kurulmalıdır?",
+    ),
+    skeleton=(
+        "Görevli ve yetkili mahkeme",
+        "Taraflar",
+        "Konu",
+        "Açıklamalar",
+        "Hukuki nedenler",
+        "Deliller",
+        "Sonuç ve istem",
+    ),
+    evidence=("belgeler", "resmi kayıtlar", "tanık beyanları", "bilirkişi incelemesi", "her türlü yasal delil"),
+    checklist=(
+        "Dava türü ve görevli mahkeme somutlaştırıldı mı?",
+        "Olaylar tarih sırasıyla açıklandı mı?",
+        "Deliller talep ile eşleştirildi mi?",
+        "Sonuç ve istem bölümü net kuruldu mu?",
+    ),
+    risk_notes=("Dava türü, görevli mahkeme ve süreler somut dosya üzerinden ayrıca kontrol edilmelidir.",),
+    legal_assessment=(
+        "Somut uyuşmazlıkta maddi vakıalar, talep sonucu ve uygulanacak hukuki nedenler birbirine bağlı biçimde "
+        "kurulmalıdır. Dilekçenin ikna gücü, olay anlatımının delillerle desteklenmesine ve talep sonucunun açık "
+        "kurulmasına bağlıdır."
+    ),
+    triggers=(),
+)
+
+
+def get_petition_profile(case_text: str, request_type: str = "") -> PetitionProfile:
+    haystack = _plain(f"{case_text} {request_type}")
+    scored: list[tuple[int, PetitionProfile]] = []
+    for profile in PROFILES:
+        score = sum(1 for trigger in profile.triggers if _plain(trigger) in haystack)
+        scored.append((score, profile))
+    score, best = max(scored, key=lambda item: item[0])
+    return best if score else GENERIC_PROFILE
+
+
+def profile_relevance_terms(profile: PetitionProfile) -> list[str]:
+    text = " ".join([profile.petition_type, profile.legal_assessment, *profile.legal_basis, *profile.questions])
+    return sorted(set(re.findall(r"[a-zçğıöşü0-9]{4,}", text.casefold())))
+
+
+def _plain(text: str) -> str:
+    normalized = str(text).casefold().translate(
+        str.maketrans(
+            {
+                "ç": "c",
+                "ğ": "g",
+                "ı": "i",
+                "ö": "o",
+                "ş": "s",
+                "ü": "u",
+            }
+        )
+    )
+    decomposed = unicodedata.normalize("NFKD", normalized)
+    plain = "".join(character for character in decomposed if not unicodedata.combining(character))
+    return re.sub(r"\s+", " ", plain).strip()

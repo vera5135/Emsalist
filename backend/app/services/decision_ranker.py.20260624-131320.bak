@@ -1,0 +1,160 @@
+"""Deterministic decision ranking service.
+
+This is not a full semantic/legal assessment. It offers predictable local
+behaviour until embeddings, an LLM summarizer and richer decision signals are
+connected.
+"""
+
+import re
+
+from app.models.decision_models import DecisionInput, RankedDecision
+from app.services.petition_profile_service import get_petition_profile, profile_relevance_terms
+
+
+TURKISH_STOPWORDS = {
+    "acaba", "ama", "ancak", "bir", "bu", "da", "daha", "de", "diye", "en",
+    "gibi", "hem", "ile", "icin", "için", "ise", "ki", "mi", "ne", "olan", "olarak",
+    "ve", "veya", "çok", "şu", "tarafından", "davalı", "davacı",
+}
+
+LEGAL_BOOST_TERMS = {
+    "nafaka", "yoksulluk", "iştirak", "kaldırılması", "indirilmesi", "gelir",
+    "ekonomik", "hakkaniyet", "tmk", "tahliye", "kiracı", "kiralanan", "ihtiyaç",
+    "tbk", "işçi", "kıdem", "ihbar", "fazla", "mesai", "icra", "itiraz", "takip",
+    "ayıp", "gizli", "araç", "ekspertiz", "hasar", "tramer", "bedel", "tekeffül",
+}
+
+CONCEPT_PATTERNS = {
+    "yoksulluk nafakası": ("yoksulluk nafakası", "yoksulluk nafaka"),
+    "nafakanın kaldırılması": ("nafaka kaldır", "nafakanın kaldır", "kaldırılması"),
+    "nafaka indirimi": ("nafaka indir", "nafakanın indir", "indirilmesi"),
+    "gelir değişikliği": ("gelir", "maaş", "ekonomik durum", "maddi durum"),
+    "hakkaniyet": ("hakkaniyet",),
+    "ihtiyaç nedeniyle tahliye": ("ihtiyaç nedeniyle tahliye", "gereksinim nedeniyle tahliye"),
+    "kiralananın tahliyesi": ("kiralananın tahliyesi", "tahliye", "kiracı"),
+    "gerçek samimi zorunlu ihtiyaç": ("gerçek", "samimi", "zorunlu ihtiyaç"),
+    "tbk 350": ("tbk 350", "350. madde"),
+    "işçilik alacakları": ("işçilik alacağı", "kıdem", "ihbar", "fazla mesai"),
+    "fazla çalışma": ("fazla çalışma", "fazla mesai"),
+    "arabuluculuk": ("arabuluculuk", "son tutanak"),
+    "itirazın iptali": ("itirazın iptali", "itiraz iptali"),
+    "icra takibi": ("icra takibi", "ödeme emri", "takip"),
+    "icra inkar tazminatı": ("icra inkar tazminatı", "inkar tazminatı"),
+    "ayıplı araç satışı": ("ayıplı araç", "araç satışı", "ikinci el araç"),
+    "gizli ayıp": ("gizli ayıp", "ayıp", "ayıplı"),
+    "satıcının ayıba karşı sorumluluğu": ("ayıba karşı sorumluluk", "tekeffül", "satıcının sorumluluğu"),
+    "seçimlik haklar": ("seçimlik hak", "sözleşmeden dönme", "bedel indirimi", "onarım"),
+    "ağır hasar": ("ağır hasar", "hasar kaydı", "tramer"),
+    "tbk 219": ("tbk 219", "219. madde"),
+    "tbk 227": ("tbk 227", "227. madde"),
+}
+
+
+class MockDecisionRanker:
+    """Rank supplied decisions using token overlap and petition-profile signals."""
+
+    def rank(
+        self,
+        case_text: str,
+        decisions: list[DecisionInput],
+        limit: int,
+    ) -> list[RankedDecision]:
+        profile = get_petition_profile(case_text)
+        case_tokens = self._tokens(case_text)
+        profile_terms = set(profile_relevance_terms(profile))
+        ranked = [
+            self._rank_one(
+                case_text=case_text,
+                case_tokens=case_tokens,
+                profile_terms=profile_terms,
+                decision=decision,
+            )
+            for decision in decisions
+        ]
+        ranked.sort(key=lambda item: item.similarity_score, reverse=True)
+        return ranked[:limit]
+
+    def _rank_one(
+        self,
+        *,
+        case_text: str,
+        case_tokens: set[str],
+        profile_terms: set[str],
+        decision: DecisionInput,
+    ) -> RankedDecision:
+        decision_tokens = self._tokens(decision.raw_text)
+        common = case_tokens & decision_tokens
+        union = case_tokens | decision_tokens
+
+        case_concepts = self._concepts(case_text)
+        decision_concepts = self._concepts(decision.raw_text)
+        common_concepts = case_concepts & decision_concepts
+        profile_overlap = profile_terms & decision_tokens
+
+        jaccard = len(common) / max(len(union), 1)
+        case_coverage = len(common) / max(len(case_tokens), 1)
+        concept_coverage = len(common_concepts) / max(len(case_concepts), 1)
+        profile_coverage = len(profile_overlap) / max(min(len(profile_terms), 30), 1)
+        legal_boost = min(len(common_concepts) * 4 + len(profile_overlap), 18)
+        score = min(
+            round(
+                (jaccard * 15)
+                + (case_coverage * 25)
+                + (concept_coverage * 38)
+                + (profile_coverage * 22)
+                + legal_boost
+            ),
+            100,
+        )
+
+        usefulness = "yüksek" if score >= 60 else "orta" if score >= 35 else "düşük"
+        identity = (
+            f"{decision.court}, E. {decision.esas_no}, "
+            f"K. {decision.karar_no}, T. {decision.date}"
+        )
+        relevant_terms = sorted(common, key=lambda term: (term not in LEGAL_BOOST_TERMS, term))[:4]
+        profile_terms_text = sorted(profile_overlap)[:4]
+        signals = sorted(common_concepts) + relevant_terms + profile_terms_text
+        terms_text = ", ".join(dict.fromkeys(signals[:8])) if signals else "sınırlı metinsel benzerlik"
+
+        return RankedDecision(
+            similarity_score=score,
+            usefulness_score=usefulness,
+            decision_identity=identity,
+            summary=self._summary(decision.raw_text),
+            why_relevant=(
+                f"Dilekçe konusu ile kararda örtüşen başlıca kavramlar: {terms_text}. "
+                "Puan, olay metni ve dilekçe profiline göre kural tabanlı ön eleme niteliğindedir."
+            ),
+            petition_paragraph=(
+                f"Somut olayla benzer maddi ve hukuki değerlendirmeler içeren {identity} sayılı karar, "
+                "dilekçede talebin olay, delil ve hukuki dayanak bağlantısını desteklemek üzere kullanılabilir."
+            ),
+        )
+
+    @staticmethod
+    def _tokens(text: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[a-zçğıöşü0-9]+", text.casefold())
+            if len(token) > 2 and token not in TURKISH_STOPWORDS
+        }
+
+    @staticmethod
+    def _concepts(text: str) -> set[str]:
+        lowered = text.casefold()
+        return {
+            concept
+            for concept, patterns in CONCEPT_PATTERNS.items()
+            if any(pattern in lowered for pattern in patterns)
+        }
+
+    @staticmethod
+    def _summary(raw_text: str) -> str:
+        cleaned = " ".join(raw_text.split())
+        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        summary = " ".join(sentences[:2])
+        return summary if len(summary) <= 500 else f"{summary[:497].rstrip()}..."
+
+
+decision_ranker = MockDecisionRanker()
