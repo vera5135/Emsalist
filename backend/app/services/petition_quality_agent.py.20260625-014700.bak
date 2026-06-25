@@ -48,14 +48,7 @@ class PetitionQualityAgent:
         response = self._response_from_ai(data=gemini_result.data, fallback=fallback)
         response.ai_used = True
         response.warnings.extend(gemini_result.warnings)
-        merged = self._merge_validator(response=response, draft_text=draft_text, case_text=case_text, selected_decisions=selected_decisions or [])
-        if fallback.ready_for_lawyer_review and merged.quality_score < max(60, fallback.quality_score - 20):
-            merged.warnings.append("Gemini kalite çıktısı fallback validator ile dengelendi.")
-            merged.quality_score = max(merged.quality_score, fallback.quality_score)
-            merged.critical_issues = list(fallback.critical_issues)
-            merged.major_issues = ai_output_validator.dedupe(fallback.major_issues + merged.major_issues[:3])
-            merged.ready_for_lawyer_review = merged.quality_score >= 70 and not merged.critical_issues
-        return merged
+        return self._merge_validator(response=response, draft_text=draft_text, case_text=case_text, selected_decisions=selected_decisions or [])
 
     def _fallback(
         self,

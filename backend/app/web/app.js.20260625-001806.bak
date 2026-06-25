@@ -19,17 +19,10 @@ const els = {
   decisionOutput: $("decisionOutput"),
   draftOutput: $("draftOutput"),
   riskOutput: $("riskOutput"),
-  strategyTabOutput: $("strategyTabOutput"),
-  clientQuestionsOutput: $("clientQuestionsOutput"),
-  defenseOutput: $("defenseOutput"),
-  officialSourcesOutput: $("officialSourcesOutput"),
   analysisCount: $("analysisCount"),
   brainCount: $("brainCount"),
   decisionCount: $("decisionCount"),
   riskCount: $("riskCount"),
-  strategyCount: $("strategyCount"),
-  defenseCount: $("defenseCount"),
-  officialSourceCount: $("officialSourceCount"),
   buttons: [
     $("reviewBtn"),
     $("aiEnrichBtn"),
@@ -47,12 +40,7 @@ const els = {
     $("questionsBtn"),
     $("clearBtn"),
     $("copyDraftBtn"),
-    $("printDraftBtn"),
     $("downloadDraftBtn"),
-    $("downloadDocxBtn"),
-    $("downloadPdfBtn"),
-    $("downloadUdfBtn"),
-    $("copyClientQuestionsBtn"),
   ].filter(Boolean),
 };
 
@@ -63,18 +51,6 @@ let lastBetterSearches = null;
 let lastStrategy = null;
 let lastStrategyCase = "";
 let lastStrategyRequest = "";
-let questionFlow = {
-  questions: [],
-  currentIndex: 0,
-  answers: {},
-  skipped: new Set(),
-  showAll: false,
-};
-let lastDraftData = null;
-let lastDraftAudit = null;
-let lastSourceAudit = null;
-let lastPrecedentAudit = null;
-let lastYargitaySearch = null;
 
 const sampleCase = `Müvekkil, maliki olduğu konutu davalı kiracıya yazılı kira sözleşmesi ile kiraya vermiştir. Müvekkilin evlenen oğlu ve gelini için bağımsız konuta ihtiyaç doğmuştur. Müvekkilin aynı ilçe sınırlarında oturmaya elverişli başka bir konutu bulunmamaktadır. Kiracıya durum sözlü olarak bildirilmiş, ancak kiracı taşınmayı kabul etmemiştir. Kira sözleşmesi dönem sonunda sona ermiş olmasına rağmen kiracı taşınmazı kullanmaya devam etmektedir. Müvekkilin ve ailesinin gerçek, samimi ve zorunlu konut ihtiyacı bulunduğundan ihtiyaç nedeniyle tahliye davası açılması istenmektedir.`;
 const THEME_STORAGE_KEY = "emsalist-theme";
@@ -83,8 +59,6 @@ const DEFAULT_PRECEDENT_PARAGRAPH =
   "Karar, gizli ayıp, ayıp ihbarı ve seçimlik hakların değerlendirilmesi bakımından somut uyuşmazlıkla bağlantılıdır.";
 const RISK_PRECEDENT_PARAGRAPH =
   "Bu karar doğrudan lehe emsal gibi sunulmamalı; davalı savunması ve somut olayın ayrılan yönleri bakımından değerlendirilmelidir.";
-const CLEAN_PRECEDENT_EXPLANATION =
-  "Anılan kararda, ayıplı satışta ayıbın niteliği, alıcının seçimlik hakları ve delil değerlendirmesi yönünden ilkeler ortaya konulmuştur. Bu karar, somut olayda gizli ayıp iddiası ve seçimlik hakların kullanılması bakımından emsal olarak değerlendirilebilir.";
 
 const defectiveVehicleRequest =
   "Öncelikle sözleşmeden dönülerek satış bedelinin iadesi, aksi halde ayıp oranında bedel indirimi ve zarar kalemlerinin tahsili";
@@ -96,50 +70,7 @@ const fallbackQuestions = [
   "Karşı tarafın muhtemel savunması veya riskli nokta nedir?",
 ];
 
-const commonAnswerOptions = ["Belge mevcut", "Bilmiyorum", "Sonra tamamlanacak"];
-
-const vehicleQuestionBank = [
-  {
-    question: "Satıcı kim?",
-    options: ["Galeri/şirket", "Gerçek kişi", "Tacir", "Bilmiyorum"],
-    requiredTerms: ["satici", "galeri", "sirket", "tacir"],
-  },
-  {
-    question: "Satış belgesi ve ödeme bilgisi nedir?",
-    options: ["Noter satış sözleşmesi var", "Banka dekontu var", "Elden ödeme", "Belge yok"],
-    requiredTerms: ["noter", "satis belgesi", "dekont", "odeme", "bedel"],
-  },
-  {
-    question: "Araç bilgisi ve satış bedeli belli mi?",
-    options: ["Plaka/şasi bilgisi belli", "Satış bedeli belli", "Marka-model belli", "Eksik"],
-    requiredTerms: ["plaka", "sasi", "marka", "model", "bedel"],
-  },
-  {
-    question: "Satıcı satış öncesinde nasıl beyanda bulundu?",
-    options: ["Sorunsuz denildi", "Kazasız denildi", "Ağır hasarsız denildi", "İlan görüntüsü var"],
-    requiredTerms: ["beyan", "sorunsuz", "kazasiz", "hasarsiz", "ilan"],
-  },
-  {
-    question: "Arıza veya ayıp nasıl tespit edildi?",
-    options: ["Servis raporu", "Ekspertiz raporu", "TRAMER kaydı", "Henüz belge yok"],
-    requiredTerms: ["servis", "ekspertiz", "tramer", "rapor", "ariza"],
-  },
-  {
-    question: "Ayıp ne zaman ortaya çıktı?",
-    options: ["Teslimden kısa süre sonra", "İlk kullanımda", "Serviste öğrenildi", "Tarih belirsiz"],
-    requiredTerms: ["teslim", "kisa sure", "tarih", "ortaya cikti"],
-  },
-  {
-    question: "Satıcıya ne zaman ve nasıl bildirim yapıldı?",
-    options: ["WhatsApp/SMS", "Noter ihtarı", "Telefonla bildirildi", "Henüz bildirilmedi"],
-    requiredTerms: ["bildirim", "ihbar", "ihtar", "whatsapp", "sms"],
-  },
-  {
-    question: "Talep ve masraf kalemleri nelerdir?",
-    options: ["Bedel iadesi", "Bedel indirimi", "Onarım gideri", "Ekspertiz/servis masrafı"],
-    requiredTerms: ["bedel iadesi", "bedel indirimi", "onarim", "masraf", "talep"],
-  },
-];
+const commonAnswerOptions = ["Belge mevcut", "Tanıkla desteklenecek", "Resmi kayıt istenecek", "Sonra tamamlanacak"];
 
 const optionSets = {
   eviction: [
@@ -212,16 +143,7 @@ function plainText(value) {
     .replaceAll("ü", "u")
     .replaceAll("ş", "s")
     .replaceAll("ö", "o")
-    .replaceAll("ç", "c")
-    .replaceAll("ı", "i")
-    .replaceAll("ğ", "g")
-    .replaceAll("ü", "u")
-    .replaceAll("Ş", "s")
-    .replaceAll("Ö", "o")
-    .replaceAll("Ç", "c")
-    .replaceAll("İ", "i")
-    .replaceAll("Ğ", "g")
-    .replaceAll("Ü", "u");
+    .replaceAll("ç", "c");
 }
 
 function currentProfileKey() {
@@ -236,26 +158,19 @@ function currentProfileKey() {
 
 function questionOptions(question) {
   const normalizedQuestion = plainText(question);
-  if (currentProfileKey() === "defectiveVehicle") {
-    const direct = vehicleQuestionBank.find((item) => plainText(item.question) === normalizedQuestion);
-    if (direct) return direct.options.slice(0, 5);
-    const matchedVehicle = vehicleQuestionBank.find((item) =>
-      item.requiredTerms.some((term) => normalizedQuestion.includes(term) || plainText(item.question).includes(normalizedQuestion)),
-    );
-    if (matchedVehicle) return matchedVehicle.options.slice(0, 5);
-  }
   const profileKey = currentProfileKey();
   const profileOptions = optionSets[profileKey] || [];
+  const genericOptions = optionSets.generic || [];
   const matched = [];
 
-  for (const [needles, options] of profileOptions) {
+  for (const [needles, options] of [...profileOptions, ...genericOptions]) {
     if (needles.some((needle) => normalizedQuestion.includes(plainText(needle)))) {
       matched.push(...options);
     }
   }
 
-  if (!matched.length) matched.push(...commonAnswerOptions);
-  return [...new Set(matched)].slice(0, 5);
+  matched.push(...commonAnswerOptions);
+  return [...new Set(matched)].slice(0, 8);
 }
 
 function appendAnswerOption(field, value) {
@@ -501,146 +416,55 @@ function renderBrain(data) {
   const visibleResults = results.filter(
     (item) => item.is_directly_relevant !== false && cleanOutputText(item.usable_argument) !== UNRELATED_ARGUMENT,
   );
-  const filteredCount = results.length - visibleResults.length;
   els.brainCount.textContent = String(visibleResults.length);
   if (!visibleResults.length) {
-    els.brainOutput.className = "result-list";
-    els.brainOutput.innerHTML = `
-      <div class="result-item">
-        <h3>Kaynak taraması</h3>
-        <div class="meta-row">
-          <span class="chip blue">${escapeHtml(results.length)} kaynak incelendi</span>
-          <span class="chip">${escapeHtml(filteredCount)} kaynak filtrelendi</span>
-        </div>
-        <p>Bu dosya için doğrudan kullanılabilir Legal Brain kaynağı bulunamadı. Mevzuat ve Yargıtay emsalleri üzerinden devam edildi.</p>
-      </div>
-      ${filteredCount ? `<div class="result-item"><h3>Filtre sonucu</h3><p>Konu dışı kaynaklar filtrelendi.</p></div>` : ""}
-    `;
+    els.brainOutput.className = "empty-state";
+    els.brainOutput.textContent = "Kaynak sonucu bulunamadı.";
+    els.brainOutput.textContent = results.length
+      ? "Somut uyuşmazlıkla doğrudan bağlantılı kaynak bulunamadı; konu dışı kaynaklar dilekçede kullanılmayacak."
+      : "Kaynak sonucu bulunamadı.";
     return;
   }
   els.brainOutput.className = "result-list";
-  els.brainOutput.innerHTML = `
-    ${filteredCount ? `<div class="result-item"><h3>Filtre sonucu</h3><p>Konu dışı kaynaklar filtrelendi.</p></div>` : ""}
-    ${visibleResults
+  els.brainOutput.innerHTML = visibleResults
     .map((item) => {
       const title = item.title || item.section_title || "Kaynak";
       const score = item.relevance_score ?? "";
-      const used = item.use_in_petition !== false && item.is_directly_relevant !== false;
       const preview =
         item.is_directly_relevant === false
           ? item.relevance_reason || UNRELATED_ARGUMENT
           : item.usable_argument || item.doctrine_principle || item.chunk_preview || "";
       const citation = item.citation_label || [item.author, item.page_start && `s. ${item.page_start}`].filter(Boolean).join(", ");
-      const reason = item.relevance_reason || item.reason || (used ? "Somut uyuşmazlıkla doğrudan bağlantılı göründüğü için kullanılabilir." : "Konu dışı olduğu için elendi.");
       return `
         <div class="result-item">
           <h3>${escapeHtml(title)}</h3>
           <div class="meta-row">
             ${score !== "" ? `<span class="chip blue">${escapeHtml(score)} puan</span>` : ""}
-            <span class="chip">${escapeHtml(item.source_type || item.kind || "kaynak")}</span>
-            <span class="chip">${used ? "Dilekçede kullanılabilir" : "Dilekçede kullanılmadı"}</span>
+            ${item.is_directly_relevant === false ? `<span class="chip">Dolaylı / denetle</span>` : ""}
+            ${item.source_type ? `<span class="chip">${escapeHtml(item.source_type)}</span>` : ""}
             ${citation ? `<span class="chip">${escapeHtml(citation)}</span>` : ""}
           </div>
-          <ol class="compact-list">
-            <li><strong>Neden:</strong> ${escapeHtml(reason)}</li>
-            <li><strong>Kullanılabilir argüman:</strong> ${escapeHtml(preview || "Bu kaynak için temiz argüman üretilemedi.")}</li>
-            ${citation ? `<li><strong>Sayfa / tarih:</strong> ${escapeHtml(citation)}</li>` : ""}
-          </ol>
+          <p>${escapeHtml(preview)}</p>
         </div>
       `;
     })
-    .join("")}
-  `;
+    .join("");
 }
 
 function cleanDecisionParagraph(item) {
   const alignment = plainText(`${item.lehe_aleyhe || ""} ${item.usefulness_score || ""}`);
   const risk = alignment.includes("riskli") || alignment.includes("aleyhe") || alignment.includes("dusuk");
   const raw = item.petition_paragraph || item.petition_usage_paragraph || item.legal_principle || item.short_summary || item.clean_text_preview || "";
-  return cleanDecisionText(raw, risk ? RISK_PRECEDENT_PARAGRAPH : DEFAULT_PRECEDENT_PARAGRAPH);
-}
-
-function cleanDecisionText(value, fallback = CLEAN_PRECEDENT_EXPLANATION) {
-  let text = cleanOutputText(value, fallback);
-  text = text
-    .replace(/İçtihat Metni/gi, "")
-    .replace(/MAHKEMESİ\s*:\s*[^.]{0,160}/gi, "")
-    .replace(/Kararda öne çıkan bağlantılar\s*:[^.]+\.?/gi, "")
-    .replace(/Öne çıkan bağlantılar\s*:[^.]+\.?/gi, "")
-    .replace(/aracın,\s*araç,\s*ayıp[^.]{0,120}/gi, "")
-    .replace(/ayıp,\s*ayıplı,\s*bedel,\s*bilirkişi[^.]{0,120}/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const plain = plainText(text);
-  if (
-    !text ||
-    plain.includes("kararda one cikan baglantilar") ||
-    plain.includes("aracin arac ayip") ||
-    plain.includes("ayip ayipli bedel bilirkisi") ||
-    plain.includes("aracin ve aractaki ayibin")
-  ) {
-    return fallback;
-  }
-  return text;
-}
-
-function decisionScoreBreakdown(item) {
-  const similarity = Math.max(0, Math.min(100, Number(item.similarity_score ?? 55)));
-  const plain = plainText(`${item.short_summary || ""} ${item.legal_principle || ""} ${item.petition_paragraph || ""} ${item.lehe_aleyhe || ""}`);
-  const vehicleFit = ["arac", "otomobil", "ikinci el", "motor", "servis", "ekspertiz", "tramer"].filter((term) => plain.includes(term)).length;
-  const hiddenDefectFit = ["gizli ayip", "bedel indirimi", "sozlesmeden donme", "ayip ihbari"].filter((term) => plain.includes(term)).length;
-  const realEstateOnly = ["tasinmaz", "konut", "daire", "bagimsiz bolum"].some((term) => plain.includes(term)) && !vehicleFit;
-  const legalFit = realEstateOnly
-    ? Math.min(58, similarity)
-    : vehicleFit
-      ? Math.min(96, 58 + vehicleFit * 5 + hiddenDefectFit * 7)
-      : Math.max(45, similarity - 12);
-  const currentYear = new Date().getFullYear();
-  const yearMatch = String(item.date || "").match(/(20\d{2}|19\d{2})/);
-  const year = yearMatch ? Number(yearMatch[1]) : currentYear - 8;
-  const recency = Math.max(35, Math.min(95, 95 - Math.max(0, currentYear - year) * 4));
-  const risk = plain.includes("riskli") || plain.includes("aleyhe") || plain.includes("redd") ? 35 : realEstateOnly ? 62 : 86;
-  const riskLevel = risk < 50 ? "Yüksek" : risk < 75 ? "Orta" : "Düşük";
-  const strength = Math.round(similarity * 0.3 + legalFit * 0.35 + recency * 0.15 + risk * 0.2);
-  return { similarity, legalFit, recency, risk, riskLevel, strength };
+  return cleanOutputText(raw, risk ? RISK_PRECEDENT_PARAGRAPH : DEFAULT_PRECEDENT_PARAGRAPH);
 }
 
 function renderDecisions(data) {
   const decisions = data.top_decisions || [];
-  lastYargitaySearch = data || lastYargitaySearch;
   lastDecisions = decisions;
   els.decisionCount.textContent = String(decisions.length);
   if (!decisions.length) {
-    const queries = data.queries || lastYargitaySearch?.queries || [];
-    const errors = data.errors || lastYargitaySearch?.errors || [];
-    const searched = Boolean(data.yargitay_search_started || queries.length);
-    els.decisionOutput.className = "result-list";
-    els.decisionOutput.innerHTML = `
-      <div class="result-item">
-        <h3>Emsal arama özeti</h3>
-        <div class="meta-row">
-          <span class="chip blue">${searched ? "Arama yapıldı" : "Henüz arama yok"}</span>
-          <span class="chip">${escapeHtml(data.yargitay_result_count ?? 0)} ham sonuç</span>
-          <span class="chip">${data.fallback_query_used ? "Fallback sorgular denendi" : "Özel sorgular denendi"}</span>
-          <span class="chip">${escapeHtml(data.final_precedent_count ?? 0)} kullanılabilir emsal</span>
-        </div>
-        <p>${
-          searched
-            ? "Bu aramada dilekçeye güvenle aktarılabilecek doğrudan emsal bulunamadı veya Yargıtay erişimi sonuç döndürmedi."
-            : "Emsal araması henüz çalıştırılmadı."
-        }</p>
-      </div>
-      ${
-        queries.length
-          ? `<div class="result-item"><h3>Denenen sorgular</h3><ol class="compact-list">${queries.map((query) => `<li>${escapeHtml(query)}</li>`).join("")}</ol></div>`
-          : ""
-      }
-      ${
-        errors.length
-          ? `<div class="result-item"><h3>Bağlantı / arama uyarıları</h3><ol class="compact-list">${errors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ol></div>`
-          : `<div class="result-item"><h3>Sonuç nedeni</h3><p>Sonuç bulunamadı; sorgular daraltılarak veya Yargıtay bağlantısı tekrar denenerek arama yenilenebilir.</p></div>`
-      }
-    `;
+    els.decisionOutput.className = "empty-state";
+    els.decisionOutput.textContent = "Karar sonucu bulunamadı.";
     return;
   }
   els.decisionOutput.className = "result-list";
@@ -649,38 +473,16 @@ function renderDecisions(data) {
       const title = item.title || `${item.court || "Yargıtay"} ${item.esas_no || ""}`;
       const detailLink = item.detail_url ? `<a href="${escapeHtml(item.detail_url)}" target="_blank" rel="noreferrer">Detay</a>` : "";
       const paragraph = cleanDecisionParagraph(item);
-      const scores = decisionScoreBreakdown(item);
-      const summary = cleanDecisionText(item.short_summary || paragraph, CLEAN_PRECEDENT_EXPLANATION);
-      const topic = cleanDecisionText(item.legal_principle || item.short_summary || paragraph, "Ayıp, ihbar ve seçimlik haklar yönünden değerlendirme.");
-      const similar = cleanDecisionText(item.why_relevant || paragraph, "Karar; ayıp, ihbar, seçimlik hak ve delil bağlantısı bakımından somut olayla karşılaştırılabilir.");
-      const different = plainText(item.lehe_aleyhe || "").includes("riskli") ? "Ayıp ihbarı, süre veya ispat yönünden somut olaydan ayrılabilir." : "Somut olayın belge ve tarihleri ayrıca karşılaştırılmalıdır.";
-      const usage = plainText(item.lehe_aleyhe || "").includes("riskli") ? RISK_PRECEDENT_PARAGRAPH : "Karar numarası, tarih ve kısa özetle destekleyici emsal olarak kullanılabilir.";
       return `
         <div class="result-item">
           <h3>${escapeHtml(title)}</h3>
           <div class="meta-row">
-            <span class="chip blue">${escapeHtml(scores.strength)} güç</span>
+            <span class="chip blue">${escapeHtml(item.similarity_score ?? "-")} puan</span>
             <span class="chip">${escapeHtml(item.lehe_aleyhe || "Değerlendirme")}</span>
             <span class="chip">${escapeHtml([item.esas_no, item.karar_no, item.date].filter(Boolean).join(" / "))}</span>
             ${detailLink ? `<span class="chip">${detailLink}</span>` : ""}
           </div>
-          <ol class="compact-list">
-            <li><strong>Karar kimliği:</strong> ${escapeHtml([item.court || "Yargıtay", item.esas_no, item.karar_no, item.date].filter(Boolean).join(" / "))}</li>
-            <li><strong>Temiz özet:</strong> ${escapeHtml(summary)}</li>
-            <li><strong>Uyuşmazlık konusu:</strong> ${escapeHtml(topic)}</li>
-            <li><strong>Yargıtay'ın temel değerlendirmesi:</strong> ${escapeHtml(paragraph)}</li>
-            <li><strong>Somut olaya benzer yönleri:</strong> ${escapeHtml(similar)}</li>
-            <li><strong>Somut olaydan ayrılan yönleri:</strong> ${escapeHtml(different)}</li>
-            <li><strong>Lehe / riskli / aleyhe:</strong> ${escapeHtml(item.lehe_aleyhe || "Değerlendirme")}</li>
-            <li><strong>Kullanım önerisi:</strong> ${escapeHtml(usage)}</li>
-          </ol>
-          <div class="score-grid">
-            <span>Benzerlik: ${scores.similarity}</span>
-            <span>Hukuki uygunluk: ${scores.legalFit}</span>
-            <span>Güncellik: ${scores.recency}</span>
-            <span>Kullanım riski: ${scores.riskLevel}</span>
-            <span>Genel güç: ${scores.strength}</span>
-          </div>
+          <p>${escapeHtml(paragraph)}</p>
         </div>
       `;
     })
@@ -697,120 +499,35 @@ function renderStrategy(data) {
   `;
 }
 
-function normalizeQuestionFlow(questions) {
-  const incoming = (questions?.length ? questions : fallbackQuestions).map((item) =>
-    typeof item === "string" ? { question: item } : { question: item.question || String(item), options: item.suggested_answers || item.options || [] },
-  );
-  const base = currentProfileKey() === "defectiveVehicle" ? vehicleQuestionBank : incoming;
-  return [...base, ...incoming]
-    .filter((item) => item.question)
-    .reduce((acc, item) => {
-      const key = plainText(item.question);
-      if (!acc.some((existing) => plainText(existing.question) === key)) {
-        acc.push({
-          question: item.question,
-          options: (item.options?.length ? item.options : questionOptions(item.question)).slice(0, 5),
-          requiredTerms: item.requiredTerms || [],
-        });
-      }
-      return acc;
-    }, [])
-    .slice(0, 10);
-}
-
-function currentQuestionItem() {
-  return questionFlow.questions[questionFlow.currentIndex] || null;
-}
-
-function answerCurrentQuestion() {
-  const item = currentQuestionItem();
-  const field = els.questionFields.querySelector("[data-question]");
-  if (!item || !field) return;
-  const value = field.value.trim();
-  if (value) {
-    questionFlow.answers[item.question] = value;
-    questionFlow.skipped.delete(item.question);
-  }
-}
-
 function renderQuestionFields(questions) {
-  const previousAnswers = { ...questionFlow.answers, ...buildAnswers() };
-  questionFlow = {
-    questions: normalizeQuestionFlow(questions),
-    currentIndex: 0,
-    answers: previousAnswers,
-    skipped: new Set([...questionFlow.skipped].filter((question) => !previousAnswers[question])),
-    showAll: false,
-  };
-  renderQuestionCard();
-}
-
-function renderQuestionCard() {
-  if (!questionFlow.questions.length) {
-    els.questionFields.innerHTML = '<div class="question-empty">Sorular henüz hazırlanmadı.</div>';
-    return;
-  }
-  if (questionFlow.showAll) {
-    els.questionFields.innerHTML = `
-      <div class="question-flow-head">
-        <strong>Tüm sorular</strong>
-        <button class="ghost-btn small-btn" type="button" data-action="toggle-question-mode">Kart moduna dön</button>
-      </div>
-      ${questionFlow.questions
-        .map((item, index) => {
-          const value = questionFlow.answers[item.question] || "";
-          const optionButtons = (item.options || questionOptions(item.question))
-            .slice(0, 5)
-            .map((option) => `<button class="answer-chip" type="button" data-option="${escapeHtml(option)}">${escapeHtml(option)}</button>`)
-            .join("");
-          return `
-            <label class="question-card compact-question-card">
-              <span>${index + 1}. ${escapeHtml(item.question)}</span>
-              <textarea data-question="${escapeHtml(item.question)}" rows="2">${escapeHtml(value)}</textarea>
-              <div class="answer-chips">${optionButtons}</div>
-            </label>
-          `;
-        })
-        .join("")}
-      <button class="primary-btn small-btn" type="button" data-action="prepare-draft-from-questions">Dilekçeyi Hazırla</button>
-    `;
-    return;
-  }
-  const item = currentQuestionItem();
-  const answeredCount = Object.values(questionFlow.answers).filter(Boolean).length;
-  const progress = `${questionFlow.currentIndex + 1} / ${questionFlow.questions.length}`;
-  const value = questionFlow.answers[item.question] || "";
-  const optionButtons = (item.options || questionOptions(item.question))
-    .slice(0, 5)
-    .map((option) => `<button class="answer-chip" type="button" data-option="${escapeHtml(option)}">${escapeHtml(option)}</button>`)
+  const usableQuestions = questions?.length ? questions : fallbackQuestions;
+  els.questionFields.innerHTML = usableQuestions
+    .map((question, index) => {
+      const options = questionOptions(question);
+      const optionButtons = options
+        .map(
+          (option) => `
+            <button class="answer-chip" type="button" data-option="${escapeHtml(option)}">
+              ${escapeHtml(option)}
+            </button>
+          `,
+        )
+        .join("");
+      return `
+        <label class="question-card">
+          <span>${index + 1}. ${escapeHtml(question)}</span>
+          <textarea data-question="${escapeHtml(question)}" rows="3"></textarea>
+          <div class="answer-chips" aria-label="Hazır cevap seçenekleri">${optionButtons}</div>
+        </label>
+      `;
+    })
     .join("");
-  const isLast = questionFlow.currentIndex >= questionFlow.questions.length - 1;
-  els.questionFields.innerHTML = `
-    <div class="question-flow-head">
-      <strong>Soru ${progress}</strong>
-      <span>${answeredCount} cevap</span>
-    </div>
-    <label class="question-card active-question-card">
-      <span>${escapeHtml(item.question)}</span>
-      <textarea data-question="${escapeHtml(item.question)}" rows="4" placeholder="Elle yaz">${escapeHtml(value)}</textarea>
-      <div class="answer-chips" aria-label="Hazır cevap seçenekleri">${optionButtons}</div>
-    </label>
-    <div class="question-nav">
-      <button class="ghost-btn small-btn" type="button" data-action="prev-question" ${questionFlow.currentIndex === 0 ? "disabled" : ""}>Geri</button>
-      <button class="ghost-btn small-btn" type="button" data-action="skip-question">Atla</button>
-      <button class="primary-btn small-btn" type="button" data-action="${isLast ? "prepare-draft-from-questions" : "next-question"}">
-        ${isLast ? "Dilekçeyi Hazırla" : "Sonraki"}
-      </button>
-    </div>
-    <button class="ghost-btn small-btn full-width-btn" type="button" data-action="toggle-question-mode">Tüm soruları göster</button>
-  `;
 }
 
 function resetQuestions() {
   lastStrategy = null;
   lastStrategyCase = "";
   lastStrategyRequest = "";
-  questionFlow = { questions: [], currentIndex: 0, answers: {}, skipped: new Set(), showAll: false };
   els.strategyOutput.className = "strategy-output";
   els.strategyOutput.innerHTML = "";
   els.questionFields.innerHTML = '<div class="question-empty">Sorular henüz hazırlanmadı.</div>';
@@ -826,7 +543,7 @@ function questionsAreCurrent() {
 }
 
 function buildAnswers() {
-  const answers = { ...questionFlow.answers };
+  const answers = {};
   els.questionFields.querySelectorAll("[data-question]").forEach((field) => {
     const question = field.dataset.question;
     const answer = field.value.trim();
@@ -838,46 +555,6 @@ function buildAnswers() {
 }
 
 function handleQuestionOptionClick(event) {
-  const actionButton = event.target.closest("[data-action]");
-  if (actionButton) {
-    const action = actionButton.dataset.action;
-    if (action === "prev-question") {
-      answerCurrentQuestion();
-      questionFlow.currentIndex = Math.max(0, questionFlow.currentIndex - 1);
-      renderQuestionCard();
-      renderRisks();
-      return;
-    }
-    if (action === "next-question") {
-      answerCurrentQuestion();
-      questionFlow.currentIndex = Math.min(questionFlow.questions.length - 1, questionFlow.currentIndex + 1);
-      renderQuestionCard();
-      renderRisks();
-      return;
-    }
-    if (action === "skip-question") {
-      const item = currentQuestionItem();
-      if (item) {
-        delete questionFlow.answers[item.question];
-        questionFlow.skipped.add(item.question);
-      }
-      questionFlow.currentIndex = Math.min(questionFlow.questions.length - 1, questionFlow.currentIndex + 1);
-      renderQuestionCard();
-      renderRisks();
-      return;
-    }
-    if (action === "toggle-question-mode") {
-      answerCurrentQuestion();
-      questionFlow.showAll = !questionFlow.showAll;
-      renderQuestionCard();
-      return;
-    }
-    if (action === "prepare-draft-from-questions") {
-      answerCurrentQuestion();
-      runDraft({ force: true, auditAndRefine: true }).catch((error) => setStatus(error.message, true));
-      return;
-    }
-  }
   const button = event.target.closest(".answer-chip");
   if (!button) return;
 
@@ -887,9 +564,7 @@ function handleQuestionOptionClick(event) {
   if (!field || !value) return;
 
   appendAnswerOption(field, value);
-  answerCurrentQuestion();
   button.classList.add("selected");
-  renderRisks();
   setStatus("Seçenek cevaba eklendi.");
 }
 
@@ -906,110 +581,24 @@ function renderDraft(data) {
   els.draftOutput.textContent = parts.filter(Boolean).join("\n");
 }
 
-function dynamicRiskState() {
-  const rawCombined = [getCaseText(), getRequestType(), Object.values(buildAnswers()).join(" ")].join(" ");
-  const combined = plainText(rawCombined);
-  const profile = currentProfileKey();
-  const completed = [];
-  const partial = [];
-  const missing = [];
-
-  if (profile === "defectiveVehicle") {
-    const hasDate = /\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b/.test(rawCombined) || /\b20\d{2}\b/.test(rawCombined);
-    const hasAmount = /(?:₺|\btl\b|\blira\b|\b\d{4,}\b)/i.test(rawCombined);
-    const hasSeller = ["galeri", "sirket", "gercek kisi", "tacir"].some((term) => combined.includes(term));
-    const hasSaleDoc = ["noter satis", "dekont", "banka dekontu", "elden odeme"].some((term) => combined.includes(term));
-    const hasVehicleMarker = ["plaka", "sasi", "marka", "model"].some((term) => combined.includes(term));
-    const hasReport = ["servis raporu", "ekspertiz raporu", "rapor"].some((term) => combined.includes(term));
-    const hasReportDetail = hasReport && (hasDate || /rapor\s*(no|numara|numarası)/i.test(rawCombined));
-    const hasTramer = combined.includes("tramer");
-    const hasNotice = ["whatsapp", "sms", "noter ihtar", "bildirim", "ihbar"].some((term) => combined.includes(term));
-    const hasDemand = ["bedel iadesi", "sozlesmeden donme", "bedel indirimi", "onarim gideri", "masraf"].some((term) => combined.includes(term));
-
-    if (hasSeller) completed.push("Satıcı sıfatı");
-    else missing.push("Satıcı galeri/şirket/tacir/gerçek kişi olarak netleştirilmeli");
-
-    if (hasSaleDoc) completed.push("Satış belgesi / ödeme dayanağı");
-    else missing.push("Satış belgesi ve ödeme dayanağı eklenmeli");
-
-    if (hasAmount) completed.push("Satış bedeli miktarı");
-    else if (combined.includes("bedel")) partial.push("Satış bedeli var, miktar girilmeli");
-    else missing.push("Satış bedelinin miktarı girilmeli");
-
-    if (hasDate) completed.push("Tarih bilgisi");
-    else missing.push("Satış tarihi, ayıbın öğrenilme tarihi ve bildirim tarihi somutlaştırılmalı");
-
-    if (hasVehicleMarker && (combined.includes("plaka") || combined.includes("sasi")) && (combined.includes("marka") || combined.includes("model"))) {
-      completed.push("Araç marka/model/plaka/şasi bilgisi");
-    } else if (hasVehicleMarker) {
-      partial.push("Araç bilgisi kısmen tamamlandı; marka-model, plaka ve şasi bilgisi somutlaştırılmalı");
-    } else {
-      missing.push("Araç marka-model, plaka ve şasi bilgisi somutlaştırılmalı");
-    }
-
-    if (hasReportDetail) completed.push("Servis/ekspertiz rapor bilgisi");
-    else if (hasReport) partial.push("Ayıp tespit belgesi kısmen tamamlandı; servis/ekspertiz rapor tarihi ve numarası yazılmalı");
-    else missing.push("Servis/ekspertiz raporu veya teknik tespit belgesi eklenmeli");
-
-    if (hasTramer && hasDate) completed.push("TRAMER/hasar kaydı içeriği");
-    else if (hasTramer) partial.push("TRAMER kaydı kısmen tamamlandı; tarih ve içerik dosyaya eklenmeli");
-    else missing.push("TRAMER kaydı varsa içeriği dosyaya eklenmeli");
-
-    if (hasNotice && hasDate) completed.push("Ayıp ihbarı tarihi ve yöntemi");
-    else if (hasNotice) partial.push("Ayıp ihbarı kısmen tamamlandı; bildirim tarihi ve tebliğ/mesaj kaydı eklenmeli");
-    else missing.push("Ayıp ihbarının tarihi ve yöntemi netleştirilmeli");
-
-    if (hasDemand) completed.push("Talep stratejisi");
-    else missing.push("Asli ve terditli talep stratejisi netleştirilmeli");
-  } else {
-    const checks = [
-      ["Taraf sıfatları", ["davaci", "davali", "muvekkil"]],
-      ["Talep sonucu", ["talep", "dava", "kabul"]],
-      ["Deliller", ["belge", "tanik", "rapor", "kayit", "dekont"]],
-    ];
-    checks.forEach(([label, terms]) => {
-      if (terms.some((term) => combined.includes(term))) completed.push(label);
-      else missing.push(label);
-    });
-  }
-
-  const skipped = [...questionFlow.skipped].map((question) => `Atlandı: ${question}`);
-  const answeredCount = Object.values(buildAnswers()).filter(Boolean).length;
-  const missingCount = missing.length + skipped.length;
-  const riskScore = missingCount * 2 + partial.length;
-  const riskLevel = riskScore >= 12 ? "Yüksek" : riskScore >= 7 ? "Orta-Yüksek" : riskScore >= 4 ? "Orta" : "Düşük";
-  const riskNotes = [];
-  if (profile === "defectiveVehicle" && !completed.includes("Ayıp ihbarı tarihi ve yöntemi")) {
-    riskNotes.push("Ayıp ihbarı tarihi ve yöntemi netleşmezse TBK m. 223 yönünden risk doğabilir.");
-  }
-  if (profile === "defectiveVehicle" && !completed.includes("Servis/ekspertiz rapor bilgisi")) {
-    riskNotes.push("Servis/ekspertiz/TRAMER belgesi yoksa ayıbın satış anında mevcut olduğunu ispat güçleşir.");
-  }
-  return { completed, partial, missing: [...missing, ...skipped], riskLevel, riskNotes, answeredCount };
-}
-
 function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, sourceAudit = null, precedentAudit = null, draftWarnings = [] } = {}) {
   const cards = [];
-  const dynamic = dynamicRiskState();
-  const missing = [...dynamic.missing, ...(caseEnrichment?.missing_facts || []), ...(draftAudit?.missing_facts || [])];
-  const riskFlags = [`Risk seviyesi: ${dynamic.riskLevel}`, ...dynamic.riskNotes, ...(caseEnrichment?.risk_flags || []), ...(draftAudit?.critical_issues || []), ...(draftAudit?.major_issues || [])];
-  const rejectedSourceCount = (sourceAudit?.audited_sources || []).filter((item) => !item.use_in_petition).length;
+  const missing = [...(caseEnrichment?.missing_facts || []), ...(draftAudit?.missing_facts || [])];
+  const riskFlags = [...(caseEnrichment?.risk_flags || []), ...(draftAudit?.critical_issues || []), ...(draftAudit?.major_issues || [])];
   const sourceProblems = [
     ...(draftAudit?.source_problems || []),
-    rejectedSourceCount ? "Konu dışı kaynaklar filtrelendi." : "",
-  ].filter(Boolean);
-  const safeDraftDecisionCount = mapSelectedDecisions().length;
-  const riskyAuditItems = (precedentAudit?.audited_precedents || []).filter((item) => item.alignment === "riskli" || item.alignment === "aleyhe");
+    ...((sourceAudit?.audited_sources || [])
+      .filter((item) => !item.use_in_petition)
+      .map((item) => item.source_rejected_reason || item.reason)
+      .filter(Boolean)),
+  ];
   const precedentProblems = [
-    ...(draftAudit?.precedent_problems || []).filter((item) => {
-      const plain = plainText(item);
-      if (plain.includes("tekrar") && safeDraftDecisionCount) return false;
-      if (plain.includes("riskli") && safeDraftDecisionCount) return false;
-      return true;
-    }),
-    !safeDraftDecisionCount && lastDecisions.length ? "Emsaller bulundu; ancak güvenli biçimde dilekçeye alınabilecek doğrudan lehe emsal sınırlı." : "",
-    riskyAuditItems.length && !safeDraftDecisionCount ? "Riskli/aleyhe kararlar talebi destekler gibi kullanılmadı." : "",
-  ].filter(Boolean);
+    ...(draftAudit?.precedent_problems || []),
+    ...((precedentAudit?.audited_precedents || [])
+      .filter((item) => item.alignment === "riskli" || item.alignment === "aleyhe")
+      .map((item) => item.risk_reason || RISK_PRECEDENT_PARAGRAPH)
+      .filter(Boolean)),
+  ];
   const languageProblems = [...(draftAudit?.petition_language_problems || []), ...(draftWarnings || [])];
 
   const pushCard = (title, items, badgeClass = "info") => {
@@ -1018,13 +607,11 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
     cards.push({ title, items: cleanItems, badgeClass });
   };
 
-  pushCard("Eksik Bilgiler", missing, "warning");
-  pushCard("Kısmen Tamamlananlar", dynamic.partial, "warning");
-  pushCard("Tamamlananlar", dynamic.completed, "info");
+  pushCard("Eksik bilgiler", missing, "warning");
   pushCard("Dava riskleri", riskFlags, "danger");
-  pushCard("Emsal denetimi", precedentProblems, "warning");
   pushCard("Kaynak denetimi", sourceProblems, "warning");
-  pushCard("Dilekçe Notları", languageProblems, "info");
+  pushCard("Emsal denetimi", precedentProblems, "warning");
+  pushCard("Dilekçe notları", languageProblems, "info");
 
   els.riskCount.textContent = String(cards.reduce((total, card) => total + card.items.length, 0));
   if (!cards.length) {
@@ -1073,151 +660,6 @@ function renderReviewSummary({ analysis = null, enrichment = null, sourceCount =
             .join("")}</div></div>`
         : ""
     }
-  `;
-}
-
-function vehicleClientQuestions() {
-  return [
-    "Aracı hangi tarihte aldınız?",
-    "Satış bedeli kaç TL?",
-    "Satıcı galeri/şirket miydi, gerçek kişi miydi?",
-    "Ödeme nasıl yapıldı ve dekont var mı?",
-    "Araçta arıza ne zaman ortaya çıktı?",
-    "Servis veya ekspertiz raporu var mı?",
-    "TRAMER/hasar kaydı var mı?",
-    "Satıcıya ne zaman ve nasıl bildirim yaptınız?",
-    "Noter ihtarnamesi gönderildi mi?",
-    "Onarım, ekspertiz ve servis masrafları kaç TL?",
-  ];
-}
-
-function defenseSimulationItems() {
-  if (currentProfileKey() !== "defectiveVehicle") {
-    return [
-      ["Somut vakıalar eksik", "Eksik tarih, belge ve deliller tamamlanmalıdır.", "Belge/tanık/resmi kayıt", "Orta"],
-      ["İspat yükü davacıda", "Her vakıa delille eşleştirilmelidir.", "Delil listesi ve bilirkişi", "Orta"],
-    ];
-  }
-  return [
-    ["Araç görülerek alındı.", "Ayıp gizli niteliktedir; olağan muayene ile fark edilmesi beklenemez.", "Servis/ekspertiz raporu, bilirkişi", "Orta"],
-    ["Arıza satıştan sonra oluştu.", "Arızanın satıştan önce mevcut olduğu teknik inceleme ile ispatlanmalıdır.", "Servis kayıtları, TRAMER, bilirkişi", "Yüksek"],
-    ["Ayıp ihbarı süresinde yapılmadı.", "Bildirim tarihi WhatsApp, SMS, noter ihtarı veya tebliğ kayıtlarıyla somutlaştırılmalıdır.", "Yazışma, ihtarname, tebliğ şerhi", "Orta"],
-    ["Satıcı ayıbı bilmiyordu.", "TBK ayıptan sorumluluk rejimi kapsamında bildirilmeyen gizli ayıp ayrıca değerlendirilmelidir.", "Satış ilanı, beyanlar, teknik kayıtlar", "Orta"],
-  ];
-}
-
-function renderStrategyToolkit() {
-  const dynamic = dynamicRiskState();
-  const answers = buildAnswers();
-  const profile = currentProfileKey();
-  const hasDecisions = lastDecisions.length > 0;
-  const directSources = lastBrainResults.filter((item) => item.is_directly_relevant !== false);
-  const strategyGroups = [
-    ["Güçlü yönler", [
-      profile === "defectiveVehicle" ? "Satıcı beyanı, kısa sürede ortaya çıkan arıza ve teknik tespit birlikte kurulursa gizli ayıp anlatımı güçlenir." : "Olay, talep ve delil bağlantısı netleştirildikçe dava iskeleti güçlenir.",
-      dynamic.completed.length ? `Tamamlanan bilgi başlıkları: ${dynamic.completed.join(", ")}.` : "",
-    ]],
-    ["Kısmen tamamlanan bilgi", dynamic.partial.length ? dynamic.partial : ["Kısmen tamamlanan başlık yok."]],
-    ["Somutlaştırılması gereken bilgi", dynamic.missing.length ? dynamic.missing.map((item) => `${item}.`) : ["Belirgin kritik eksik şimdilik görünmüyor."]],
-    ["Kritik eksik / görev listesi", profile === "defectiveVehicle" ? [
-      "Satış tarihi ve satış bedeli somutlaştırılmalı.",
-      "Araç marka/model/plaka/şasi bilgisi eklenmeli.",
-      "Servis raporunun tarih, numara ve içeriği belirtilmeli.",
-      "Bildirim tarihi WhatsApp/SMS veya noter ihtarıyla ispatlanmalı.",
-      "TRAMER kaydı varsa içeriği dosyaya eklenmeli.",
-    ] : dynamic.missing.map((item) => `${item} tamamlanmalı.`)],
-    ["İspat stratejisi", profile === "defectiveVehicle" ? [
-      "Servis/ekspertiz/TRAMER kayıtları ve bilirkişi incelemesi ile ayıbın niteliği ve satış anındaki varlığı ispatlanmalı.",
-      "Satıcı beyanları ilan, mesaj ve tanıkla desteklenmeli.",
-    ] : ["Her vakıa, belge veya tanıkla eşleştirilmeli."]],
-    ["Delil tamamlama planı", [
-      "Eksik bilgi başlıkları tamamlanmalı.",
-      directSources.length ? "Doğrudan ilgili Legal Brain kaynakları dilekçe dayanaklarıyla kontrol edilmeli." : "Doğrudan ilgili kaynak bulunmadıysa kanun maddesi ve emsal taraması ayrıca teyit edilmeli.",
-    ]],
-    ["Muhtemel davalı savunmaları ve cevaplar", defenseSimulationItems().map(([defense, answer]) => `${defense} Cevap: ${answer}`)],
-    ["Asli / terditli talep stratejisi", [
-      profile === "defectiveVehicle" ? "Asli talep sözleşmeden dönme ve bedel iadesi; terditli talep bedel indirimi ve masrafların tahsili olarak korunmalı." : "Asli ve terditli talepler dava türüne göre açık ayrılmalı.",
-    ]],
-    ["Görev, yetki, süre, dava şartı", [
-      profile === "defectiveVehicle" ? "Satıcının tacir/galeri olup olmadığına göre Tüketici Mahkemesi / Asliye Hukuk değerlendirmesi yapılmalı." : "Görev, yetki ve dava şartı dosya özelinde kontrol edilmeli.",
-      `Güncel risk seviyesi: ${dynamic.riskLevel}.`,
-    ]],
-    ["Emsal kullanımı", [
-      hasDecisions ? "Lehe ve doğrudan bağlantılı kararlar numara, tarih ve kısa özetle kullanılmalı; riskli kararlar dilekçeye lehe gibi alınmamalı." : "Emsal bulunmadıysa karar numarası uydurulmadan emsal bölümü boş/temkinli bırakılmalı.",
-    ]],
-    ["Dava açmadan önce", dynamic.missing.length ? dynamic.missing.map((item) => `${item} tamamlanmalı.`).join(" ") : "Mevcut bilgilerle ilk taslak hazırlanabilir; son kontrol avukatta olmalı."],
-  ];
-  els.strategyCount.textContent = String(strategyGroups.length);
-  els.strategyTabOutput.className = "result-list";
-  els.strategyTabOutput.innerHTML = strategyGroups
-    .map(([title, items]) => {
-      const list = Array.isArray(items) ? items.filter(Boolean) : [items].filter(Boolean);
-      return `<div class="result-item"><h3>${escapeHtml(title)}</h3><ol class="compact-list">${list.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol></div>`;
-    })
-    .join("");
-
-  const clientQuestions = profile === "defectiveVehicle" ? vehicleClientQuestions() : questionFlow.questions.map((item) => item.question).slice(0, 10);
-  els.clientQuestionsOutput.className = "result-list";
-  els.clientQuestionsOutput.innerHTML = `<div class="result-item"><h3>Müvekkile gönderilecek kısa liste</h3><ol class="compact-list">${clientQuestions
-    .map((item) => `<li>${escapeHtml(item)}</li>`)
-    .join("")}</ol></div>`;
-
-  const defenses = defenseSimulationItems();
-  els.defenseCount.textContent = String(defenses.length);
-  els.defenseOutput.className = "result-list";
-  els.defenseOutput.innerHTML = defenses
-    .map(
-      ([defense, answer, evidence, risk]) => `
-        <div class="result-item">
-          <h3>${escapeHtml(defense)}</h3>
-          <div class="meta-row"><span class="chip blue">Risk: ${escapeHtml(risk)}</span><span class="chip">${escapeHtml(evidence)}</span></div>
-          <p>${escapeHtml(answer)}</p>
-        </div>
-      `,
-    )
-    .join("");
-
-  renderOfficialSourcesStatus();
-}
-
-function renderOfficialSourcesStatus() {
-  const sources = [
-    ["Resmî Gazete", "Whitelist", "Kanun ve yönetmelik değişiklikleri için resmi kaynak."],
-    ["Mevzuat kaynakları", "Whitelist", "Mevzuat doğrulaması için izinli/resmî kaynak."],
-    ["Yargıtay Karar Arama", "Whitelist", "Emsal karar taraması için resmî kaynak."],
-    ["UYAP Emsal", "Whitelist", "UYAP emsal taraması için resmî/izinli kaynak."],
-    ["Danıştay", "Whitelist", "İdari yargı içtihatları için resmî kaynak."],
-    ["Anayasa Mahkemesi", "Whitelist", "AYM kararları için resmî kaynak."],
-    ["Uyuşmazlık Mahkemesi", "Whitelist", "Görev uyuşmazlıkları için resmî kaynak."],
-  ];
-  els.officialSourceCount.textContent = String(sources.length);
-  els.officialSourcesOutput.className = "result-list";
-  els.officialSourcesOutput.innerHTML = `
-    <div class="result-item">
-      <h3>Resmî Kaynak Takibi</h3>
-      <div class="meta-row">
-        <span class="chip blue">Durum: Hazırlık aşamasında</span>
-        <span class="chip">Canlı tarama: Kapalı</span>
-        <span class="chip">Whitelist: Aktif</span>
-        <span class="chip">Rastgele web taraması: Kapalı</span>
-      </div>
-      <ol class="compact-list">
-        <li>Son kontrol: Henüz yapılmadı.</li>
-        <li>Yeni kaynak: Yok.</li>
-        <li>Rastgele blog, forum, haber sitesi veya izinsiz/telifli doktrin kazıması yapılmaz.</li>
-      </ol>
-    </div>
-    ${sources
-      .map(
-        ([name, status, note]) => `
-          <div class="result-item">
-            <h3>${escapeHtml(name)}</h3>
-            <div class="meta-row"><span class="chip blue">${escapeHtml(status)}</span><span class="chip">Doğrulama gerekli</span></div>
-            <p>${escapeHtml(note)}</p>
-          </div>
-        `,
-      )
-      .join("")}
   `;
 }
 
@@ -1397,13 +839,13 @@ async function runAuditPrecedents() {
     const auditMap = new Map((audit.audited_precedents || []).map((item) => [plainText(item.decision_id), item]));
     lastDecisions = lastDecisions
       .map((decision) => {
-        const item = auditItemForDecision(auditMap, decision);
+        const id = plainText([decision.court || "Yargıtay", decision.esas_no || "", decision.karar_no || "", decision.date || ""].join(" | "));
+        const item = auditMap.get(id);
         return item
           ? {
               ...decision,
               lehe_aleyhe: item.alignment,
               usefulness_score: item.use_in_petition ? decision.usefulness_score || "Orta" : "Düşük",
-              use_in_petition: item.use_in_petition,
               petition_paragraph: cleanOutputText(
                 item.petition_usage_paragraph || decision.petition_paragraph,
                 item.alignment === "riskli" || item.alignment === "aleyhe" ? RISK_PRECEDENT_PARAGRAPH : DEFAULT_PRECEDENT_PARAGRAPH,
@@ -1413,7 +855,7 @@ async function runAuditPrecedents() {
           : decision;
       })
       .filter((decision) => !decision._is_duplicate);
-    renderDecisions({ ...(lastYargitaySearch || {}), top_decisions: lastDecisions });
+    renderDecisions({ top_decisions: lastDecisions });
     renderRisks({ precedentAudit: audit });
     setStatus("Emsal denetimi tamamlandı.");
     return audit;
@@ -1423,7 +865,7 @@ async function runAuditPrecedents() {
 }
 
 function mapStrategyDecisions() {
-  return draftableDecisions(5).map((item) => ({
+  return lastDecisions.filter(decisionUsableForDraft).slice(0, 5).map((item) => ({
     similarity_score: item.similarity_score ?? 0,
     usefulness_score: item.usefulness_score || "orta",
     court: item.court || "Yargıtay",
@@ -1439,7 +881,7 @@ function mapStrategyDecisions() {
 }
 
 function mapSelectedDecisions() {
-  return draftableDecisions(3).map((item) => ({
+  return lastDecisions.filter(decisionUsableForDraft).slice(0, 5).map((item) => ({
     court: item.court || "Yargıtay",
     esas_no: item.esas_no || "-",
     karar_no: item.karar_no || "-",
@@ -1448,14 +890,7 @@ function mapSelectedDecisions() {
   }));
 }
 
-function draftableDecisions(limit = 3) {
-  const preferred = lastDecisions.filter(decisionUsableForDraft);
-  const fallback = lastDecisions.filter(decisionSafeForDraft);
-  return (preferred.length ? preferred : fallback).slice(0, limit);
-}
-
 function decisionUsableForDraft(item) {
-  if (item.use_in_petition === false) return false;
   const score = Number(item.similarity_score ?? 0);
   const alignment = plainText(`${item.lehe_aleyhe || ""} ${item.petition_paragraph || ""}`);
   if (alignment.includes("riskli") || alignment.includes("aleyhe")) {
@@ -1465,29 +900,7 @@ function decisionUsableForDraft(item) {
   if (plainText(usefulness).includes("dusuk")) {
     return false;
   }
-  return score >= 45 && !usefulness.includes("düşük");
-}
-
-function decisionSafeForDraft(item) {
-  if (item.use_in_petition === false) return false;
-  const alignment = plainText(`${item.lehe_aleyhe || ""} ${item.usefulness_score || ""} ${item.petition_paragraph || ""}`);
-  if (alignment.includes("riskli") || alignment.includes("aleyhe") || alignment.includes("dusuk")) return false;
-  return Number(item.similarity_score ?? 0) >= 35;
-}
-
-function decisionAuditKeys(decision) {
-  return [
-    [decision.court || "Yargıtay", decision.esas_no || "", decision.karar_no || "", decision.date || ""].join(" | "),
-    `${decision.court || "Yargıtay"}, E. ${decision.esas_no || ""}, K. ${decision.karar_no || ""}, T. ${decision.date || ""}`,
-    [decision.court || "Yargıtay", decision.esas_no || "", decision.karar_no || "", decision.date || ""].join(" "),
-  ].map((value) => plainText(value));
-}
-
-function auditItemForDecision(auditMap, decision) {
-  for (const key of decisionAuditKeys(decision)) {
-    if (auditMap.has(key)) return auditMap.get(key);
-  }
-  return null;
+  return score >= 55 && !usefulness.includes("düşük");
 }
 
 async function prepareQuestions(force = false) {
@@ -1513,10 +926,9 @@ async function prepareQuestions(force = false) {
   }
 }
 
-async function runDraft(options = {}) {
+async function runDraft() {
   const caseText = assertCaseText();
-  answerCurrentQuestion();
-  if (!options.force && !questionsAreCurrent()) {
+  if (!questionsAreCurrent()) {
     await prepareQuestions(false);
     return;
   }
@@ -1531,47 +943,8 @@ async function runDraft(options = {}) {
       use_legal_brain: true,
       legal_language_level: "usta_avukat",
     });
-    lastDraftData = data;
     renderDraft(data);
-    let draftAudit = null;
-    if (options.auditAndRefine) {
-      setStatus("Dilekçe kalite kontrolü yapılıyor...");
-      draftAudit = await apiPost("/ai/audit-draft", {
-        case_text: caseText,
-        draft_text: currentDraftText(),
-        case_enrichment: lastCaseEnrichment || {},
-        selected_decisions: mapSelectedDecisions(),
-        use_gemini: true,
-      });
-      lastDraftAudit = draftAudit;
-      renderDraftAudit(draftAudit);
-
-      if (draftAudit.can_refine && !(draftAudit.critical_issues || []).length) {
-        setStatus("Usta avukat redaksiyonu deneniyor...");
-        const refined = await apiPost("/ai/refine-draft", {
-          case_text: caseText,
-          draft_text: currentDraftText(),
-          case_enrichment: lastCaseEnrichment || {},
-          selected_decisions: mapSelectedDecisions(),
-          use_gemini: true,
-        });
-        if (refined.refined_draft && refined.accepted) {
-          els.draftOutput.textContent = refined.refined_draft;
-        }
-      } else {
-        setStatus("Kritik uyarı nedeniyle redaksiyon atlandı.");
-      }
-    }
-    renderStrategyToolkit();
-    renderRisks({
-      caseEnrichment: lastCaseEnrichment,
-      sourceAudit: lastSourceAudit,
-      precedentAudit: lastPrecedentAudit,
-      draftAudit: draftAudit || lastDraftAudit,
-      draftWarnings: data.warnings || [],
-    });
-    switchTab("petition");
-    setStatus(options.auditAndRefine ? "Dilekçe taslağı, kalite kontrol ve redaksiyon akışı hazır." : "Dilekçe taslağı hazır.");
+    setStatus("Dilekçe taslağı hazır.");
     return data;
   } finally {
     setBusy(false);
@@ -1685,7 +1058,6 @@ async function runFullReview() {
       sources: lastBrainResults,
       use_gemini: true,
     });
-    lastSourceAudit = sourceAudit;
     const sourceAuditMap = new Map((sourceAudit.audited_sources || []).map((item) => [item.source_id, item]));
     const auditedSources = lastBrainResults
       .map((source, index) => {
@@ -1722,17 +1094,16 @@ async function runFullReview() {
       precedents: lastDecisions,
       use_gemini: true,
     });
-    lastPrecedentAudit = precedentAudit;
     const precedentAuditMap = new Map((precedentAudit.audited_precedents || []).map((item) => [plainText(item.decision_id), item]));
     lastDecisions = lastDecisions
       .map((decision) => {
-        const item = auditItemForDecision(precedentAuditMap, decision);
+        const id = plainText([decision.court || "Yargıtay", decision.esas_no || "", decision.karar_no || "", decision.date || ""].join(" | "));
+        const item = precedentAuditMap.get(id);
         return item
           ? {
               ...decision,
               lehe_aleyhe: item.alignment,
               usefulness_score: item.use_in_petition ? decision.usefulness_score || "Orta" : "Düşük",
-              use_in_petition: item.use_in_petition,
               petition_paragraph: cleanOutputText(
                 item.petition_usage_paragraph || decision.petition_paragraph,
                 item.alignment === "riskli" || item.alignment === "aleyhe" ? RISK_PRECEDENT_PARAGRAPH : DEFAULT_PRECEDENT_PARAGRAPH,
@@ -1742,18 +1113,57 @@ async function runFullReview() {
           : decision;
       })
       .filter((decision) => !decision._is_duplicate);
-    renderDecisions({ ...yargitay, top_decisions: lastDecisions });
+    renderDecisions({ top_decisions: lastDecisions });
     renderRisks({ caseEnrichment: enrichment, sourceAudit, precedentAudit });
-    renderStrategyToolkit();
+
+    setStatus("9/11 Dilekçe taslağı hazırlanıyor...");
+    draft = await apiPost("/petition/draft", {
+      case_text: caseText,
+      answers: buildAnswers(),
+      selected_decisions: mapSelectedDecisions(),
+      request_type: getRequestType(),
+      tone: "Ölçülü ve ikna edici",
+      use_legal_brain: true,
+      legal_language_level: "usta_avukat",
+    });
+    renderDraft(draft);
+
+    setStatus("10/11 Dilekçe kalite kontrolü yapılıyor...");
+    draftAudit = await apiPost("/ai/audit-draft", {
+      case_text: caseText,
+      draft_text: currentDraftText(),
+      case_enrichment: enrichment,
+      selected_decisions: mapSelectedDecisions(),
+      use_gemini: true,
+    });
+    renderDraftAudit(draftAudit);
+
+    if (draftAudit.can_refine && !(draftAudit.critical_issues || []).length) {
+      setStatus("11/11 Usta avukat redaksiyonu deneniyor...");
+      const refined = await apiPost("/ai/refine-draft", {
+        case_text: caseText,
+        draft_text: currentDraftText(),
+        case_enrichment: enrichment,
+        selected_decisions: mapSelectedDecisions(),
+        use_gemini: true,
+      });
+      if (refined.refined_draft && refined.accepted) {
+        els.draftOutput.textContent = refined.refined_draft;
+      }
+    } else {
+      setStatus("11/11 Kritik uyarı nedeniyle redaksiyon atlandı.");
+    }
+
+    renderRisks({ caseEnrichment: enrichment, sourceAudit, precedentAudit, draftAudit, draftWarnings: draft?.warnings || [] });
     renderReviewSummary({
       analysis,
       enrichment,
       sourceCount: lastBrainResults.length,
       precedentCount: lastDecisions.length,
-      qualityScore: null,
+      qualityScore: draftAudit?.quality_score ?? null,
     });
-    switchTab("summary");
-    setStatus("Kaynak ve emsal incelemesi hazır. Soru kartlarını cevaplayıp son kartta Dilekçeyi Hazırla'ya bas.");
+    switchTab("petition");
+    setStatus("Emsalist inceleme tamamlandı.");
   } finally {
     setBusy(false);
   }
@@ -1780,56 +1190,6 @@ function downloadDraft() {
   URL.revokeObjectURL(url);
 }
 
-function downloadBlob(filename, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-function printDraft() {
-  const text = currentDraftText();
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    setStatus("Yazdırma penceresi açılamadı.", true);
-    return;
-  }
-  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Dilekçe</title><style>body{background:#f3f4f6;margin:0;padding:24px;font-family:Georgia,'Times New Roman',serif}.page{width:210mm;min-height:297mm;margin:auto;background:white;padding:25mm 22mm;box-shadow:0 0 0 1px #ddd;white-space:pre-wrap;line-height:1.6;color:#111827}@media print{body{background:white;padding:0}.page{box-shadow:none;margin:0;width:auto;min-height:auto}}</style></head><body><div class="page">${escapeHtml(text)}</div></body></html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-}
-
-function downloadDocx() {
-  const text = currentDraftText();
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Dilekçe</title></head><body><pre style="font-family:Georgia,'Times New Roman',serif;white-space:pre-wrap;line-height:1.6">${escapeHtml(text)}</pre></body></html>`;
-  downloadBlob("dilekce-taslagi.doc", html, "application/msword;charset=utf-8");
-  setStatus("Word uyumlu DOC çıktısı hazırlandı; DOCX servis modülü için altyapı ayrıldı.");
-}
-
-function downloadPdf() {
-  printDraft();
-  setStatus("PDF için yazdır penceresinde 'PDF olarak kaydet' seçilebilir.");
-}
-
-function downloadUdf() {
-  const text = currentDraftText();
-  const udf = `<?xml version="1.0" encoding="UTF-8"?>\n<emsalist-udf-placeholder>\n  <type>dilekce</type>\n  <note>UYAP UDF üretim modülü için placeholder çıktıdır.</note>\n  <content><![CDATA[${text}]]></content>\n</emsalist-udf-placeholder>\n`;
-  downloadBlob("dilekce-udf-placeholder.xml", udf, "application/xml;charset=utf-8");
-}
-
-async function copyClientQuestions() {
-  const text = (els.clientQuestionsOutput.innerText || "").trim();
-  if (!text) return;
-  await navigator.clipboard.writeText(text);
-  setStatus("Müvekkil soru listesi panoya kopyalandı.");
-}
-
 function clearAll() {
   els.caseText.value = "";
   els.requestType.value = "Talebimizin kabulü";
@@ -1837,36 +1197,20 @@ function clearAll() {
   lastBrainResults = [];
   lastCaseEnrichment = null;
   lastBetterSearches = null;
-  lastYargitaySearch = null;
-  lastDraftData = null;
-  lastDraftAudit = null;
-  lastSourceAudit = null;
-  lastPrecedentAudit = null;
   resetQuestions();
   els.analysisCount.textContent = "0";
   els.brainCount.textContent = "0";
   els.decisionCount.textContent = "0";
   els.riskCount.textContent = "0";
-  els.strategyCount.textContent = "0";
-  els.defenseCount.textContent = "0";
-  els.officialSourceCount.textContent = "0";
   els.analysisOutput.className = "empty-state";
   els.brainOutput.className = "empty-state";
   els.decisionOutput.className = "empty-state";
   els.riskOutput.className = "empty-state";
-  els.strategyTabOutput.className = "empty-state";
-  els.clientQuestionsOutput.className = "empty-state";
-  els.defenseOutput.className = "empty-state";
-  els.officialSourcesOutput.className = "empty-state";
   els.analysisOutput.textContent = "Henüz analiz yok.";
   els.brainOutput.textContent = "Henüz kaynak sonucu yok.";
   els.decisionOutput.textContent = "Henüz karar sonucu yok.";
   els.draftOutput.textContent = "Henüz dilekçe taslağı yok.";
   els.riskOutput.textContent = "Henüz risk değerlendirmesi yok.";
-  els.strategyTabOutput.textContent = "Henüz strateji hazırlanmadı.";
-  els.clientQuestionsOutput.textContent = "Henüz müvekkil soru listesi yok.";
-  els.defenseOutput.textContent = "Henüz savunma simülasyonu yok.";
-  els.officialSourcesOutput.textContent = "Henüz resmî kaynak takibi yok.";
   switchTab("summary");
   setStatus("");
 }
@@ -1897,10 +1241,6 @@ function wireEvents() {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
   });
   els.questionFields.addEventListener("click", handleQuestionOptionClick);
-  els.questionFields.addEventListener("input", () => {
-    answerCurrentQuestion();
-    renderRisks();
-  });
   els.analysisOutput.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action='use-ai-enrichment']");
     if (!button || !lastCaseEnrichment) return;
@@ -1946,40 +1286,10 @@ function wireEvents() {
   $("clearBtn").addEventListener("click", clearAll);
   $("copyDraftBtn").addEventListener("click", () => copyDraft().catch((error) => setStatus(error.message, true)));
   $("downloadDraftBtn").addEventListener("click", downloadDraft);
-  $("printDraftBtn")?.addEventListener("click", () => {
-    try {
-      printDraft();
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  });
-  $("downloadDocxBtn")?.addEventListener("click", () => {
-    try {
-      downloadDocx();
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  });
-  $("downloadPdfBtn")?.addEventListener("click", () => {
-    try {
-      downloadPdf();
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  });
-  $("downloadUdfBtn")?.addEventListener("click", () => {
-    try {
-      downloadUdf();
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  });
-  $("copyClientQuestionsBtn")?.addEventListener("click", () => copyClientQuestions().catch((error) => setStatus(error.message, true)));
   els.caseText.addEventListener("input", () => {
     lastStrategyCase = "";
     lastCaseEnrichment = null;
     lastBetterSearches = null;
-    lastYargitaySearch = null;
   });
   els.requestType.addEventListener("input", () => {
     lastStrategyRequest = "";
@@ -1987,5 +1297,4 @@ function wireEvents() {
 }
 
 wireEvents();
-renderOfficialSourcesStatus();
 checkHealth();

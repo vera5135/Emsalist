@@ -82,8 +82,6 @@ class RuleBasedLegalSummaryService:
         relevance_bonus = min(signal_score + recency_bonus + alignment_bonus, 35)
         rank_penalty = self._rank_penalty(is_procedural=is_procedural, lehe_aleyhe=lehe_aleyhe, signal_labels=signal_labels)
         final_score = max(0, min(100, base_similarity_score + relevance_bonus - rank_penalty))
-        if profile.key == "defective_vehicle":
-            final_score = self._vehicle_adjusted_score(final_score, match_text)
         identity = self._identity(decision)
 
         usefulness = self.usefulness_label(
@@ -130,16 +128,14 @@ class RuleBasedLegalSummaryService:
         needles = tuple(signal_labels[:6]) + ("dava", "talep", "mahkeme", "uyuşmazlık", "karar")
         chosen: list[str] = []
         for sentence in sentences:
-            if self._is_boilerplate_sentence(sentence):
-                continue
             matchable = self._matchable_text(sentence)
             if any(self._has(matchable, needle) for needle in needles):
                 chosen.append(sentence)
             if len(chosen) >= 3:
                 break
         if not chosen:
-            chosen = [sentence for sentence in sentences if not self._is_boilerplate_sentence(sentence)][:2]
-        return self._clip(self._clean_user_summary(" ".join(chosen)), 750)
+            chosen = sentences[:2]
+        return self._clip(" ".join(chosen), 750)
 
     @staticmethod
     def _legal_principle(profile_assessment: str, signal_labels: list[str], is_procedural: bool) -> str:
@@ -148,19 +144,15 @@ class RuleBasedLegalSummaryService:
                 "Karar ağırlıklı olarak usul, süre, görev, yetki veya kanun yolu koşullarıyla ilgilidir; "
                 "maddi uyuşmazlık bakımından sınırlı kullanılmalıdır."
             )
-        return (
-            "Anılan kararda, ayıplı satışta ayıbın niteliği, alıcının seçimlik hakları ve delil değerlendirmesi yönünden "
-            "ilkeler ortaya konulmuştur. Karar somut olayla benzerlik kurulabildiği ölçüde kullanılmalıdır."
-        )
+        signal_text = ", ".join(signal_labels[:5])
+        suffix = f" Kararda öne çıkan bağlantılar: {signal_text}." if signal_text else ""
+        return profile_assessment + suffix
 
     @staticmethod
     def _why_relevant(*, usefulness: str, signal_labels: list[str], is_procedural: bool) -> str:
-        if is_procedural:
-            return f"Dilekçede kullanılabilirlik: {usefulness}. Karar usuli ağırlıklı olduğundan maddi uyuşmazlık için sınırlı değerlendirilmelidir."
-        return (
-            f"Dilekçede kullanılabilirlik: {usefulness}. Karar; ayıbın niteliği, seçimlik haklar, ihbar ve delil bağlantısı "
-            "somut olayla örtüştüğü ölçüde destekleyici emsal olarak değerlendirilebilir."
-        )
+        signal_text = ", ".join(signal_labels[:6]) if signal_labels else "sınırlı kavram örtüşmesi"
+        note = " Usuli ağırlık nedeniyle alt sıralamaya itildi." if is_procedural else ""
+        return f"Dilekçede kullanılabilirlik: {usefulness}. Öne çıkan bağlantılar: {signal_text}.{note}"
 
     @staticmethod
     def _petition_paragraph(
@@ -178,49 +170,18 @@ class RuleBasedLegalSummaryService:
                 "göstermek amacıyla sınırlı kullanılmalıdır."
             )
 
+        signal_text = ", ".join(signal_labels[:4]) if signal_labels else "somut olay ve hukuki değerlendirme"
         if lehe_aleyhe == "Aleyhe":
             return (
                 f"{identity} sayılı karar, {profile_type} yönünden karşı tarafça ileri sürülebilecek değerlendirmeler "
-                "içermektedir. Dilekçede somut olayın bu karardan ayrılan yönleri açıkça gösterilmelidir."
+                f"içermektedir. Dilekçede somut olayın bu karardan ayrılan yönleri özellikle {signal_text} ekseninde açıklanmalıdır."
             )
 
         return (
-            f"{identity} sayılı karar, {profile_type} bakımından ayıbın niteliği, alıcının seçimlik hakları ve delil "
-            "değerlendirmesi yönünden somut olaya temas eden içtihat değerlendirmesi içermektedir. Bu nedenle dilekçede "
-            "talebin maddi vakıa, delil ve hukuki dayanak bağlantısını destekleyen kaynak olarak kullanılabilir."
+            f"{identity} sayılı karar, {profile_type} bakımından {signal_text} yönünden somut olaya temas eden içtihat "
+            "değerlendirmesi içermektedir. Bu nedenle dilekçede talebin maddi vakıa, delil ve hukuki dayanak bağlantısını "
+            "destekleyen kaynak olarak kullanılabilir."
         )
-
-    def _vehicle_adjusted_score(self, score: int, match_text: str) -> int:
-        vehicle_hits = sum(
-            self._has(match_text, term)
-            for term in (
-                "araç",
-                "arac",
-                "otomobil",
-                "ikinci el",
-                "galeri",
-                "motor",
-                "tramer",
-                "servis",
-                "ekspertiz",
-            )
-        )
-        hidden_defect_hits = sum(
-            self._has(match_text, term)
-            for term in ("gizli ayıp", "gizli ayip", "ayıp ihbarı", "ayip ihbari", "bedel indirimi", "sözleşmeden dönme")
-        )
-        real_estate_hits = sum(
-            self._has(match_text, term)
-            for term in ("taşınmaz", "tasinmaz", "konut", "daire", "bağımsız bölüm", "bagimsiz bolum")
-        )
-        if real_estate_hits and not vehicle_hits:
-            return min(score, 55)
-        if not vehicle_hits:
-            return min(score, 62)
-        adjusted = score + min(vehicle_hits * 3, 12) + min(hidden_defect_hits * 4, 16)
-        if vehicle_hits >= 2 and hidden_defect_hits >= 2:
-            adjusted += 6
-        return max(0, min(96, adjusted))
 
     def _classify_alignment(self, match_text: str, outcome: str, is_procedural: bool) -> str:
         supportive_score = sum(self._has(match_text, pattern) for pattern in SUPPORTIVE_PATTERNS)
@@ -291,80 +252,6 @@ class RuleBasedLegalSummaryService:
             if sentence.strip()
         ]
         return sentences[:35]
-
-    def _is_boilerplate_sentence(self, sentence: str) -> bool:
-        plain = self._plain(sentence)
-        return any(
-            marker in plain
-            for marker in (
-                "ictihat metni",
-                "mahkemesi",
-                "taraflar arasindaki",
-                "yargitay karari",
-                "geregi dusunuldu",
-                "durusma icin belirlenen",
-                "durusmali islerin yogunlugu",
-                "temyiz edilmesi uzerine",
-                "cagri kagidi gonderilmisti",
-                "belli gunde",
-                "hukumun suresi icinde",
-                "ilamda yazili nedenlerden",
-                "dosya incelendi",
-                "davaci vekili",
-                "davali vekili",
-            )
-        ) and len(sentence) < 260
-
-    def _clean_user_summary(self, text: str) -> str:
-        cleaned = re.sub(r"\bİçtihat Metni\b", "", text, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\bMAHKEMESİ\s*:\s*[^.]{0,120}", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"^.{0,260}?\bgereği\s+konuşulup\s+düşünüldü\.?", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"^.{0,260}?\bgeregi\s+konusulup\s+dusunuldu\.?", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\bK\s*A\s*R\s*A\s*R\b", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"Kararda öne çıkan bağlantılar\s*:[^.]+\.?", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\b(aracın,\s*araç,\s*ayıp[^.]{0,80})", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip(" -.;\"'“”")
-        cleaned = re.sub(r"^(?:[IVX]+\.\s*)?(?:DAVA|KARAR|GEREKÇE|HÜKÜM)\s+", "", cleaned, flags=re.IGNORECASE)
-        cleaned = self._drop_procedural_prefix(cleaned)
-        if self._looks_like_raw_summary(cleaned):
-            return self._default_summary()
-        if not cleaned:
-            return self._default_summary()
-        return cleaned
-
-    def _drop_procedural_prefix(self, text: str) -> str:
-        fact_match = re.search(r"\bDavac[ıi](?:lar)?(?:\s+vekili)?\s*,", text, flags=re.IGNORECASE)
-        if fact_match and fact_match.start() <= 420:
-            prefix = text[: fact_match.start()]
-            if self._looks_like_raw_summary(prefix) or len(prefix) > 40:
-                return text[fact_match.start() :].strip(" -.;\"'“”")
-        return text
-
-    def _looks_like_raw_summary(self, text: str) -> bool:
-        plain = self._plain(text[:260])
-        return any(
-            marker in plain
-            for marker in (
-                "ipli mal bedelinin iadesi davasinin yapilan yargilamasi",
-                "asil ve birlesen davanin reddine yonelik",
-                "davasinin yapilan yargilamasi sonunda",
-                "ilamda yazili nedenlerden dolayi",
-                "dosya incelendi",
-                "geregi konusulup dusunuldu",
-                "durusma icin belirlenen",
-                "durusmali islerin yogunlugu",
-                "temyiz edilmesi uzerine",
-                "cagri kagidi gonderilmisti",
-                "hukumun suresi icinde",
-            )
-        )
-
-    @staticmethod
-    def _default_summary() -> str:
-        return (
-            "Anılan kararda, ayıplı satışta ayıbın niteliği, alıcının seçimlik hakları ve delil değerlendirmesi "
-            "yönünden ilkeler ortaya konulmuştur."
-        )
 
     def _preview(self, text: str) -> str:
         preview = self._clip(" ".join(text.split()), 1000)

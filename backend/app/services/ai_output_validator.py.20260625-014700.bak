@@ -173,17 +173,12 @@ class AIOutputValidator:
     def _duplicate_decision_identities(text: str) -> list[str]:
         seen: set[str] = set()
         duplicates: list[str] = []
-        blocks = re.split(r"\n(?=\s*\d+\.\s)", text)
-        for block in blocks:
-            block_identities = {
-                f"E. {esas} K. {karar}"
-                for esas, karar in DECISION_RE.findall(block)
-            }
-            for identity in block_identities:
-                key = AIOutputValidator.plain(identity)
-                if key in seen and identity not in duplicates:
-                    duplicates.append(identity)
-                seen.add(key)
+        for esas, karar in DECISION_RE.findall(text):
+            identity = f"E. {esas} K. {karar}"
+            key = AIOutputValidator.plain(identity)
+            if key in seen and identity not in duplicates:
+                duplicates.append(identity)
+            seen.add(key)
         return duplicates
 
     @staticmethod

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Emsalist Legal Brain</title>
-    <link rel="stylesheet" href="styles.css?v=20260625-legal-flow-2" />
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="topbar">
@@ -103,11 +103,7 @@
           <button class="tab-button active" type="button" data-tab="summary">Özet</button>
           <button class="tab-button" type="button" data-tab="petition">Dilekçe</button>
           <button class="tab-button" type="button" data-tab="precedents">Emsaller</button>
-          <button class="tab-button" type="button" data-tab="strategy">Dava Stratejisi</button>
-          <button class="tab-button" type="button" data-tab="clientQuestions">Müvekkile Sorular</button>
-          <button class="tab-button" type="button" data-tab="defense">Savunma Simülasyonu</button>
           <button class="tab-button" type="button" data-tab="sources">Kaynaklar</button>
-          <button class="tab-button" type="button" data-tab="officialSources">Resmî Kaynak Takibi</button>
           <button class="tab-button" type="button" data-tab="risks">Eksikler / Riskler</button>
         </div>
 
@@ -124,11 +120,7 @@
             <h2>Dilekçe Taslağı</h2>
             <div class="draft-actions">
               <button id="copyDraftBtn" class="ghost-btn" type="button">Kopyala</button>
-              <button id="printDraftBtn" class="ghost-btn" type="button">Yazdır</button>
               <button id="downloadDraftBtn" class="ghost-btn" type="button">TXT</button>
-              <button id="downloadDocxBtn" class="ghost-btn" type="button">DOCX</button>
-              <button id="downloadPdfBtn" class="ghost-btn" type="button">PDF</button>
-              <button id="downloadUdfBtn" class="ghost-btn" type="button">UDF</button>
             </div>
           </div>
           <pre id="draftOutput">Henüz dilekçe taslağı yok.</pre>
@@ -142,44 +134,12 @@
           <div id="decisionOutput" class="empty-state">Henüz karar sonucu yok.</div>
         </article>
 
-        <article class="tab-panel" data-tab-panel="strategy">
-          <div class="section-head">
-            <h2>Dava Stratejisi</h2>
-            <span id="strategyCount">0</span>
-          </div>
-          <div id="strategyTabOutput" class="empty-state">Henüz strateji hazırlanmadı.</div>
-        </article>
-
-        <article class="tab-panel" data-tab-panel="clientQuestions">
-          <div class="section-head">
-            <h2>Müvekkile Sorulacak Sorular</h2>
-            <button id="copyClientQuestionsBtn" class="ghost-btn" type="button">Kopyala</button>
-          </div>
-          <div id="clientQuestionsOutput" class="empty-state">Henüz müvekkil soru listesi yok.</div>
-        </article>
-
-        <article class="tab-panel" data-tab-panel="defense">
-          <div class="section-head">
-            <h2>Karşı Taraf Savunma Simülasyonu</h2>
-            <span id="defenseCount">0</span>
-          </div>
-          <div id="defenseOutput" class="empty-state">Henüz savunma simülasyonu yok.</div>
-        </article>
-
         <article class="tab-panel" data-tab-panel="sources">
           <div class="section-head">
             <h2>Kaynaklar</h2>
             <span id="brainCount">0</span>
           </div>
           <div id="brainOutput" class="empty-state">Henüz kaynak sonucu yok.</div>
-        </article>
-
-        <article class="tab-panel" data-tab-panel="officialSources">
-          <div class="section-head">
-            <h2>Resmî Hukuk Kaynakları</h2>
-            <span id="officialSourceCount">0</span>
-          </div>
-          <div id="officialSourcesOutput" class="empty-state">Henüz resmî kaynak takibi yok.</div>
         </article>
 
         <article class="tab-panel" data-tab-panel="risks">
@@ -192,6 +152,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260625-legal-flow-2" defer></script>
+    <script src="app.js" defer></script>
   </body>
 </html>

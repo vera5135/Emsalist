@@ -44,16 +44,14 @@ class PetitionDraftService:
             if use_legal_brain
             else None
         )
-        legal_brain_section = (
-            "" if profile.key == "defective_vehicle" else legal_style_service.legal_brain_section(legal_memory)
-        ) if legal_memory else ""
+        legal_brain_section = legal_style_service.legal_brain_section(legal_memory) if legal_memory else ""
         draft_text = "\n\n".join(
             section
             for section in [
                 self._court_heading(profile=profile, case_text=case_text, answers=answers),
                 self._parties_section(),
                 self._subject_section(profile=profile, request_type=request_type),
-                self._case_frame_section(profile=profile, case_text=case_text, answers=answers),
+                self._case_frame_section(profile=profile, case_text=case_text),
                 self._fact_and_answer_section(profile=profile, case_text=case_text, answers=answers, tone=tone),
                 self._procedural_section(profile=profile, answers=answers),
                 self._legal_assessment_section(
@@ -134,14 +132,7 @@ class PetitionDraftService:
         )
 
     @staticmethod
-    def _case_frame_section(*, profile: PetitionProfile, case_text: str, answers: dict[str, str]) -> str:
-        if profile.key == "defective_vehicle":
-            sale_sentences = [
-                PetitionDraftService._vehicle_case_sentence(case_text, "sale"),
-                *PetitionDraftService._vehicle_answer_sentences(answers, "sale"),
-            ]
-            return PetitionDraftService._numbered_section("I. SATIŞ İLİŞKİSİ VE BEYANLAR", sale_sentences)
-
+    def _case_frame_section(*, profile: PetitionProfile, case_text: str) -> str:
         opening = {
             "eviction_need": (
                 "Dava, kiraya verenin veya kanunda sayılan yakınlarının gerçek, samimi ve zorunlu konut/işyeri "
@@ -212,150 +203,82 @@ class PetitionDraftService:
     def _defective_vehicle_fact_section(self, *, case_text: str, answers: dict[str, str]) -> str:
         answer_text = " ".join(value for value in answers.values() if value)
         source_text = self._clean(" ".join([case_text, answer_text]))
-        defect_sentences = [
-            self._vehicle_case_sentence(case_text, "defect"),
-            *self._vehicle_answer_sentences(answers, "defect"),
-        ]
-        notice_sentences = [
-            *self._vehicle_answer_sentences(answers, "notice"),
-        ]
-        if self._plain(case_text).find("cozmedi") >= 0 or self._plain(case_text).find("çözmedi") >= 0:
-            notice_sentences.append("Davalı satıcı bildirim üzerine ayıbı gidermemiş ve müvekkile çözüm sunmamıştır.")
-        if not notice_sentences:
-            notice_sentences.append(
-                "Ayıp ihbarının tarihi, yöntemi ve satıcıya ulaşma bilgisi yazışma, ihtarname veya diğer kayıtlarla somutlaştırılmalıdır."
-            )
+        sale = self._select_narrative(
+            source_text,
+            (
+                "satis",
+                "satim",
+                "noter",
+                "bedel",
+                "galeri",
+                "satici",
+                "beyan",
+                "ilan",
+                "kazasiz",
+                "hasarsiz",
+                "plaka",
+                "sasi",
+            ),
+            f"Müvekkil, dosyaya yansıyan anlatıma göre aracı satın almış; satış ilişkisi, satış bedeli ve satıcının satış öncesi beyanları dosyadaki belgelerle ortaya konulacaktır. Olay anlatımı: {source_text}.",
+        )
+        defect = self._select_narrative(
+            source_text,
+            (
+                "gizli ayip",
+                "ayip",
+                "ariza",
+                "motor",
+                "agir hasar",
+                "tramer",
+                "hasar kaydi",
+                "kilometre",
+                "onarim",
+                "ekspertiz",
+                "servis",
+            ),
+            "Araç tesliminden sonra olağan muayene ile fark edilmesi beklenmeyen ayıp emareleri ortaya çıkmış; ayıbın satış anında mevcut olup olmadığı servis kayıtları, ekspertiz raporu, hasar kayıtları ve bilirkişi incelemesiyle açıklığa kavuşturulacaktır.",
+        )
+        notice = self._select_narrative(
+            source_text,
+            (
+                "ihbar",
+                "bildirim",
+                "ihtar",
+                "whatsapp",
+                "sms",
+                "noter",
+                "ogrendi",
+                "ogrenil",
+            ),
+            "Müvekkil, ayıbı öğrendikten sonra satıcıya başvurarak ayıptan doğan haklarını kullanmak istemiştir; bildirim tarihi ve yöntemi dosyadaki yazışma, ihtarname veya diğer kayıtlarla somutlaştırılacaktır.",
+        )
+        demand = self._select_narrative(
+            source_text,
+            (
+                "sozlesmeden donme",
+                "bedel indirimi",
+                "iade",
+                "onarim gideri",
+                "deger kaybi",
+                "zarar",
+                "masraf",
+                "tahsil",
+            ),
+            "Müvekkilin öncelikli talebi sözleşmeden dönme ve satış bedelinin iadesidir; mahkeme aksi kanaatte olursa ayıp oranında bedel indirimi ile onarım, ekspertiz, servis ve sair zarar kalemlerinin tahsili talep edilmektedir.",
+        )
         return "\n".join(
             [
-                "II. AYIBIN ORTAYA ÇIKIŞI",
-                *self._numbered_lines(defect_sentences),
-                "",
-                "III. AYIP İHBARI",
-                *self._numbered_lines(notice_sentences),
+                "II. MADDİ VAKIALAR",
+                "A. Satış ilişkisi ve beyanlar",
+                f"1. {sale}",
+                "B. Ayıbın ortaya çıkışı",
+                f"2. {defect}",
+                "C. Ayıp ihbarı",
+                f"3. {notice}",
+                "D. Talep ve zarar kalemleri",
+                f"4. {demand}",
             ]
         )
-
-    @staticmethod
-    def _vehicle_case_sentence(case_text: str, section: str) -> str:
-        plain = PetitionDraftService._plain(case_text)
-        if section == "sale":
-            if "galeri" in plain or "sorunsuz" in plain:
-                return (
-                    "Müvekkil, davalı satıcıdan ikinci el araç satın almış; satış öncesinde aracın sorunsuz olduğu "
-                    "yönündeki beyanlara güvenmiştir."
-                )
-            return (
-                "Müvekkil, davalı satıcıdan ikinci el araç satın almış olup satış ilişkisinin kapsamı noter satış sözleşmesi, "
-                "ödeme belgeleri ve satıcı beyanlarıyla ortaya konulacaktır."
-            )
-        if section == "defect":
-            if "motor" in plain or "servis" in plain or "onarim" in plain:
-                return (
-                    "Teslimden kısa süre sonra araçta motor arızası ortaya çıkmış; servis incelemesinde arızanın eskiye "
-                    "dayandığı ve araçta gizli onarım izleri bulunduğu değerlendirilmiştir."
-                )
-            return (
-                "Araç tesliminden sonra olağan muayene ile fark edilmesi beklenmeyen ayıp emareleri ortaya çıkmıştır; ayıbın "
-                "satış anında mevcut olup olmadığı teknik incelemeyle açıklığa kavuşturulmalıdır."
-            )
-        return ""
-
-    @staticmethod
-    def _vehicle_answer_sentences(answers: dict[str, str], section: str) -> list[str]:
-        sentences: list[str] = []
-        for question, answer in answers.items():
-            question_plain = PetitionDraftService._plain(question)
-            for part in PetitionDraftService._answer_parts(answer):
-                part_plain = PetitionDraftService._plain(part)
-                sentence = PetitionDraftService._vehicle_chip_sentence(part_plain, section)
-                if sentence:
-                    sentences.append(sentence)
-
-            detail = PetitionDraftService._vehicle_manual_detail_sentence(question_plain, answer, section)
-            if detail:
-                sentences.append(detail)
-        return PetitionDraftService._unique_sentences(sentences)
-
-    @staticmethod
-    def _vehicle_chip_sentence(part_plain: str, section: str) -> str:
-        sale = {
-            "galeri/sirket": "Davalı satıcı galeri/şirket sıfatıyla hareket etmiş olup profesyonel satıcı konumundadır.",
-            "galeri sirket": "Davalı satıcı galeri/şirket sıfatıyla hareket etmiş olup profesyonel satıcı konumundadır.",
-            "gercek kisi": "Satıcının gerçek kişi olması nedeniyle görevli mahkeme ve tüketici işlemi niteliği ayrıca değerlendirilmelidir.",
-            "tacir": "Satıcının tacir/profesyonel satıcı niteliği, ayıba karşı sorumluluk değerlendirmesinde ayrıca önem taşımaktadır.",
-            "noter satis sozlesmesi var": "Satış ilişkisi noter satış sözleşmesiyle kurulmuştur.",
-            "banka dekontu var": "Satış bedelinin banka kanalıyla ödendiği ödeme dekontlarıyla ispatlanacaktır.",
-            "elden odeme": "Satış bedelinin elden ödendiği beyan edilmekte olup bu husus tanık, yazışma ve sair delillerle ispatlanacaktır.",
-            "plaka/sasi bilgisi belli": "Aracın plaka ve şasi bilgileri ruhsat ve tescil kayıtlarıyla ortaya konulacaktır.",
-            "marka-model belli": "Aracın marka ve modeli dosya kapsamındaki kayıtlarla ortaya konulacaktır.",
-            "satis bedeli belli": "Satış bedeli ayrıca tutarıyla birlikte somutlaştırılmalıdır.",
-            "sorunsuz denildi": "Satış öncesinde aracın sorunsuz olduğu beyan edilmiştir.",
-            "kazasiz denildi": "Satış öncesinde aracın kazasız ve sorunsuz olduğu beyan edilmiştir.",
-            "agir hasarsiz denildi": "Satış öncesinde aracın ağır hasarsız olduğu beyan edilmiştir.",
-            "ilan goruntusu var": "Satış ilanı ve ilan içeriği satıcının beyanlarını göstermek üzere dosyaya sunulmalıdır.",
-        }
-        defect = {
-            "servis raporu": "Ayıp, servis raporu ile tespit edilmiştir.",
-            "ekspertiz raporu": "Ayıp ve aracın satış anındaki durumu ekspertiz raporu ile desteklenmektedir.",
-            "tramer kaydi": "Aracın hasar geçmişi TRAMER kayıtlarıyla araştırılmalı ve dosyaya sunulmalıdır.",
-            "serviste ogrenildi": "Müvekkil ayıbı servis incelemesi sırasında öğrenmiştir.",
-            "teslimden kisa sure sonra": "Ayıp teslimden kısa süre sonra ortaya çıkmıştır.",
-            "ilk kullanimda": "Ayıp ilk kullanım sırasında fark edilmiştir.",
-            "motor arizasi tespit edildi": "Araçta motor arızası tespit edilmiştir.",
-            "gizli onarim izi var": "Araçta satış öncesine dayanan gizli onarım izleri bulunduğu değerlendirilmektedir.",
-        }
-        notice = {
-            "whatsapp/sms": "Ayıp davalı satıcıya WhatsApp/SMS yazışmalarıyla bildirilmiştir.",
-            "noter ihtari": "Ayıp noter ihtarnamesi ile davalı satıcıya bildirilmiştir.",
-            "telefonla bildirildi": "Ayıp satıcıya telefonla bildirilmiş olup bu bildirimin yazışma, arama kaydı veya tanıkla desteklenmesi gerekmektedir.",
-            "henuz bildirilmedi": "Ayıp ihbarı henüz yapılmadıysa seçimlik hakların korunması için bildirim süreci ayrıca değerlendirilmelidir.",
-        }
-        demand = {
-            "bedel iadesi": "Müvekkil öncelikle sözleşmeden dönerek satış bedelinin iadesini talep etmektedir.",
-            "bedel indirimi": "Mahkeme aksi kanaatte ise ayıp oranında bedel indirimi talep edilmektedir.",
-            "onarim gideri": "Ayıp nedeniyle yapılan onarım ve servis giderlerinin davalıdan tahsili talep edilmektedir.",
-            "ekspertiz/servis masrafi": "Ekspertiz ve servis masraflarının davalıdan tahsili talep edilmektedir.",
-        }
-        table = {"sale": sale, "defect": defect, "notice": notice, "demand": demand}.get(section, {})
-        for key, sentence in table.items():
-            if key in part_plain:
-                return sentence
-        return ""
-
-    @staticmethod
-    def _vehicle_manual_detail_sentence(question_plain: str, answer: str, section: str) -> str:
-        if not answer or len(answer) < 18:
-            return ""
-        answer_plain = PetitionDraftService._plain(answer)
-        if section == "notice" and any(key in question_plain for key in ("bildirim", "ihbar")) and re.search(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}", answer):
-            return f"Ayıp ihbarının tarihi ve yöntemi müvekkil beyanına göre {PetitionDraftService._clean(answer)} şeklindedir."
-        if section == "sale" and "bedel" in question_plain and re.search(r"(₺|tl|\b\d{4,}\b)", answer_plain):
-            return f"Satış bedeli ve ödeme bilgisi dosya kapsamındaki belge ve beyanlara göre {PetitionDraftService._clean(answer)} şeklindedir."
-        return ""
-
-    @staticmethod
-    def _answer_parts(answer: str) -> list[str]:
-        return [part.strip(" .") for part in re.split(r"[;\n]+", str(answer or "")) if part.strip(" .")]
-
-    @staticmethod
-    def _unique_sentences(sentences: list[str]) -> list[str]:
-        result: list[str] = []
-        seen: set[str] = set()
-        for sentence in sentences:
-            clean = PetitionDraftService._ensure_terminal_period(PetitionDraftService._clean(sentence))
-            key = PetitionDraftService._plain(clean)
-            if clean and key not in seen:
-                seen.add(key)
-                result.append(clean)
-        return result
-
-    @staticmethod
-    def _numbered_lines(sentences: list[str]) -> list[str]:
-        return [f"{index}. {sentence}" for index, sentence in enumerate(PetitionDraftService._unique_sentences(sentences), start=1)]
-
-    @staticmethod
-    def _numbered_section(title: str, sentences: list[str]) -> str:
-        return "\n".join([title, *PetitionDraftService._numbered_lines(sentences)])
 
     def _select_narrative(self, text: str, keywords: tuple[str, ...], fallback: str) -> str:
         matches: list[str] = []
@@ -595,9 +518,6 @@ class PetitionDraftService:
 
     @staticmethod
     def _procedural_section(*, profile: PetitionProfile, answers: dict[str, str]) -> str:
-        if profile.key == "defective_vehicle":
-            return ""
-
         procedural_text = {
             "eviction_need": (
                 "Kira ilişkisinin varlığı, sözleşme dönemi, bildirim/ihtar süreci ve dava açma zamanı tahliye davaları "
@@ -661,18 +581,14 @@ class PetitionDraftService:
                 "özellikleri üzerinden karşılanmalıdır."
             )
 
-        heading = "IV. HUKUKİ DEĞERLENDİRME" if profile.key == "defective_vehicle" else "IV. HUKUKİ NEDENLER VE DEĞERLENDİRME"
         return (
-            f"{heading}\n"
+            "IV. HUKUKİ NEDENLER VE DEĞERLENDİRME\n"
             f"Uyuşmazlık {basis} ve ilgili sair mevzuat hükümleri çerçevesinde değerlendirilmelidir. "
             f"{profile.legal_assessment}{senior_clause}{memory_argument_text}"
         )
 
     @staticmethod
     def _counter_argument_section(*, profile: PetitionProfile) -> str:
-        if profile.key == "defective_vehicle":
-            return ""
-
         responses = {
             "eviction_need": (
                 "Davalı tarafça ihtiyacın samimi olmadığı, başka taşınmaz bulunduğu veya dava süresinin kaçırıldığı ileri "
@@ -708,16 +624,15 @@ class PetitionDraftService:
 
     @staticmethod
     def _precedent_section(*, profile: PetitionProfile, selected_decisions: list[SelectedDecisionForDraft]) -> str:
-        heading = "V. EMSAL KARARLAR" if profile.key == "defective_vehicle" else "VI. EMSAL KARARLAR VE İÇTİHAT ÇİZGİSİ"
         if not selected_decisions:
             return (
-                f"{heading}\n"
+                "VI. EMSAL KARARLAR VE İÇTİHAT ÇİZGİSİ\n"
                 "Seçilmiş karar bilgisi sunulmadığından bu bölümde uydurma esas/karar numarası kullanılmamıştır. "
                 f"Bununla birlikte {profile.petition_type} bakımından emsal kararlar eklendiğinde, karar kimliği, somut "
                 "olaya benzer maddi vakıa ve uygulanabilir hukuki ilke birlikte gösterilerek dilekçe güçlendirilmelidir."
             )
 
-        paragraphs: list[str] = [heading]
+        paragraphs: list[str] = ["VI. EMSAL KARARLAR VE İÇTİHAT ÇİZGİSİ"]
         for index, decision in enumerate(PetitionDraftService._dedupe_selected_decisions(selected_decisions), start=1):
             identity = f"{decision.court}, E. {decision.esas_no}, K. {decision.karar_no}, T. {decision.date}"
             paragraph = PetitionDraftService._ensure_terminal_period(PetitionDraftService._clean(decision.petition_paragraph))
@@ -759,62 +674,18 @@ class PetitionDraftService:
 
     @staticmethod
     def _evidence_section(*, profile: PetitionProfile, answers: dict[str, str]) -> str:
-        if profile.key == "defective_vehicle":
-            evidence = PetitionDraftService._vehicle_evidence_items(answers)
-            evidence_text = "\n".join(f"{index}. {item}" for index, item in enumerate(evidence, start=1))
-            return (
-                "VI. DELİLLER\n"
-                f"{evidence_text}\n"
-                "Delillerimizin toplanmasını, gerektiğinde ilgili kurum ve kuruluşlara müzekkere yazılmasını ve aracın ayıplı "
-                "niteliği ile değer farkı konusunda bilirkişi incelemesi yapılmasını talep ederiz."
-            )
-
         evidence = list(profile.evidence)
         for question, answer in answers.items():
             lowered = question.casefold()
             if answer and any(marker in lowered for marker in ("delil", "belge", "kayıt", "tanık", "ispat")):
                 evidence.append(answer)
         evidence_text = "\n".join(f"{index}. {item}" for index, item in enumerate(dict.fromkeys(evidence), start=1))
-        heading = "VI. DELİLLER" if profile.key == "defective_vehicle" else "VII. DELİLLER"
         return (
-            f"{heading}\n"
+            "VII. DELİLLER\n"
             f"{evidence_text}\n"
             "Delillerimizin toplanmasını, gerektiğinde ilgili kurum ve kuruluşlara müzekkere yazılmasını ve uyuşmazlığın "
             "niteliğine göre bilirkişi incelemesi yapılmasını talep ederiz."
         )
-
-    @staticmethod
-    def _vehicle_evidence_items(answers: dict[str, str]) -> list[str]:
-        evidence = [
-            "Noter satış sözleşmesi",
-            "Ruhsat, tescil ve araç kimlik kayıtları",
-            "Satış ilanı, mesaj yazışmaları ve satıcı beyanlarını gösteren kayıtlar",
-            "Servis kayıtları ve servis raporu",
-            "Ekspertiz raporu",
-            "TRAMER ve hasar kayıtları",
-            "WhatsApp/SMS yazışmaları, ihtarname ve tebliğ kayıtları",
-            "Ödeme dekontları",
-            "Bilirkişi incelemesi",
-            "Tanık beyanları ve her türlü yasal delil",
-        ]
-        answer_plain = PetitionDraftService._plain(" ".join(answers.values()))
-        if "elden odeme" in answer_plain:
-            evidence.append("Elden ödeme iddiasına ilişkin tanık beyanları, yazışmalar ve sair deliller")
-        if "onarim gideri" in answer_plain or "servis masrafi" in answer_plain:
-            evidence.append("Onarım, servis ve ekspertiz masraf belgeleri")
-        if "noter satis sozlesmesi" not in answer_plain:
-            evidence.remove("Noter satış sözleşmesi")
-        if "servis raporu" not in answer_plain:
-            evidence.remove("Servis kayıtları ve servis raporu")
-        if "ekspertiz raporu" not in answer_plain and "ekspertiz/servis" not in answer_plain:
-            evidence.remove("Ekspertiz raporu")
-        if "tramer" not in answer_plain:
-            evidence.remove("TRAMER ve hasar kayıtları")
-        if "whatsapp" not in answer_plain and "sms" not in answer_plain and "ihtar" not in answer_plain:
-            evidence.remove("WhatsApp/SMS yazışmaları, ihtarname ve tebliğ kayıtları")
-        if "banka dekontu" not in answer_plain and "dekont" not in answer_plain:
-            evidence.remove("Ödeme dekontları")
-        return list(dict.fromkeys(evidence))
 
     @staticmethod
     def _request_section(*, profile: PetitionProfile, request_type: str, tone: str) -> str:
@@ -828,7 +699,7 @@ class PetitionDraftService:
                 "Araç üzerindeki ayıbın, satış anında mevcut olup olmadığının ve değer farkının bilirkişi marifetiyle tespitine",
                 "Yargılama giderleri ile vekalet ücretinin davalı tarafa yükletilmesine",
             ]
-            lines = ["VII. SONUÇ VE İSTEM", intro]
+            lines = ["VIII. SONUÇ VE İSTEM", intro]
             lines.extend(f"{index}. {item}," for index, item in enumerate(requests, start=1))
             lines.append("karar verilmesini saygıyla vekaleten arz ve talep ederiz.")
             return "\n".join(lines)

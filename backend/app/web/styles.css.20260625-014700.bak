@@ -400,10 +400,6 @@ select:focus {
   flex-wrap: wrap;
 }
 
-.advanced-panel:not([open]) .toolbar {
-  display: none;
-}
-
 button {
   min-height: 42px;
   border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));

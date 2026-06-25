@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import logging
 from typing import Any
 
 from pydantic import ValidationError
@@ -18,18 +17,8 @@ from app.services.search_builder import search_builder
 from app.services.yargitay_scraper import yargitay_scraper
 
 
-RESEARCH_QUERY_LIMIT = 8
+RESEARCH_QUERY_LIMIT = 5
 RESEARCH_MAX_RESULTS_CAP = 10
-logger = logging.getLogger(__name__)
-
-VEHICLE_YARGITAY_FALLBACK_QUERIES = (
-    '"ayıplı araç" "gizli ayıp"',
-    '"ikinci el araç" "gizli ayıp"',
-    '"ayıplı araç" "sözleşmeden dönme"',
-    '"araç satışı" "bedel indirimi"',
-    '"ayıplı araç" "servis raporu"',
-    '"gizli ayıp" "ayıp ihbarı"',
-)
 POVERTY_ALIMONY_PRIORITY_QUERIES = (
     '"yoksulluk nafakası" "nafakanın kaldırılması"',
     '"yoksulluk nafakası" "nafaka indirimi"',
@@ -73,7 +62,6 @@ class ResearchService:
                 legal_keywords=case_analysis.legal_keywords,
             )
         )
-        logger.info("generated_queries=%s", query_response.queries)
         queries = self._research_queries(
             case_text=case_text,
             legal_topic=case_analysis.legal_topic,
@@ -81,17 +69,12 @@ class ResearchService:
             generated_queries=query_response.queries,
             preferred_queries=yargitay_query_templates or [],
         )
-        fallback_query_used = any(query in queries for query in VEHICLE_YARGITAY_FALLBACK_QUERIES)
-        logger.info("yargitay_search_started queries=%s fallback_query_used=%s", queries, fallback_query_used)
 
         scraper_response = await self.scraper.search(
             queries=queries,
             max_results=effective_max_results,
         )
         errors = list(scraper_response.errors)
-        logger.info("yargitay_result_count=%s", len(scraper_response.results))
-        if errors:
-            logger.warning("yargitay_error=%s", errors)
 
         rankable_decisions = self._dedupe_rankable_decisions(self._to_rankable_decisions(scraper_response.results, errors))
         ranked_items = (
@@ -155,16 +138,9 @@ class ResearchService:
         if scraper_response.results and not top_decisions:
             errors.append("Sıralama için yeterli karar metni bulunamadı.")
 
-        final_precedent_count = len(top_decisions[:5])
-        logger.info("final_precedent_count=%s", final_precedent_count)
         return {
             "case_analysis": case_analysis.model_dump(),
             "queries": queries,
-            "generated_queries": query_response.queries,
-            "yargitay_search_started": True,
-            "yargitay_result_count": len(scraper_response.results),
-            "fallback_query_used": fallback_query_used,
-            "final_precedent_count": final_precedent_count,
             "top_decisions": top_decisions[:5],
             "errors": errors,
         }
@@ -178,17 +154,9 @@ class ResearchService:
         generated_queries: list[str],
         preferred_queries: list[str],
     ) -> list[str]:
-        is_vehicle_case = self._is_vehicle_case(
-            case_text=case_text,
-            legal_topic=legal_topic,
-            legal_keywords=legal_keywords,
-        )
-
         if preferred_queries:
             queries = list(preferred_queries)
             queries.extend(generated_queries)
-            if is_vehicle_case:
-                queries.extend(VEHICLE_YARGITAY_FALLBACK_QUERIES)
             return self._dedupe_queries(queries)[:RESEARCH_QUERY_LIMIT]
 
         if self._is_poverty_alimony_case(
@@ -202,11 +170,6 @@ class ResearchService:
                 for query in generated_queries
                 if not self._contains_participation_or_tmk331(query)
             )
-            return self._dedupe_queries(queries)[:RESEARCH_QUERY_LIMIT]
-
-        if is_vehicle_case:
-            queries = list(VEHICLE_YARGITAY_FALLBACK_QUERIES)
-            queries.extend(generated_queries)
             return self._dedupe_queries(queries)[:RESEARCH_QUERY_LIMIT]
 
         return self._dedupe_queries(generated_queries)[:RESEARCH_QUERY_LIMIT]
@@ -299,30 +262,6 @@ class ResearchService:
     def _contains_participation_or_tmk331(self, query: str) -> bool:
         normalized = self._plain(query)
         return "tmk 331" in normalized or "istirak nafakasi" in normalized or "istirak" in normalized
-
-    def _is_vehicle_case(
-        self,
-        *,
-        case_text: str,
-        legal_topic: str,
-        legal_keywords: list[str],
-    ) -> bool:
-        combined = self._plain(" ".join([case_text, legal_topic, *legal_keywords]))
-        return any(
-            term in combined
-            for term in (
-                "ayipli arac",
-                "gizli ayip",
-                "ikinci el arac",
-                "arac satisi",
-                "motor arizasi",
-                "tramer",
-                "servis raporu",
-                "ekspertiz",
-                "bedel indirimi",
-                "sozlesmeden donme",
-            )
-        )
 
     @staticmethod
     def _dedupe_queries(queries: list[str]) -> list[str]:

@@ -144,6 +144,15 @@ class PrecedentQualityAgent:
             f"{identity} sayılı karar, somut olayla benzer maddi ve hukuki yönleri karar kimliğiyle birlikte gösterilerek "
             f"destekleyici emsal olarak kullanılabilir. {paragraph}"
         ).strip()
+        if alignment in {"riskli", "aleyhe"}:
+            return (
+                f"{identity} sayılı karar doğrudan lehe emsal gibi sunulmamalı; davalı tarafın ileri sürebileceği savunma ve "
+                "somut olayın ayrılan yönleri bakımından sınırlı değerlendirilmelidir."
+            )
+        return (
+            f"{identity} sayılı karar, somut olayla benzer maddi ve hukuki yönleri karar kimliğiyle birlikte gösterilerek "
+            "destekleyici emsal olarak kullanılabilir. {paragraph}"
+        ).strip()
 
     @staticmethod
     def _clean_paragraph(paragraph: str) -> str:
