@@ -15,6 +15,7 @@ from typing import Any
 LEGAL_BRAIN_ROOT = Path(__file__).resolve().parents[1] / "legal_brain"
 UPLOADS_DIR = LEGAL_BRAIN_ROOT / "uploads"
 SOURCES_DIR = LEGAL_BRAIN_ROOT / "sources"
+INTERNET_SOURCES_DIR = LEGAL_BRAIN_ROOT / "internet_sources"
 LIBRARY_DIR = LEGAL_BRAIN_ROOT / "library"
 METADATA_DIR = LEGAL_BRAIN_ROOT / "metadata"
 
@@ -85,7 +86,7 @@ class LegalBrainLibrarianService:
             "last_started_at": kwargs.get("last_started_at", datetime.now(timezone.utc).isoformat()),
             "last_scan_at": kwargs.get("last_scan_at"),
             "last_completed_at": kwargs.get("last_completed_at"),
-            "watch_paths": [str(UPLOADS_DIR), str(SOURCES_DIR)],
+            "watch_paths": [str(UPLOADS_DIR), str(SOURCES_DIR), str(INTERNET_SOURCES_DIR)],
             "files_seen": kwargs.get("files_seen", 0),
             "files_learned": kwargs.get("files_learned", 0),
             "files_skipped": kwargs.get("files_skipped", 0),
@@ -160,6 +161,10 @@ class LegalBrainLibrarianService:
             files.extend(sorted(p for p in UPLOADS_DIR.iterdir() if p.is_file() and self._is_supported(p)))
         if SOURCES_DIR.exists():
             for source_dir in SOURCES_DIR.iterdir():
+                if source_dir.is_dir():
+                    files.extend(sorted(p for p in source_dir.rglob("*") if p.is_file() and self._is_supported(p)))
+        if INTERNET_SOURCES_DIR.exists():
+            for source_dir in INTERNET_SOURCES_DIR.iterdir():
                 if source_dir.is_dir():
                     files.extend(sorted(p for p in source_dir.rglob("*") if p.is_file() and self._is_supported(p)))
         return files
@@ -324,8 +329,8 @@ class LegalBrainLibrarianService:
             articles = []
             codes = []
 
-        # Fallback: extract articles using regex if parser didn't find any
-        if not articles:
+        # Fallback: extract articles using regex if parser didn't find any or returned invalid data
+        if not articles or self._validate_articles(articles, text) == False:
             articles = self._extract_articles_with_regex(text)
 
         code = self._detect_primary_code(text, codes)
@@ -572,6 +577,16 @@ class LegalBrainLibrarianService:
 
             metadata = self.classify_source(file_path, text[:8000])
             source_type = metadata.get("source_type", "unknown")
+
+            # Detect code early for error reporting
+            code = "unknown"
+            if source_type in ("statute", "official_gazette"):
+                try:
+                    from app.services.legal_brain_statute_parser import legal_brain_statute_parser
+                    parsed = legal_brain_statute_parser.parse_text(text=text, metadata=metadata)
+                    code = self._detect_primary_code(text, parsed.get("parsed_codes", []))
+                except Exception:
+                    code = self._detect_primary_code(text, [])
 
             if source_type in ("statute", "official_gazette"):
                 cards = self.build_statute_cards(text, metadata, file_path, file_hash)
@@ -866,26 +881,34 @@ class LegalBrainLibrarianService:
     # ------------------------------------------------------------------
     def _detect_primary_code(self, text: str, codes: list[str]) -> str:
         mapping = {
-            "TMK": ["türk medeni kanunu", "medeni kanun", "tmk"],
-            "TBK": ["türk borçlar kanunu", "borçlar kanunu", "tbk"],
+            "TMK": ["turk medeni kanunu", "medeni kanun", "tmk"],
+            "TBK": ["turk borclar kanunu", "borclar kanunu", "tbk"],
             "HMK": ["hukuk muhakemeleri kanunu", "hmk"],
-            "İİK": ["İcra ve İflas Kanunu", "İcra iflas kanunu", "iik", "İİK", "IIK"],
-            "TCK": ["türk ceza kanunu", "ceza kanunu", "tck"],
+            "İİK": ["İcra ve İflas Kanunu", "İcra iflas kanunu", "iik", "İİK", "IIK", "icra ve iflas kanunu"],
+            "TCK": ["turk ceza kanunu", "ceza kanunu", "tck"],
             "CMK": ["ceza muhakemeleri kanunu", "cmk"],
-            "TTK": ["türk ticaret kanunu", "ticaret kanunu", "ttk"],
-            "IS_KANUNU": ["iş kanunu", "is kanunu"],
-            "TKHK": ["tüketicinin korunması hakkında kanun"],
-            "KMK": ["kat mülkiyeti kanunu"],
-            "IYUK": ["idari yargılama usulü kanunu", "İdari yargılama usulü kanunu"],
+            "TTK": ["turk ticaret kanunu", "ticaret kanunu", "ttk"],
+            "IS_KANUNU": ["iş kanunu", "is kanunu", "is kanunu"],
+            "TKHK": ["tüketicinin korunması hakkında kanun", "tuketicinin korunmasi hakkinda kanun"],
+            "KMK": ["kat mülkiyeti kanunu", "kat mulkiyeti kanunu"],
+            "IYUK": ["idari yargılama usulü kanunu", "İdari yargılama usulü kanunu", "idari yargılama usul kanunu"],
             "ARABULUCULUK": ["arabuluculuk kanunu"],
-            "KVKK": ["kişisel verilerin korunması kanunu", "kvkk"],
+            "KVKK": ["kişisel verilerin korunması kanunu", "kvkk", "kisisel verilerin korunmasi kanunu"],
         }
         plain = self._plain(text)
         for code, markers in mapping.items():
             if any(marker in plain for marker in markers):
                 return code
         if codes:
-            return codes[0].split()[0]
+            # Clean up codes - don't use parser codes that look like "m.315"
+            for code in codes:
+                cleaned = code.split()[0].upper()
+                # Skip invalid codes
+                if cleaned.startswith('M.') or cleaned.startswith('MADDE'):
+                    continue
+                if cleaned.isdigit():
+                    continue
+                return cleaned
         return "unknown"
 
     def _resolve_statute_folder(self, code: str, file_path: Path) -> Path:
@@ -908,12 +931,29 @@ class LegalBrainLibrarianService:
         folder_name = mapping.get(code.upper(), code)
         return LIBRARY_DIR / "statutes" / folder_name
 
+    def _validate_articles(self, articles: list[str], original_text: str) -> bool:
+        """Validate that parsed articles contain actual content, not just references."""
+        if not articles:
+            return False
+        
+        # Check if articles are too short (just "m.315" or similar)
+        for article in articles[:3]:  # Check first 3 articles
+            # If article is just a reference like "m.315" or "MADDE 315", it's invalid
+            if len(article.strip()) < 50:
+                return False
+            # If article doesn't contain the actual text content, it's invalid
+            if article.strip().lower() in ["m.315", "madde 315", "m. 315"]:
+                return False
+        
+        return True
+
     def _extract_articles_with_regex(self, text: str) -> list[str]:
         """Extract individual articles from statute text using regex patterns."""
         articles: list[str] = []
         # Pattern to match article headers: MADDE 315 -, Madde 315:, etc.
+        # The header can be followed by content on the same line or next line
         article_pattern = re.compile(
-            r'(?im)^\s*(?:MADDE|Madde)\s+(\d+[A-Z]?)\s*(?:[-–—:])?\s*$',
+            r'(?im)^\s*(?:MADDE|Madde)\s+(\d+[A-Z]?)\s*(?:[-–—:])?\s*',
             re.MULTILINE
         )
         
