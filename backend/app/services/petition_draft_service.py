@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from typing import Any
 
-from app.models.petition_models import PetitionDraftResponse, SelectedDecisionForDraft
+from app.models.petition_models import GroundingNote, PetitionDraftResponse, SelectedDecisionForDraft
 from app.services.legal_retrieval_service import legal_retrieval_service
 from app.services.legal_style_service import legal_style_service
 from app.services.petition_profile_service import PetitionProfile, get_petition_profile
@@ -26,6 +27,10 @@ class PetitionDraftService:
         self,
         *,
         case_text: str,
+        case_enrichment: dict[str, Any] | None = None,
+        confirmed_facts: list[str] | None = None,
+        missing_facts: list[str] | None = None,
+        petition_strategy_hint: str = "",
         answers: dict[str, str],
         selected_decisions: list[SelectedDecisionForDraft],
         tone: str,
@@ -34,6 +39,13 @@ class PetitionDraftService:
         legal_language_level: str = "standart",
     ) -> PetitionDraftResponse:
         case_text = self._petition_case_text(case_text)
+        enrichment = case_enrichment or {}
+        confirmed_facts = self._clean_list(
+            (confirmed_facts or []) + list(enrichment.get("confirmed_facts") or [])
+        )
+        missing_facts = self._clean_list(
+            (missing_facts or []) + list(enrichment.get("missing_facts") or [])
+        )
         profile = get_petition_profile(case_text, request_type)
         legal_memory = (
             legal_retrieval_service.retrieve_for_case(
@@ -61,6 +73,15 @@ class PetitionDraftService:
                     legal_language_level=legal_language_level,
                     legal_memory_arguments=legal_memory.recommended_arguments if legal_memory else [],
                 ),
+                self._grounding_section(
+                    profile=profile,
+                    case_text=case_text,
+                    answers=answers,
+                    confirmed_facts=confirmed_facts,
+                    missing_facts=missing_facts,
+                    legal_memory=legal_memory,
+                    petition_strategy_hint=petition_strategy_hint,
+                ),
                 self._counter_argument_section(profile=profile),
                 legal_brain_section,
                 self._precedent_section(profile=profile, selected_decisions=selected_decisions),
@@ -74,11 +95,20 @@ class PetitionDraftService:
             draft_title=profile.draft_title,
             draft_text=draft_text,
             checklist=list(profile.checklist),
+            grounding_notes=self._grounding_notes(
+                profile=profile,
+                case_text=case_text,
+                answers=answers,
+                confirmed_facts=confirmed_facts,
+                missing_facts=missing_facts,
+                legal_memory=legal_memory,
+            ),
             warnings=self._warnings(
                 answers=answers,
                 selected_decisions=selected_decisions,
                 use_legal_brain=use_legal_brain,
                 legal_brain_warnings=self._legal_brain_warnings_for_draft(legal_memory),
+                source_visibility_note=self._source_visibility_note(legal_memory),
             ),
         )
 
@@ -241,18 +271,17 @@ class PetitionDraftService:
         if section == "sale":
             if "galeri" in plain or "sorunsuz" in plain:
                 return (
-                    "Müvekkil, davalı satıcıdan ikinci el araç satın almış; satış öncesinde aracın sorunsuz olduğu "
-                    "yönündeki beyanlara güvenmiştir."
+                    "Müvekkil, ikinci el aracı satış öncesinde aracın sorunsuz olduğu yönündeki beyanlara güvenerek satın aldığını ileri sürmektedir."
                 )
             return (
-                "Müvekkil, davalı satıcıdan ikinci el araç satın almış olup satış ilişkisinin kapsamı noter satış sözleşmesi, "
+                "Müvekkil, ikinci el araç satın almış olup satış ilişkisinin kapsamı noter satış sözleşmesi, "
                 "ödeme belgeleri ve satıcı beyanlarıyla ortaya konulacaktır."
             )
         if section == "defect":
             if "motor" in plain or "servis" in plain or "onarim" in plain:
                 return (
                     "Teslimden kısa süre sonra araçta motor arızası ortaya çıkmış; servis incelemesinde arızanın eskiye "
-                    "dayandığı ve araçta gizli onarım izleri bulunduğu değerlendirilmiştir."
+                    "dayanabileceği belirtilmiştir."
                 )
             return (
                 "Araç tesliminden sonra olağan muayene ile fark edilmesi beklenmeyen ayıp emareleri ortaya çıkmıştır; ayıbın "
@@ -279,34 +308,34 @@ class PetitionDraftService:
     @staticmethod
     def _vehicle_chip_sentence(part_plain: str, section: str) -> str:
         sale = {
-            "galeri/sirket": "Davalı satıcı galeri/şirket sıfatıyla hareket etmiş olup profesyonel satıcı konumundadır.",
-            "galeri sirket": "Davalı satıcı galeri/şirket sıfatıyla hareket etmiş olup profesyonel satıcı konumundadır.",
-            "gercek kisi": "Satıcının gerçek kişi olması nedeniyle görevli mahkeme ve tüketici işlemi niteliği ayrıca değerlendirilmelidir.",
-            "tacir": "Satıcının tacir/profesyonel satıcı niteliği, ayıba karşı sorumluluk değerlendirmesinde ayrıca önem taşımaktadır.",
-            "noter satis sozlesmesi var": "Satış ilişkisi noter satış sözleşmesiyle kurulmuştur.",
-            "banka dekontu var": "Satış bedelinin banka kanalıyla ödendiği ödeme dekontlarıyla ispatlanacaktır.",
-            "elden odeme": "Satış bedelinin elden ödendiği beyan edilmekte olup bu husus tanık, yazışma ve sair delillerle ispatlanacaktır.",
-            "plaka/sasi bilgisi belli": "Aracın plaka ve şasi bilgileri ruhsat ve tescil kayıtlarıyla ortaya konulacaktır.",
-            "marka-model belli": "Aracın marka ve modeli dosya kapsamındaki kayıtlarla ortaya konulacaktır.",
+            "galeri/sirket": "Davalının galeri/şirket/tacir sıfatı mevcut kayıtlar ve satış belgeleri üzerinden araştırılmalıdır.",
+            "galeri sirket": "Davalının galeri/şirket/tacir sıfatı mevcut kayıtlar ve satış belgeleri üzerinden araştırılmalıdır.",
+            "gercek kisi": "Satıcının gerçek kişi olup olmadığı görevli mahkeme ve tüketici işlemi niteliği bakımından ayrıca değerlendirilmelidir.",
+            "tacir": "Satıcının tacir/profesyonel satıcı niteliği kayıt ve belgelerle doğrulanmalıdır.",
+            "noter satis sozlesmesi var": "Satış ilişkisinin noter satış sözleşmesiyle kurulduğu belgeyle doğrulanmalıdır.",
+            "banka dekontu var": "Satış bedelinin banka kanalıyla ödendiği ödeme dekontlarıyla doğrulanmalıdır.",
+            "elden odeme": "Satış bedelinin elden ödendiği iddiası tanık, yazışma ve sair delillerle ispatlanmalıdır.",
+            "plaka/sasi bilgisi belli": "Araç plaka ve şasi bilgileri ruhsat ve tescil kayıtlarıyla doğrulanmalıdır.",
+            "marka-model belli": "Araç marka ve modeli dosya kapsamındaki kayıtlarla doğrulanmalıdır.",
             "satis bedeli belli": "Satış bedeli ayrıca tutarıyla birlikte somutlaştırılmalıdır.",
-            "sorunsuz denildi": "Satış öncesinde aracın sorunsuz olduğu beyan edilmiştir.",
-            "kazasiz denildi": "Satış öncesinde aracın kazasız ve sorunsuz olduğu beyan edilmiştir.",
-            "agir hasarsiz denildi": "Satış öncesinde aracın ağır hasarsız olduğu beyan edilmiştir.",
+            "sorunsuz denildi": "Satış öncesinde aracın sorunsuz olduğu beyan edildiği ileri sürülmektedir.",
+            "kazasiz denildi": "Satış öncesinde aracın kazasız ve sorunsuz olduğu beyan edildiği ileri sürülmektedir.",
+            "agir hasarsiz denildi": "Satış öncesinde aracın ağır hasarsız olduğu beyan edildiği ileri sürülmektedir.",
             "ilan goruntusu var": "Satış ilanı ve ilan içeriği satıcının beyanlarını göstermek üzere dosyaya sunulmalıdır.",
         }
         defect = {
-            "servis raporu": "Ayıp, servis raporu ile tespit edilmiştir.",
-            "ekspertiz raporu": "Ayıp ve aracın satış anındaki durumu ekspertiz raporu ile desteklenmektedir.",
+            "servis raporu": "Ayıbın servis raporu ile tespit edildiği belirtilmektedir.",
+            "ekspertiz raporu": "Ayıp ve aracın satış anındaki durumu ekspertiz raporu ile desteklenmelidir.",
             "tramer kaydi": "Aracın hasar geçmişi TRAMER kayıtlarıyla araştırılmalı ve dosyaya sunulmalıdır.",
-            "serviste ogrenildi": "Müvekkil ayıbı servis incelemesi sırasında öğrenmiştir.",
+            "serviste ogrenildi": "Müvekkil ayıbı servis incelemesi sırasında öğrendiğini ileri sürmektedir.",
             "teslimden kisa sure sonra": "Ayıp teslimden kısa süre sonra ortaya çıkmıştır.",
             "ilk kullanimda": "Ayıp ilk kullanım sırasında fark edilmiştir.",
             "motor arizasi tespit edildi": "Araçta motor arızası tespit edilmiştir.",
-            "gizli onarim izi var": "Araçta satış öncesine dayanan gizli onarım izleri bulunduğu değerlendirilmektedir.",
+            "gizli onarim izi var": "Varsa gizli onarım veya hasar izi servis, ekspertiz ya da bilirkişi incelemesiyle ortaya konulmalıdır.",
         }
         notice = {
-            "whatsapp/sms": "Ayıp davalı satıcıya WhatsApp/SMS yazışmalarıyla bildirilmiştir.",
-            "noter ihtari": "Ayıp noter ihtarnamesi ile davalı satıcıya bildirilmiştir.",
+            "whatsapp/sms": "Ayıp davalı satıcıya WhatsApp/SMS yazışmalarıyla bildirildiği ileri sürülmektedir.",
+            "noter ihtari": "Ayıp noter ihtarnamesi ile bildirildiği ileri sürülmektedir.",
             "telefonla bildirildi": "Ayıp satıcıya telefonla bildirilmiş olup bu bildirimin yazışma, arama kaydı veya tanıkla desteklenmesi gerekmektedir.",
             "henuz bildirilmedi": "Ayıp ihbarı henüz yapılmadıysa seçimlik hakların korunması için bildirim süreci ayrıca değerlendirilmelidir.",
         }
@@ -669,6 +698,175 @@ class PetitionDraftService:
         )
 
     @staticmethod
+    def _grounding_section(
+        *,
+        profile: PetitionProfile,
+        case_text: str,
+        answers: dict[str, str],
+        confirmed_facts: list[str],
+        missing_facts: list[str],
+        legal_memory,
+        petition_strategy_hint: str,
+    ) -> str:
+        notes = PetitionDraftService._grounding_notes(
+            profile=profile,
+            case_text=case_text,
+            answers=answers,
+            confirmed_facts=confirmed_facts,
+            missing_facts=missing_facts,
+            legal_memory=legal_memory,
+        )
+        if petition_strategy_hint:
+            notes.append(
+                GroundingNote(
+                    status="fact_inferred",
+                    title="Strateji notu",
+                    detail=f"Talep stratejisi şu çerçevede değerlendirilmelidir: {petition_strategy_hint}.",
+                )
+            )
+        if not notes:
+            return ""
+
+        lines = ["VAKIA VE KAYNAK GROUNDING"]
+        for index, note in enumerate(notes, start=1):
+            lines.append(f"{index}. [{note.status}] {note.title}: {note.detail}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _grounding_notes(
+        *,
+        profile: PetitionProfile,
+        case_text: str,
+        answers: dict[str, str],
+        confirmed_facts: list[str],
+        missing_facts: list[str],
+        legal_memory,
+    ) -> list[GroundingNote]:
+        notes: list[GroundingNote] = []
+        confirmed = PetitionDraftService._clean_list(confirmed_facts)
+        missing = PetitionDraftService._clean_list(missing_facts)
+
+        if confirmed:
+            for fact in confirmed[:6]:
+                notes.append(
+                    GroundingNote(
+                        status="fact_confirmed",
+                        title="Doğrulanan vakıa",
+                        detail=fact,
+                    )
+                )
+        elif profile.key == "defective_vehicle":
+            notes.append(
+                GroundingNote(
+                    status="fact_confirmed",
+                    title="Doğrulanan vakıa",
+                    detail="Müvekkilin ikinci el araç satın aldığı ve satış sonrası motor arızası ortaya çıktığı olay metninden anlaşılmaktadır.",
+                )
+            )
+
+        if profile.key == "defective_vehicle":
+            if PetitionDraftService._has_any(case_text, answers, ("galeri", "şirket", "sirket", "tacir")):
+                notes.append(
+                    GroundingNote(
+                        status="fact_inferred",
+                        title="Satıcı sıfatı",
+                        detail="Davalının galeri/şirket/tacir sıfatı mevcut kayıtlar ve satış belgeleri üzerinden ayrıca doğrulanmalıdır.",
+                    )
+                )
+            else:
+                notes.append(
+                    GroundingNote(
+                        status="fact_missing",
+                        title="Satıcı sıfatı",
+                        detail="Davalının galeri/şirket/tacir sıfatı araştırılmalıdır.",
+                    )
+                )
+
+            if PetitionDraftService._has_any(case_text, answers, ("noter ihtar", "whatsapp", "sms", "bildirim", "ihbar", "teblig", "tebligat")):
+                notes.append(
+                    GroundingNote(
+                        status="fact_inferred",
+                        title="Ayıp bildirimi",
+                        detail="Ayıp bildiriminin tarihi, yöntemi ve tebliğ bilgisi somutlaştırılmalıdır.",
+                    )
+                )
+            else:
+                notes.append(
+                    GroundingNote(
+                        status="fact_missing",
+                        title="Ayıp bildirimi",
+                        detail="Ayıp bildiriminin tarihi, yöntemi ve tebliğ bilgisi somutlaştırılmalıdır.",
+                    )
+                )
+
+            if PetitionDraftService._has_any(case_text, answers, ("servis", "ekspertiz", "tramer", "bilirkişi", "bilirkisi", "rapor")):
+                notes.append(
+                    GroundingNote(
+                        status="fact_inferred",
+                        title="Teknik tespit",
+                        detail="Varsa gizli onarım/hasar/TRAMER kaydı servis, ekspertiz veya bilirkişi incelemesiyle ortaya konulmalıdır.",
+                    )
+                )
+            else:
+                notes.append(
+                    GroundingNote(
+                        status="fact_missing",
+                        title="Teknik tespit",
+                        detail="Varsa gizli onarım/hasar/TRAMER kaydı servis, ekspertiz veya bilirkişi incelemesiyle ortaya konulmalıdır.",
+                    )
+                )
+
+            if re.search(r"(₺|\btl\b|\blira\b|\b\d{4,}\b)", PetitionDraftService._plain(" ".join([case_text, *answers.values()]))) and PetitionDraftService._has_any(case_text, answers, ("satış bedeli", "satis bedeli", "ödeme", "odeme", "dekont")):
+                notes.append(
+                    GroundingNote(
+                        status="fact_confirmed",
+                        title="Satış bedeli",
+                        detail="Satış bedeli dosya kapsamındaki belge ve beyanlarla somutlaştırılmış görünmektedir.",
+                    )
+                )
+            else:
+                notes.append(
+                    GroundingNote(
+                        status="fact_missing",
+                        title="Satış bedeli",
+                        detail="Satış bedelinin miktarı somutlaştırılmalıdır.",
+                    )
+                )
+
+        notes.extend(
+            GroundingNote(
+                status="fact_missing",
+                title="Eksik husus",
+                detail=detail,
+            )
+            for detail in missing[:4]
+        )
+
+        if legal_memory and (legal_memory.statute_sources or legal_memory.book_sources or legal_memory.doctrine_cards):
+            source_labels = PetitionDraftService._source_labels(legal_memory)
+            notes.append(
+                GroundingNote(
+                    status="source_confirmed",
+                    title="Legal Brain kaynağı",
+                    detail=(
+                        "Doğrulanan kaynaklar: " + ", ".join(source_labels)
+                        if source_labels
+                        else "Legal Brain içinde doğrudan eşleşen kaynaklar doğrulandı."
+                    ),
+                )
+            )
+        else:
+            notes.append(
+                GroundingNote(
+                    status="needs_verification",
+                    title="Legal Brain kaynağı",
+                    detail="Doğrudan dosya özelinde eşleşen Legal Brain kaynağı bulunamadı; genel mevzuat çerçevesiyle ön taslak oluşturuldu.",
+                )
+            )
+
+        return notes
+
+    @staticmethod
     def _counter_argument_section(*, profile: PetitionProfile) -> str:
         if profile.key == "defective_vehicle":
             return ""
@@ -879,6 +1077,7 @@ class PetitionDraftService:
         selected_decisions: list[SelectedDecisionForDraft],
         use_legal_brain: bool = False,
         legal_brain_warnings: list[str] | None = None,
+        source_visibility_note: list[str] | None = None,
     ) -> list[str]:
         warnings = ["Dilekçe avukat kontrolünden geçirilmelidir."]
         filled_answers = [value for value in answers.values() if value]
@@ -888,8 +1087,7 @@ class PetitionDraftService:
             warnings.append("Seçilmiş emsal karar olmadığı için içtihat bölümü karar numarası içermeden kurulmuştur.")
         if use_legal_brain:
             warnings.extend(legal_brain_warnings or [])
-            if not legal_brain_warnings:
-                warnings.append("Legal Brain kaynakları taslağa işlendi; kaynak atıfları son kontrolde gözden geçirilmelidir.")
+            warnings.extend(source_visibility_note or [])
         return list(dict.fromkeys(warnings))
 
     @staticmethod
@@ -903,6 +1101,51 @@ class PetitionDraftService:
             or legal_memory.recommended_arguments
         )
         return [] if has_useful_memory else list(legal_memory.warnings)
+
+    @staticmethod
+    def _source_visibility_note(legal_memory) -> list[str]:
+        if not legal_memory:
+            return []
+        if legal_memory.statute_sources or legal_memory.book_sources or legal_memory.doctrine_cards:
+            labels = PetitionDraftService._source_labels(legal_memory)
+            if labels:
+                return ["Legal Brain ile doğrulanan kaynaklar: " + ", ".join(labels)]
+            return ["Legal Brain ile doğrulanan kaynaklar bulundu."]
+        return ["Doğrudan dosya özelinde eşleşen Legal Brain kaynağı bulunamadı; genel mevzuat çerçevesiyle ön taslak oluşturuldu."]
+
+    @staticmethod
+    def _source_labels(legal_memory) -> list[str]:
+        labels: list[str] = []
+        for source in getattr(legal_memory, "statute_sources", []) or []:
+            label = f"{source.code} {source.article}".strip()
+            if label and label not in labels:
+                labels.append(label)
+        for source in getattr(legal_memory, "book_sources", []) or []:
+            label = getattr(source, "citation_label", "") or getattr(source, "title", "")
+            if label and label not in labels:
+                labels.append(label)
+        for card in getattr(legal_memory, "doctrine_cards", []) or []:
+            label = getattr(card, "source_label", "") or getattr(card, "topic", "")
+            if label and label not in labels:
+                labels.append(label)
+        return labels[:8]
+
+    @staticmethod
+    def _clean_list(values: list[str]) -> list[str]:
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            cleaned = PetitionDraftService._clean(value)
+            key = PetitionDraftService._plain(cleaned)
+            if cleaned and key not in seen:
+                seen.add(key)
+                result.append(cleaned)
+        return result
+
+    @staticmethod
+    def _has_any(case_text: str, answers: dict[str, str], terms: tuple[str, ...]) -> bool:
+        haystack = PetitionDraftService._plain(" ".join([case_text, *answers.values()]))
+        return any(PetitionDraftService._plain(term) in haystack for term in terms)
 
     @staticmethod
     def _tone_sentence(tone: str) -> str:

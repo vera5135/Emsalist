@@ -31,6 +31,10 @@ def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse
     case_text = request.case_text
     return petition_draft_service.build_draft(
         case_text=case_text,
+        case_enrichment=request.case_enrichment,
+        confirmed_facts=request.confirmed_facts,
+        missing_facts=request.missing_facts,
+        petition_strategy_hint=request.petition_strategy_hint,
         answers=request.answers,
         selected_decisions=selected_decisions,
         tone=request.tone,

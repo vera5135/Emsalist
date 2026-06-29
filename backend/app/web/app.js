@@ -896,11 +896,15 @@ function handleQuestionOptionClick(event) {
 function renderDraft(data) {
   const checklist = (data.checklist || []).map((item) => `- ${item}`).join("\n");
   const warnings = (data.warnings || []).map((item) => `- ${item}`).join("\n");
+  const grounding = (data.grounding_notes || [])
+    .map((item) => `- [${item.status || "note"}] ${item.title || "Not"}: ${item.detail || ""}`)
+    .join("\n");
   const parts = [
     data.draft_title || "Dilekçe Taslağı",
     "",
     cleanOutputText(data.draft_text || ""),
     checklist ? "\nKontrol Listesi:\n" + checklist : "",
+    grounding ? "\nVakıa / Kaynak Grounding:\n" + grounding : "",
     warnings ? "\nNotlar:\n" + warnings : "",
   ];
   els.draftOutput.textContent = parts.filter(Boolean).join("\n");
@@ -988,7 +992,7 @@ function dynamicRiskState() {
   return { completed, partial, missing: [...missing, ...skipped], riskLevel, riskNotes, answeredCount };
 }
 
-function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, sourceAudit = null, precedentAudit = null, draftWarnings = [] } = {}) {
+function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, sourceAudit = null, precedentAudit = null, draftWarnings = [], draftGrounding = [] } = {}) {
   const cards = [];
   const dynamic = dynamicRiskState();
   const missing = [...dynamic.missing, ...(caseEnrichment?.missing_facts || []), ...(draftAudit?.missing_facts || [])];
@@ -1011,6 +1015,9 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
     riskyAuditItems.length && !safeDraftDecisionCount ? "Riskli/aleyhe kararlar talebi destekler gibi kullanılmadı." : "",
   ].filter(Boolean);
   const languageProblems = [...(draftAudit?.petition_language_problems || []), ...(draftWarnings || [])];
+  const groundingNotes = [...(draftGrounding || []), ...((lastDraftData?.grounding_notes || []) || [])]
+    .map((item) => (typeof item === "string" ? item : `[${item.status || "note"}] ${item.title || "Not"}: ${item.detail || ""}`))
+    .filter(Boolean);
 
   const pushCard = (title, items, badgeClass = "info") => {
     const cleanItems = [...new Set((items || []).map((item) => cleanOutputText(item)).filter(Boolean))];
@@ -1024,6 +1031,7 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
   pushCard("Dava riskleri", riskFlags, "danger");
   pushCard("Emsal denetimi", precedentProblems, "warning");
   pushCard("Kaynak denetimi", sourceProblems, "warning");
+  pushCard("Vakıa / kaynak grounding", groundingNotes, "info");
   pushCard("Dilekçe Notları", languageProblems, "info");
 
   els.riskCount.textContent = String(cards.reduce((total, card) => total + card.items.length, 0));
@@ -1525,6 +1533,10 @@ async function runDraft(options = {}) {
   try {
     const data = await apiPost("/petition/draft", {
       case_text: caseText,
+      case_enrichment: lastCaseEnrichment || {},
+      confirmed_facts: lastCaseEnrichment?.confirmed_facts || [],
+      missing_facts: lastCaseEnrichment?.missing_facts || [],
+      petition_strategy_hint: lastCaseEnrichment?.petition_strategy_hint || "",
       answers: buildAnswers(),
       selected_decisions: mapSelectedDecisions(),
       request_type: getRequestType(),
@@ -1569,6 +1581,7 @@ async function runDraft(options = {}) {
       precedentAudit: lastPrecedentAudit,
       draftAudit: draftAudit || lastDraftAudit,
       draftWarnings: data.warnings || [],
+      draftGrounding: data.grounding_notes || [],
     });
     switchTab("petition");
     setStatus(options.auditAndRefine ? "Dilekçe taslağı, kalite kontrol ve redaksiyon akışı hazır." : "Dilekçe taslağı hazır.");

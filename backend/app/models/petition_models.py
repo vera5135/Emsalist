@@ -81,6 +81,7 @@ class SelectedDecisionForDraft(BaseModel):
 class PetitionDraftRequest(BaseModel):
     case_text: str = Field(min_length=10)
     enriched_case_text: str | None = None
+    case_enrichment: dict[str, object] = Field(default_factory=dict)
     confirmed_facts: list[str] = Field(default_factory=list, max_length=30)
     missing_facts: list[str] = Field(default_factory=list, max_length=30)
     petition_strategy_hint: str = ""
@@ -109,8 +110,15 @@ class PetitionDraftRequest(BaseModel):
         return normalized
 
 
+class GroundingNote(BaseModel):
+    status: Literal["fact_confirmed", "fact_inferred", "fact_missing", "source_confirmed", "needs_verification"]
+    title: str = Field(min_length=1)
+    detail: str = Field(min_length=1)
+
+
 class PetitionDraftResponse(BaseModel):
     draft_title: str
     draft_text: str
     checklist: list[str]
+    grounding_notes: list[GroundingNote] = Field(default_factory=list)
     warnings: list[str]
