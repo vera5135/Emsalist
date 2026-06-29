@@ -166,7 +166,10 @@ class LegalBrainLibrarianService:
         if INTERNET_SOURCES_DIR.exists():
             for source_dir in INTERNET_SOURCES_DIR.iterdir():
                 if source_dir.is_dir():
-                    files.extend(sorted(p for p in source_dir.rglob("*") if p.is_file() and self._is_supported(p)))
+                    files.extend(sorted(
+                        p for p in source_dir.rglob("*")
+                        if p.is_file() and self._is_supported(p) and not p.name.endswith(".metadata.json")
+                    ))
         return files
 
     def _is_supported(self, file_path: Path) -> bool:
@@ -200,6 +203,101 @@ class LegalBrainLibrarianService:
             except (OSError, UnicodeDecodeError):
                 continue
         return ""
+
+    def _clean_html_text(self, text: str) -> str:
+        import html as _html
+        text = re.sub(
+            r"(?is)<(script|style|nav|header|footer|aside|noscript|svg)[^>]*>.*?</\1>",
+            " ",
+            text,
+        )
+        text = re.sub(r"(?is)<!--.*?-->", " ", text)
+        text = re.sub(r"(?is)<[^>]+>", " ", text)
+        text = _html.unescape(text)
+        text = text.replace("\xa0", " ")
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
+
+    def _flatten_json_content(self, value: Any, parts: list[str]) -> None:
+        if isinstance(value, dict):
+            for k, v in value.items():
+                if isinstance(k, str) and k.lower() in ("title", "headline", "text", "content", "body", "summary", "description", "excerpt"):
+                    if isinstance(v, str):
+                        parts.append(v)
+                        continue
+                self._flatten_json_content(v, parts)
+        elif isinstance(value, list):
+            for item in value:
+                self._flatten_json_content(item, parts)
+        elif isinstance(value, (str, int, float)):
+            parts.append(str(value))
+
+    def _extract_internet_source_text(self, file_path: Path, text: str) -> str:
+        suffix = file_path.suffix.lower()
+        if suffix in (".html", ".htm"):
+            return self._clean_html_text(text)
+        if suffix == ".json":
+            try:
+                data = json.loads(text)
+                parts: list[str] = []
+                self._flatten_json_content(data, parts)
+                flattened = " ".join(parts).strip()
+                return flattened if flattened else text
+            except Exception:
+                return text
+        return text
+
+    def _compute_content_hash(self, text: str) -> str:
+        hasher = hashlib.sha256()
+        hasher.update(text.encode("utf-8", errors="ignore"))
+        return hasher.hexdigest()[:16]
+
+    def _internet_source_chunk_card_path(self, file_path: Path, file_hash: str, content_hash: str) -> Path:
+        card_id = f"{file_path.stem}_{file_hash}_CHUNK_{content_hash}"
+        return LIBRARY_DIR / "internet_sources" / f"{card_id}.json"
+
+    def _internet_source_reference_card_path(self, file_path: Path, file_hash: str) -> Path:
+        card_id = f"{file_path.stem}_{file_hash}_REF"
+        return LIBRARY_DIR / "internet_sources" / f"{card_id}.json"
+
+    def _internet_source_should_reprocess(self, file_path: Path, file_hash: str) -> bool:
+        try:
+            resolved_path = file_path.resolve()
+            resolved_internet = INTERNET_SOURCES_DIR.resolve()
+            if not resolved_path.is_relative_to(resolved_internet):
+                return False
+        except Exception:
+            if str(INTERNET_SOURCES_DIR.resolve()) not in str(file_path.resolve()):
+                return False
+
+        rel = str(file_path.relative_to(LEGAL_BRAIN_ROOT))
+        registry_entry = self._load_registry().get("files", {}).get(rel, {})
+        required_tracking_fields = {
+            "fallback_used",
+            "fallback_card_types",
+            "text_length",
+            "chunk_created",
+            "reference_created",
+        }
+        if not required_tracking_fields.issubset(registry_entry):
+            return True
+
+        raw_text = self.read_source_text(file_path)
+        if not raw_text or not raw_text.strip():
+            return False
+        cleaned_text = self._extract_internet_source_text(file_path, raw_text)
+        if len(cleaned_text.strip()) < 200:
+            return False
+        content_hash = self._compute_content_hash(cleaned_text)
+        chunk_path = self._internet_source_chunk_card_path(file_path, file_hash, content_hash)
+        if not chunk_path.exists():
+            return True
+        metadata = self.load_metadata_for_file(file_path)
+        if metadata:
+            ref_path = self._internet_source_reference_card_path(file_path, file_hash)
+            if not ref_path.exists():
+                return True
+        return False
 
     def _read_docx_text(self, file_path: Path) -> str:
         try:
@@ -511,6 +609,106 @@ class LegalBrainLibrarianService:
             }
         return [card]
 
+    def build_internet_source_chunk(self, text: str, metadata: dict[str, Any], file_path: Path, file_hash: str) -> list[dict[str, Any]]:
+        cleaned_text = self._extract_internet_source_text(file_path, text)
+        if len(cleaned_text.strip()) < 200:
+            return []
+        content_hash = self._compute_content_hash(cleaned_text)
+        library_folder = LIBRARY_DIR / "internet_sources"
+        card_id = f"{file_path.stem}_{file_hash}_CHUNK_{content_hash}"
+        title = metadata.get("title") or metadata.get("headline") or file_path.stem
+        summary = metadata.get("summary") or cleaned_text[:4000]
+        excerpt = cleaned_text[:220].strip()
+        card = {
+            "card_id": card_id,
+            "type": "internet_source_chunk",
+            "card_type": "internet_source_chunk",
+            "title": title,
+            "source_path": str(file_path.relative_to(LEGAL_BRAIN_ROOT)),
+            "source_file": str(file_path.relative_to(LEGAL_BRAIN_ROOT)),
+            "source_url": metadata.get("source_url", ""),
+            "source_type": metadata.get("source_type", ""),
+            "source_reliability": metadata.get("source_reliability", ""),
+            "legal_area": metadata.get("legal_area") or metadata.get("legal_area_candidates", [{}])[0].get("legal_area", ""),
+            "case_type": metadata.get("case_type") or (metadata.get("detected_case_types", [""])[0] if metadata.get("detected_case_types") else ""),
+            "chunk_text": cleaned_text,
+            "content": cleaned_text,
+            "excerpt": excerpt,
+            "summary": summary,
+            "text_length": len(cleaned_text),
+            "content_hash": content_hash,
+            "topic_id": metadata.get("topic_id", ""),
+            "profile_id": metadata.get("profile_id", ""),
+            "profile": metadata.get("profile", {}),
+            "primary_statutes": metadata.get("primary_statutes", []),
+            "expected_rules": metadata.get("expected_rules", []),
+            "expected_questions": metadata.get("expected_questions", []),
+            "tags": metadata.get("tags", []),
+            "keywords": metadata.get("keywords", []),
+            "safe_for_legal_basis": False,
+            "safe_for_question_generation": True,
+            "safe_for_petition_style": False,
+            "warnings": ["İnternet kaynağının temizlenmiş metni internet_source_chunk olarak kaydedildi."],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "learned_at": datetime.now(timezone.utc).isoformat(),
+            "library_folder": str(library_folder.relative_to(LIBRARY_DIR)),
+        }
+        return [card]
+
+    def build_internet_source_reference(self, metadata: dict[str, Any], file_path: Path, file_hash: str) -> list[dict[str, Any]]:
+        library_folder = LIBRARY_DIR / "internet_sources"
+        card_id = f"{file_path.stem}_{file_hash}_REF"
+        card = {
+            "card_id": card_id,
+            "type": "internet_source_reference",
+            "card_type": "internet_source_reference",
+            "title": metadata.get("title") or metadata.get("headline") or file_path.stem,
+            "source_path": str(file_path.relative_to(LEGAL_BRAIN_ROOT)),
+            "source_file": str(file_path.relative_to(LEGAL_BRAIN_ROOT)),
+            "source_url": metadata.get("source_url", ""),
+            "domain": metadata.get("domain", ""),
+            "topic_id": metadata.get("topic_id", ""),
+            "profile_id": metadata.get("profile_id", ""),
+            "profile": metadata.get("profile", {}),
+            "query": metadata.get("query", ""),
+            "legal_area": metadata.get("legal_area") or metadata.get("legal_area_candidates", [{}])[0].get("legal_area", ""),
+            "case_type": metadata.get("case_type") or (metadata.get("detected_case_types", [""])[0] if metadata.get("detected_case_types") else ""),
+            "primary_statutes": metadata.get("primary_statutes", []),
+            "expected_rules": metadata.get("expected_rules", []),
+            "expected_questions": metadata.get("expected_questions", []),
+            "tags": metadata.get("tags", []),
+            "keywords": metadata.get("keywords", []),
+            "source_type": metadata.get("source_type", ""),
+            "source_reliability": metadata.get("source_reliability", ""),
+            "safe_for_legal_basis": False,
+            "safe_for_question_generation": True,
+            "safe_for_petition_style": False,
+            "warnings": [],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "learned_at": datetime.now(timezone.utc).isoformat(),
+            "library_folder": str(library_folder.relative_to(LIBRARY_DIR)),
+        }
+        return [card]
+
+    def load_metadata_for_file(self, file_path: Path) -> dict[str, Any]:
+        metadata: dict[str, Any] = {}
+        base_name = file_path.stem
+        # 1) File-side metadata
+        sidecar = file_path.with_suffix(file_path.suffix + ".metadata.json")
+        # 2) Metadata directory
+        meta_dir = METADATA_DIR / "internet_sources_metadata"
+        indexed = meta_dir / f"{base_name}.json"
+        for candidate in (sidecar, indexed):
+            if candidate.exists():
+                try:
+                    data = json.loads(candidate.read_text(encoding="utf-8"))
+                    if isinstance(data, dict):
+                        metadata.update(data)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                break
+        return metadata
+
     def build_unknown_cards(self, text: str, metadata: dict[str, Any], file_path: Path, file_hash: str) -> list[dict[str, Any]]:
         library_folder = LIBRARY_DIR / "unsorted"
         card_id = f"{file_path.stem}_{file_hash}"
@@ -561,21 +759,39 @@ class LegalBrainLibrarianService:
             registry = self._load_registry()
             rel = str(file_path.relative_to(LEGAL_BRAIN_ROOT))
             existing = registry.get("files", {}).get(rel)
+            is_internet_source_file = str(INTERNET_SOURCES_DIR) in str(file_path)
             if existing and existing.get("file_hash") == file_hash:
                 existing_status = existing.get("status", "")
-                if existing_status == "learned":
-                    result["status"] = "skipped"
-                    return result
+                existing_cards = existing.get("cards_created", 0)
+                if existing_status == "learned" and existing_cards > 0:
+                    if not self._internet_source_should_reprocess(file_path, file_hash):
+                        result["status"] = "skipped"
+                        return result
                 # For skipped, failed, unsorted, partial: retry processing
 
             text = self.read_source_text(file_path)
-            if not text or not text.strip():
+            extra_metadata = self.load_metadata_for_file(file_path)
+            is_internet_source_file = str(INTERNET_SOURCES_DIR) in str(file_path)
+            cleaned_text = self._extract_internet_source_text(file_path, text) if is_internet_source_file else text
+            text_length = len(cleaned_text.strip())
+            if (not text or not text.strip()) and not (is_internet_source_file and extra_metadata):
                 result["status"] = "skipped"
                 result["error"] = "Metin çıkarılamadı."
-                self._update_registry_entry(file_path, file_hash, status="skipped", error_message=result["error"])
+                self._update_registry_entry(
+                    file_path,
+                    file_hash,
+                    status="skipped",
+                    error_message=result["error"],
+                    fallback_used=False,
+                    fallback_card_types=[],
+                    text_length=text_length,
+                    chunk_created=False,
+                    reference_created=False,
+                    skip_reason="empty_text",
+                )
                 return result
 
-            metadata = self.classify_source(file_path, text[:8000])
+            metadata = self.classify_source(file_path, cleaned_text[:8000])
             source_type = metadata.get("source_type", "unknown")
 
             # Detect code early for error reporting
@@ -583,46 +799,66 @@ class LegalBrainLibrarianService:
             if source_type in ("statute", "official_gazette"):
                 try:
                     from app.services.legal_brain_statute_parser import legal_brain_statute_parser
-                    parsed = legal_brain_statute_parser.parse_text(text=text, metadata=metadata)
-                    code = self._detect_primary_code(text, parsed.get("parsed_codes", []))
+                    parsed = legal_brain_statute_parser.parse_text(text=cleaned_text, metadata=metadata)
+                    code = self._detect_primary_code(cleaned_text, parsed.get("parsed_codes", []))
                 except Exception:
-                    code = self._detect_primary_code(text, [])
+                    code = self._detect_primary_code(cleaned_text, [])
+
+            metadata.update(extra_metadata)
+            source_type = metadata.get("source_type", source_type)
+            internet_cards: list[dict[str, Any]] = []
 
             if source_type in ("statute", "official_gazette"):
-                cards = self.build_statute_cards(text, metadata, file_path, file_hash)
+                cards = self.build_statute_cards(cleaned_text, metadata, file_path, file_hash)
             elif source_type in ("case_law", "yargitay_decision", "danistay_decision", "constitutional_court_decision"):
-                cards = self.build_case_law_cards(text, metadata, file_path, file_hash)
+                cards = self.build_case_law_cards(cleaned_text, metadata, file_path, file_hash)
             elif source_type in ("doctrine", "bar_publication", "petition_sample", "procedural_guide", "user_verified_note", "academic"):
-                cards = self.build_doctrine_cards(text, metadata, file_path, file_hash)
+                cards = self.build_doctrine_cards(cleaned_text, metadata, file_path, file_hash)
             else:
-                cards = self.build_unknown_cards(text, metadata, file_path, file_hash)
+                # Do not immediately create a miscellaneous card here.
+                # Leave cards empty so the internet_sources fallback can run
+                # (so internet_source_chunk / internet_source_reference can be created).
+                cards = []
 
-            if not cards:
-                result["status"] = "skipped"
-                result["error"] = "Kart üretilemedi."
-                # Build detailed warnings for debugging
+            if is_internet_source_file:
+                chunk_cards = self.build_internet_source_chunk(text, metadata, file_path, file_hash)
+                if chunk_cards:
+                    internet_cards.extend(chunk_cards)
+                if extra_metadata:
+                    ref_cards = self.build_internet_source_reference(metadata, file_path, file_hash)
+                    if ref_cards:
+                        internet_cards.extend(ref_cards)
+
+            if not cards and not internet_cards:
+                skip_reason = "parser_no_match"
+                if not cleaned_text.strip():
+                    skip_reason = "empty_text"
+                elif is_internet_source_file and text_length < 200:
+                    skip_reason = "internet_source_text_too_short"
+                elif file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+                    skip_reason = "unsupported_extension"
+                elif not extra_metadata:
+                    skip_reason = "metadata_not_found"
+
                 debug_warnings = [
                     f"source_type={source_type}",
-                    f"text_length={len(text)}",
+                    f"text_length={text_length}",
                     f"code_detected={code}",
+                    f"skip_reason={skip_reason}",
                 ]
                 if source_type in ("statute", "official_gazette"):
                     try:
                         from app.services.legal_brain_statute_parser import legal_brain_statute_parser
-                        parsed = legal_brain_statute_parser.parse_text(text=text, metadata=metadata)
+                        parsed = legal_brain_statute_parser.parse_text(text=cleaned_text, metadata=metadata)
                         articles_count = len(parsed.get("parsed_articles", []))
                         debug_warnings.append(f"article_matches_count={articles_count}")
                     except Exception as parse_exc:
                         debug_warnings.append(f"parse_error={str(parse_exc)}")
-                    
-                    # Also check regex fallback
-                    regex_articles = self._extract_articles_with_regex(text)
+
+                    regex_articles = self._extract_articles_with_regex(cleaned_text)
                     debug_warnings.append(f"regex_article_matches={len(regex_articles)}")
-                    
-                    if not text or len(text.strip()) < 50:
-                        debug_warnings.append("text_too_short_or_empty")
-                    if source_type == "unknown":
-                        debug_warnings.append("source_type_is_unknown")
+                result["status"] = "skipped"
+                result["error"] = skip_reason
                 result["warnings"] = debug_warnings
                 self._update_registry_entry(
                     file_path,
@@ -630,8 +866,21 @@ class LegalBrainLibrarianService:
                     status="skipped",
                     error_message=result["error"],
                     warnings=debug_warnings,
+                    fallback_used=False,
+                    fallback_card_types=[],
+                    text_length=text_length,
+                    chunk_created=False,
+                    reference_created=False,
+                    skip_reason=skip_reason,
                 )
                 return result
+
+            cards.extend(internet_cards)
+            chunk_created = any(c.get("card_type") == "internet_source_chunk" for c in internet_cards)
+            reference_created = any(c.get("card_type") == "internet_source_reference" for c in internet_cards)
+            fallback_card_types = list(dict.fromkeys(
+                c.get("card_type") for c in internet_cards if c.get("card_type")
+            ))
 
             for card in cards:
                 card_path = self._resolve_card_path(card)
@@ -650,6 +899,11 @@ class LegalBrainLibrarianService:
                 library_folder=cards[0].get("library_folder", "unsorted"),
                 cards_created=len(cards),
                 warnings=metadata.get("warnings", []),
+                fallback_used=bool(internet_cards),
+                fallback_card_types=fallback_card_types,
+                text_length=text_length,
+                chunk_created=chunk_created,
+                reference_created=reference_created,
             )
             result["status"] = "learned"
             result["cards_created"] = len(cards)
@@ -683,6 +937,7 @@ class LegalBrainLibrarianService:
         self._update_specialized_index("case_law_library_index.json", cards, lambda c: c.get("card_type") == "case_law")
         self._update_specialized_index("doctrine_library_index.json", cards, lambda c: c.get("card_type") == "doctrine_or_practice_note")
         self._update_specialized_index("petition_style_index.json", cards, lambda c: c.get("card_type") == "petition_style")
+        self._update_specialized_index("internet_source_index.json", cards, lambda c: c.get("card_type") in ("internet_source_chunk", "internet_source_reference"))
         self._update_question_index(cards)
         self._update_legal_area_index(cards)
 
@@ -739,10 +994,17 @@ class LegalBrainLibrarianService:
                 continue
             index_map[cid] = {
                 "card_id": cid,
+                "card_type": card.get("card_type") or card.get("type", "unknown"),
+                "title": card.get("title", ""),
                 "legal_area": card.get("legal_area", "belirsiz"),
                 "keywords": card.get("keywords", [])[:8],
                 "summary": (card.get("summary") or card.get("article_text") or card.get("holding") or "")[:180],
                 "source_file": card.get("source_file", ""),
+                "source_path": card.get("source_path", ""),
+                "source_url": card.get("source_url", ""),
+                "source_type": card.get("source_type", "unknown"),
+                "content_hash": card.get("content_hash", ""),
+                "card_path": str(self._resolve_card_path(card)),
                 "source_reliability": card.get("source_reliability", "low"),
                 "safe_for_legal_basis": card.get("safe_for_legal_basis", False),
                 "safe_for_question_generation": card.get("safe_for_question_generation", False),
