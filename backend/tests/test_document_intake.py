@@ -14,6 +14,8 @@ from app.main import app
 from app.models.document_models import ExtractedFact
 from app.models.petition_models import PetitionDraftRequest, PetitionDraftResponse
 from app.routes.petition_routes import build_petition_draft
+from app.services.petition_draft_service import PetitionDraftService
+from app.services.petition_profile_service import get_petition_profile
 from app.services.document_intake_service import (
     IMAGE_OCR_WARNING,
     PDF_OCR_WARNING,
@@ -88,6 +90,21 @@ class DocumentIntakeServiceTests(unittest.TestCase):
         self.assertEqual(fact_map["sale_date"].fact_value, "12.06.2026")
         self.assertEqual(fact_map["sale_price"].fact_value, "500.000 TL")
         self.assertEqual(fact_map["vehicle_plate"].source_file_name, "noter_satis.docx")
+
+    def test_requested_notary_txt_extracts_all_vehicle_sale_facts(self) -> None:
+        fixture = Path(__file__).parent / "fixtures" / "NOTER._TEST.txt"
+        record = self.service.create_document(file_name=fixture.name, content=fixture.read_bytes())
+        facts = {fact.fact_key: fact for fact in record.extracted_facts}
+
+        self.assertEqual(record.extraction_status, "extracted")
+        self.assertEqual(record.detected_document_type, "noter satış sözleşmesi")
+        self.assertEqual(facts["sale_date"].fact_value, "12.04.2024")
+        self.assertEqual(facts["sale_price"].fact_value, "500.000 TL")
+        self.assertEqual(facts["vehicle_make_model"].fact_value, "Volkswagen Golf 1.6 TDI")
+        self.assertEqual(facts["vehicle_plate"].fact_value, "35 ABC 123")
+        self.assertEqual(facts["vehicle_vin"].fact_value, "WVWZZZ123456789")
+        self.assertEqual(facts["notary_info"].fact_value, "İzmir 5. Noterliği")
+        self.assertTrue(all(fact.source_document_id == record.document_id for fact in facts.values()))
 
     def test_scanned_or_unreadable_pdf_requires_ocr(self) -> None:
         record = self.service.create_document(file_name="taranmis.pdf", content=make_pdf())
@@ -186,7 +203,7 @@ class DocumentRoutesTests(unittest.TestCase):
                     files={"file": ("noter_satis.txt", "Satış bedeli: 350.000 TL".encode(), "text/plain")},
                     data={"document_type": "noter satış sözleşmesi"},
                 )
-                self.assertEqual(upload.status_code, 201, upload.text)
+                self.assertEqual(upload.status_code, 200, upload.text)
                 document = upload.json()
                 document_id = document["document_id"]
                 self.assertEqual(client.get("/documents").status_code, 200)
@@ -232,6 +249,30 @@ class DocumentRoutesTests(unittest.TestCase):
         self.assertIn("Kaynak belge: noter_satis.txt", confirmed_facts[0])
         self.assertEqual(response.grounding_notes[-1].status, "source_confirmed")
         self.assertIn("noter_satis.txt", response.grounding_notes[-1].detail)
+
+    def test_grounding_deduplicates_confirmed_and_missing_sale_price(self) -> None:
+        profile = get_petition_profile("İkinci el araç gizli ayıp ve satış bedeli iadesi", "bedel iadesi")
+        notes = PetitionDraftService._grounding_notes(
+            profile=profile,
+            case_text="Müvekkil ikinci el araç satın aldı.",
+            answers={},
+            confirmed_facts=["sale_price: 500.000 TL (Kaynak belge: NOTER._TEST.txt)"],
+            missing_facts=[
+                "Satış bedelinin miktarı somutlaştırılmalıdır.",
+                "Satış bedelinin miktarı yazılmalı",
+            ],
+            legal_memory=None,
+        )
+        missing_sale_notes = [
+            note for note in notes
+            if note.status == "fact_missing" and "satış bedeli" in f"{note.title} {note.detail}".casefold()
+        ]
+        self.assertEqual(missing_sale_notes, [])
+        confirmed_sale_notes = [
+            note for note in notes
+            if note.status == "fact_confirmed" and "satış bedeli" in f"{note.title} {note.detail}".casefold()
+        ]
+        self.assertEqual(len(confirmed_sale_notes), 1)
 
 
 if __name__ == "__main__":

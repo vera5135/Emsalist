@@ -211,8 +211,12 @@ class DocumentIntakeService:
             if record.extraction_warning:
                 warnings.append(record.extraction_warning)
 
-        missing = sorted({field for record in documents for field in record.missing_fields})
         confirmed = [fact for fact in all_facts if fact.verification_status == "fact_confirmed"]
+        confirmed_keys = {fact.fact_key for fact in confirmed}
+        missing = sorted(
+            {field for record in documents for field in record.missing_fields}
+            - confirmed_keys
+        )
         grounding_ready = bool(documents) and not all_conflicts and all(
             record.extraction_status in {"extracted", "partial"} for record in documents
         )
@@ -508,15 +512,15 @@ class DocumentIntakeService:
             r"(?i)\bplaka(?:\s*(?:no|numarası))?\s*[:\-]?\s*(\d{2}\s*[A-ZÇĞİÖŞÜ]{1,3}\s*\d{2,5})\b",
         ], 0.96)
         self._add_first(facts, "vehicle_vin", text, pages, document_id, file_name, [
-            r"(?i)\b(?:şasi|şase|VIN)(?:\s*(?:no|numarası))?\s*[:\-]?\s*([A-HJ-NPR-Z0-9]{17})\b",
+            r"(?i)\b(?:şasi|şase|VIN)(?:\s*(?:no|numarası))?\s*[:\-]?\s*([A-HJ-NPR-Z0-9]{15,20})\b",
         ], 0.97)
         self._add_first(facts, "vehicle_make_model", text, pages, document_id, file_name, [
             r"(?im)^\s*(?:marka\s*/\s*model|marka\s+model|araç)\s*[:\-]\s*([^\n]{2,100})",
             r"(?im)^\s*Marka\s*[:\-]\s*([^\n]{2,50})(?:\n|\s{2,})\s*Model\s*[:\-]\s*([^\n]{2,50})",
         ], 0.9)
         self._add_first(facts, "notary_info", text, pages, document_id, file_name, [
-            r"(?im)^\s*([^\n]{2,100}?\s+Noterliği)(?:\s|$)",
             r"(?i)\bnoterlik\s*[:\-]\s*([^\n]{2,100})",
+            r"(?im)^\s*([^\n]{2,100}?\s+Noterliği)(?:\s|$)",
         ], 0.92)
         self._add_first(facts, "report_number", text, pages, document_id, file_name, [
             r"(?i)\brapor\s*(?:no|numarası|sayısı)\s*[:\-]?\s*([A-Z0-9./-]{2,50})",
@@ -533,7 +537,7 @@ class DocumentIntakeService:
         ], 0.88)
         self._add_first(facts, "technical_findings", text, pages, document_id, file_name, [
             r"(?im)^\s*(?:teknik\s+)?(?:tespit|bulgu|sonuç)(?:ler|ları)?\s*[:\-]\s*([^\n]{10,500})",
-            r"(?im)^\s*([^\n]{0,80}(?:arıza|hasar|değişen parça|motor|şasi)[^\n]{10,300})$",
+            r"(?im)^\s*([^\n]{0,80}(?:arıza|hasar|değişen parça|motor)[^\n]{10,300})$",
         ], 0.82)
         self._add_first(facts, "payment_info", text, pages, document_id, file_name, [
             r"(?im)^\s*([^\n]{0,100}(?:dekont|ödeme|havale|EFT|işlem referans)[^\n]{2,300})$",

@@ -9,7 +9,7 @@ from app.services.document_intake_service import DocumentIntakeError, document_i
 router = APIRouter(prefix="/documents", tags=["Document Intake"])
 
 
-@router.post("/upload", response_model=DocumentRecord, status_code=status.HTTP_201_CREATED)
+@router.post("/upload", response_model=DocumentRecord, status_code=status.HTTP_200_OK)
 async def upload_document(
     file: UploadFile = File(...),
     document_type: str | None = Form(default=None),

@@ -129,6 +129,7 @@ class PetitionDraftRequest(BaseModel):
     case_enrichment: dict[str, object] = Field(default_factory=dict)
     confirmed_facts: list[str] = Field(default_factory=list, max_length=30)
     missing_facts: list[str] = Field(default_factory=list, max_length=30)
+    document_ids: list[str] = Field(default_factory=list, max_length=100)
     document_facts: list[ExtractedFact] = Field(default_factory=list, max_length=100)
     petition_strategy_hint: str = ""
     answers: dict[str, str] = Field(default_factory=dict)

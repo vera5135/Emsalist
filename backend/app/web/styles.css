@@ -218,6 +218,17 @@ a {
   padding: 8px;
 }
 
+.document-selection-state {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.document-selection-state.pending {
+  color: var(--accent);
+}
+
 .privacy-warning {
   margin-top: 12px;
   border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--line));
@@ -273,6 +284,38 @@ a {
   border: 1px dashed var(--line);
 }
 
+.draft-readiness-dialog {
+  width: min(560px, calc(100% - 32px));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.draft-readiness-dialog::backdrop {
+  background: rgba(8, 12, 20, 0.62);
+}
+
+.draft-readiness-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 19px;
+}
+
+.draft-readiness-dialog p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 .document-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -309,6 +352,13 @@ a {
   margin: 10px 0 0;
   padding-left: 18px;
   font-size: 13px;
+}
+
+.document-facts small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .status-extracted,

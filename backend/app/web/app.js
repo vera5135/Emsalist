@@ -29,6 +29,11 @@ const els = {
   documentOutput: $("documentOutput"),
   documentCount: $("documentCount"),
   documentGroundingState: $("documentGroundingState"),
+  documentSelectionState: $("documentSelectionState"),
+  evidenceOutput: $("evidenceOutput"),
+  evidenceCount: $("evidenceCount"),
+  draftReadinessDialog: $("draftReadinessDialog"),
+  draftReadinessIssues: $("draftReadinessIssues"),
   analysisCount: $("analysisCount"),
   brainCount: $("brainCount"),
   decisionCount: $("decisionCount"),
@@ -61,6 +66,7 @@ const els = {
     $("copyClientQuestionsBtn"),
     $("uploadDocumentsBtn"),
     $("analyzeDocumentsBtn"),
+    $("confirmPreliminaryDraftBtn"),
   ].filter(Boolean),
 };
 
@@ -85,6 +91,10 @@ let lastPrecedentAudit = null;
 let lastYargitaySearch = null;
 let lastDocuments = [];
 let lastDocumentAnalysis = null;
+let selectedDocumentFiles = [];
+let uiBusy = false;
+let reviewWorkflowComplete = false;
+let pendingPreliminaryDraftOptions = null;
 
 const DOCUMENT_FACT_LABELS = {
   court: "Mahkeme",
@@ -243,6 +253,7 @@ function plainText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replaceAll("ı", "i")
+    .replaceAll("ı", "i")
     .replaceAll("ğ", "g")
     .replaceAll("ü", "u")
     .replaceAll("ş", "s")
@@ -309,9 +320,11 @@ function setFieldValue(field, value) {
 }
 
 function setBusy(isBusy, message) {
+  uiBusy = isBusy;
   els.buttons.forEach((button) => {
     button.disabled = isBusy;
   });
+  renderDocumentControls();
   if (message !== undefined) {
     setStatus(message);
   }
@@ -451,6 +464,53 @@ async function apiUpload(path, formData) {
   return data;
 }
 
+function renderDocumentControls() {
+  if (!els.documentFiles) return;
+  $("uploadDocumentsBtn").disabled = uiBusy || selectedDocumentFiles.length === 0;
+  $("analyzeDocumentsBtn").disabled = uiBusy || lastDocuments.length === 0;
+}
+
+function renderDocumentSelection() {
+  const names = selectedDocumentFiles.map((file) => file.name);
+  els.documentSelectionState.className = `document-selection-state${names.length ? " pending" : ""}`;
+  els.documentSelectionState.textContent = names.length
+    ? `${names.length} dosya seçildi, yükleme bekliyor: ${names.join(", ")}`
+    : "Yükleme için dosya seçilmedi.";
+  renderDocumentControls();
+}
+
+function renderDocumentEvidence() {
+  const documents = lastDocumentAnalysis?.documents || [];
+  const evidenceFacts = documents.flatMap((documentItem) =>
+    (documentItem.extracted_facts || []).filter((fact) => fact.verification_status === "fact_confirmed"),
+  );
+  els.evidenceCount.textContent = String(evidenceFacts.length);
+  if (!documents.length) {
+    els.evidenceOutput.className = "empty-state";
+    els.evidenceOutput.textContent = "Henüz analiz edilmiş belge delili yok.";
+    return;
+  }
+  els.evidenceOutput.className = "result-list";
+  els.evidenceOutput.innerHTML = documents
+    .map((documentItem) => {
+      const facts = (documentItem.extracted_facts || []).filter((fact) => fact.verification_status === "fact_confirmed");
+      return `
+        <div class="result-item">
+          <h3>${escapeHtml(documentItem.file_name)}</h3>
+          <div class="meta-row">
+            <span class="chip">${escapeHtml(documentItem.document_type)}</span>
+            <span class="chip status-${escapeHtml(documentItem.extraction_status)}">${escapeHtml(documentItem.extraction_status)}</span>
+          </div>
+          ${facts.length ? `<ol class="compact-list">${facts.map((fact) => `
+            <li><strong>${escapeHtml(DOCUMENT_FACT_LABELS[fact.fact_key] || fact.fact_key)}:</strong> ${escapeHtml(fact.fact_value)}<br>
+            <small>Kaynak: ${escapeHtml(fact.source_file_name)}${fact.page_number ? `, s. ${escapeHtml(fact.page_number)}` : ""}; alıntı: “${escapeHtml(fact.excerpt)}”</small></li>
+          `).join("")}</ol>` : "<p>Bu belgeden doğrulanmış metinsel delil çıkarılamadı.</p>"}
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function renderDocuments() {
   els.documentCount.textContent = `${lastDocuments.length} belge`;
   if (!lastDocuments.length) {
@@ -458,6 +518,8 @@ function renderDocuments() {
     els.documentOutput.textContent = "Henüz dosya evrakı eklenmedi.";
     els.documentGroundingState.className = "document-grounding-state";
     els.documentGroundingState.textContent = "Dilekçe için henüz analiz edilmiş belge yok.";
+    renderDocumentEvidence();
+    renderDocumentControls();
     return;
   }
 
@@ -506,6 +568,8 @@ function renderDocuments() {
   if (!lastDocumentAnalysis) {
     els.documentGroundingState.className = "document-grounding-state warning";
     els.documentGroundingState.textContent = "Belgeler yüklendi. Dilekçe akışından önce Belgeleri Analiz Et adımını çalıştırın.";
+    renderDocumentEvidence();
+    renderDocumentControls();
     return;
   }
   const conflictCount = (lastDocumentAnalysis.conflicts || []).length;
@@ -514,6 +578,8 @@ function renderDocuments() {
   els.documentGroundingState.textContent = lastDocumentAnalysis.grounding_ready
     ? `${(lastDocumentAnalysis.confirmed_facts || []).length} bilgi kaynaklandırıldı; dilekçe akışı için analizi onaylayın.`
     : `Analiz tamamlandı: ${conflictCount} çelişki, ${warningCount} okuma/OCR uyarısı. Kesin bilgi olarak yalnızca doğrulanan olgular kullanılacak.`;
+  renderDocumentEvidence();
+  renderDocumentControls();
 }
 
 function userClaimsFromCase() {
@@ -583,12 +649,25 @@ function prefillQuestionsFromDocuments() {
 }
 
 function assertDocumentFlowReady() {
-  if (!lastDocuments.length) return;
-  if (!lastDocumentAnalysis) {
-    throw new Error("Dilekçeden önce yüklenen belgeleri analiz edin.");
-  }
-  if (!els.documentApproval.checked) {
+  if (lastDocuments.length && lastDocumentAnalysis && !els.documentApproval.checked) {
     throw new Error("Dilekçeden önce belge analizini, kaynakları ve uyarıları inceleyip onaylayın.");
+  }
+}
+
+function draftReadinessIssues() {
+  const issues = [];
+  if (questionAnswerCount() === 0) issues.push("Dilekçe soruları henüz cevaplanmadı.");
+  if (!lastDocuments.length) issues.push("Dosya evrakı yüklenmedi ve analiz edilmedi.");
+  else if (!lastDocumentAnalysis) issues.push("Yüklenen dosya evrakları henüz analiz edilmedi.");
+  if (!reviewWorkflowComplete) issues.push("Kaynak, emsal, delil ve risk incelemesi tamamlanmadı.");
+  return issues;
+}
+
+function showDraftReadinessDialog(issues, options) {
+  pendingPreliminaryDraftOptions = { ...options, preliminaryApproved: true };
+  els.draftReadinessIssues.innerHTML = issues.map((issue) => `<li>${escapeHtml(issue)}</li>`).join("");
+  if (!els.draftReadinessDialog.open) {
+    els.draftReadinessDialog.showModal();
   }
 }
 
@@ -598,11 +677,12 @@ async function loadDocuments() {
   lastDocuments = await response.json();
   lastDocumentAnalysis = null;
   renderDocuments();
+  renderDocumentSelection();
 }
 
 async function uploadDocuments() {
-  const files = Array.from(els.documentFiles.files || []);
-  if (!files.length) throw new Error("Yüklenecek en az bir belge seçin.");
+  const files = [...selectedDocumentFiles];
+  if (!files.length) throw new Error("Önce yüklenecek belgeyi seçin.");
   setBusy(true, "Belgeler güvenli alana yükleniyor...");
   try {
     for (const file of files) {
@@ -611,10 +691,14 @@ async function uploadDocuments() {
       if (els.documentType.value) formData.append("document_type", els.documentType.value);
       const uploaded = await apiUpload("/documents/upload", formData);
       lastDocuments = [uploaded, ...lastDocuments.filter((item) => item.document_id !== uploaded.document_id)];
+      renderDocuments();
     }
     lastDocumentAnalysis = null;
+    reviewWorkflowComplete = false;
     els.documentApproval.checked = false;
+    selectedDocumentFiles = [];
     els.documentFiles.value = "";
+    renderDocumentSelection();
     renderDocuments();
     setStatus(`${files.length} belge yüklendi. Şimdi belgeleri analiz edin.`);
   } finally {
@@ -623,7 +707,7 @@ async function uploadDocuments() {
 }
 
 async function analyzeDocuments() {
-  if (!lastDocuments.length) throw new Error("Analiz edilecek belge yok.");
+  if (!lastDocuments.length) throw new Error("Önce belgeyi yükleyin.");
   setBusy(true, "Belgeler okunuyor, bilgiler kaynaklandırılıyor ve çelişkiler denetleniyor...");
   try {
     const data = await apiPost("/documents/analyze", {
@@ -632,10 +716,13 @@ async function analyzeDocuments() {
       document_types: {},
     });
     lastDocumentAnalysis = data;
+    reviewWorkflowComplete = false;
     lastDocuments = data.documents || [];
     els.documentApproval.checked = false;
     renderDocuments();
     prefillQuestionsFromDocuments();
+    renderRisks();
+    renderStrategyToolkit();
     const conflictSuffix = data.conflicts?.length ? ` ${data.conflicts.length} çelişki doğrulama bekliyor.` : "";
     setStatus(`Belge analizi tamamlandı; ${data.confirmed_facts?.length || 0} bilgi kaynaklandırıldı.${conflictSuffix}`);
     return data;
@@ -961,15 +1048,36 @@ function currentQuestionItem() {
   return questionFlow.questions[questionFlow.currentIndex] || null;
 }
 
-function answerCurrentQuestion() {
-  const item = currentQuestionItem();
-  const field = els.questionFields.querySelector("[data-question]");
-  if (!item || !field) return;
+function saveQuestionField(field) {
+  const question = field?.dataset.question;
+  if (!question) return;
   const value = field.value.trim();
   if (value) {
-    questionFlow.answers[item.question] = value;
-    questionFlow.skipped.delete(item.question);
+    questionFlow.answers[question] = value;
+    questionFlow.skipped.delete(question);
+  } else {
+    delete questionFlow.answers[question];
   }
+  refreshQuestionAnswerCount();
+}
+
+function answerCurrentQuestion() {
+  const item = currentQuestionItem();
+  if (!item) return;
+  const field = Array.from(els.questionFields.querySelectorAll("[data-question]"))
+    .find((candidate) => candidate.dataset.question === item.question)
+    || els.questionFields.querySelector("[data-question]");
+  saveQuestionField(field);
+}
+
+function questionAnswerCount() {
+  return Object.values(questionFlow.answers).filter((value) => String(value).trim()).length;
+}
+
+function refreshQuestionAnswerCount() {
+  els.questionFields.querySelectorAll("[data-answer-count]").forEach((element) => {
+    element.textContent = `${questionAnswerCount()} cevap`;
+  });
 }
 
 function renderQuestionFields(questions) {
@@ -993,6 +1101,7 @@ function renderQuestionCard() {
     els.questionFields.innerHTML = `
       <div class="question-flow-head">
         <strong>Tüm sorular</strong>
+        <span data-answer-count>${questionAnswerCount()} cevap</span>
         <button class="ghost-btn small-btn" type="button" data-action="toggle-question-mode">Kart moduna dön</button>
       </div>
       ${questionFlow.questions
@@ -1016,7 +1125,7 @@ function renderQuestionCard() {
     return;
   }
   const item = currentQuestionItem();
-  const answeredCount = Object.values(questionFlow.answers).filter(Boolean).length;
+  const answeredCount = questionAnswerCount();
   const progress = `${questionFlow.currentIndex + 1} / ${questionFlow.questions.length}`;
   const value = questionFlow.answers[item.question] || "";
   const optionButtons = (item.options || questionOptions(item.question))
@@ -1027,7 +1136,7 @@ function renderQuestionCard() {
   els.questionFields.innerHTML = `
     <div class="question-flow-head">
       <strong>Soru ${progress}</strong>
-      <span>${answeredCount} cevap</span>
+      <span data-answer-count>${answeredCount} cevap</span>
     </div>
     <label class="question-card active-question-card">
       <span>${escapeHtml(item.question)}</span>
@@ -1071,8 +1180,14 @@ function buildAnswers() {
     const answer = field.value.trim();
     if (question && answer) {
       answers[question] = answer;
+      questionFlow.answers[question] = answer;
+      questionFlow.skipped.delete(question);
+    } else if (question) {
+      delete answers[question];
+      delete questionFlow.answers[question];
     }
   });
+  refreshQuestionAnswerCount();
   return answers;
 }
 
@@ -1126,7 +1241,7 @@ function handleQuestionOptionClick(event) {
   if (!field || !value) return;
 
   appendAnswerOption(field, value);
-  answerCurrentQuestion();
+  saveQuestionField(field);
   button.classList.add("selected");
   renderRisks();
   setStatus("Seçenek cevaba eklendi.");
@@ -1149,8 +1264,59 @@ function renderDraft(data) {
   els.draftOutput.textContent = parts.filter(Boolean).join("\n");
 }
 
+function documentContextText() {
+  const documents = lastDocumentAnalysis?.documents || [];
+  return documents
+    .flatMap((documentItem) => [
+      documentItem.document_type,
+      documentItem.file_name,
+      ...(documentItem.extracted_facts || [])
+        .filter((fact) => fact.verification_status === "fact_confirmed")
+        .flatMap((fact) => [DOCUMENT_FACT_LABELS[fact.fact_key] || fact.fact_key, fact.fact_value]),
+    ])
+    .join(" ");
+}
+
+function missingItemResolvedByDocuments(item) {
+  const keys = new Set(documentFactPayload().map((fact) => fact.fact_key));
+  const value = plainText(item);
+  if (value.includes("satis bedel")) return keys.has("sale_price");
+  if (value.includes("satis tarih")) return keys.has("sale_date");
+  if (value.includes("marka") && value.includes("model") && value.includes("plaka") && value.includes("sasi")) {
+    return ["vehicle_make_model", "vehicle_plate", "vehicle_vin"].every((key) => keys.has(key));
+  }
+  if (value.includes("marka") || value.includes("model")) return keys.has("vehicle_make_model");
+  if (value.includes("plaka")) return keys.has("vehicle_plate");
+  if (value.includes("sasi") || value.includes("sase")) return keys.has("vehicle_vin");
+  if (value.includes("noter")) return keys.has("notary_info");
+  if (value.includes("taraf")) return keys.has("parties");
+  if (value.includes("dosya numara")) return keys.has("case_number");
+  return false;
+}
+
+function issueConcept(item) {
+  const value = plainText(item);
+  if (value.includes("satis bedel")) return "sale_price";
+  if ((value.includes("marka") || value.includes("model")) && (value.includes("plaka") || value.includes("sasi"))) return "vehicle_identity";
+  if (value.includes("satis tarih")) return "sale_date";
+  if (value.includes("ayip ihbar") || value.includes("bildirim tarih")) return "notice";
+  if (value.includes("servis") || value.includes("ekspertiz")) return "technical_report";
+  return value;
+}
+
+function dedupeIssues(items) {
+  const seen = new Set();
+  return (items || []).map((item) => cleanOutputText(item)).filter((item) => {
+    if (!item) return false;
+    const concept = issueConcept(item);
+    if (seen.has(concept)) return false;
+    seen.add(concept);
+    return true;
+  });
+}
+
 function dynamicRiskState() {
-  const rawCombined = [getCaseText(), getRequestType(), Object.values(buildAnswers()).join(" ")].join(" ");
+  const rawCombined = [getCaseText(), getRequestType(), Object.values(buildAnswers()).join(" "), documentContextText()].join(" ");
   const combined = plainText(rawCombined);
   const profile = currentProfileKey();
   const completed = [];
@@ -1234,7 +1400,12 @@ function dynamicRiskState() {
 function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, sourceAudit = null, precedentAudit = null, draftWarnings = [], draftGrounding = [] } = {}) {
   const cards = [];
   const dynamic = dynamicRiskState();
-  const missing = [...dynamic.missing, ...(caseEnrichment?.missing_facts || []), ...(draftAudit?.missing_facts || [])];
+  const missing = dedupeIssues([
+    ...dynamic.missing,
+    ...(caseEnrichment?.missing_facts || []),
+    ...(draftAudit?.missing_facts || []),
+    ...documentMissingFields(),
+  ].filter((item) => !missingItemResolvedByDocuments(item)));
   const riskFlags = [`Risk seviyesi: ${dynamic.riskLevel}`, ...dynamic.riskNotes, ...(caseEnrichment?.risk_flags || []), ...(draftAudit?.critical_issues || []), ...(draftAudit?.major_issues || [])];
   const rejectedSourceCount = (sourceAudit?.audited_sources || []).filter((item) => !item.use_in_petition).length;
   const sourceProblems = [
@@ -1257,9 +1428,17 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
   const groundingNotes = [...(draftGrounding || []), ...((lastDraftData?.grounding_notes || []) || [])]
     .map((item) => (typeof item === "string" ? item : `[${item.status || "note"}] ${item.title || "Not"}: ${item.detail || ""}`))
     .filter(Boolean);
+  const documentGrounding = documentFactPayload().map((fact) => {
+    const label = DOCUMENT_FACT_LABELS[fact.fact_key] || fact.fact_key;
+    return `[fact_confirmed] ${label}: ${fact.fact_value} — Kaynak: ${fact.source_file_name}${fact.page_number ? `, s. ${fact.page_number}` : ""}`;
+  });
+  const documentProblems = [
+    ...(lastDocumentAnalysis?.warnings || []),
+    ...(lastDocumentAnalysis?.conflicts || []).map((conflict) => conflict.warning),
+  ];
 
   const pushCard = (title, items, badgeClass = "info") => {
-    const cleanItems = [...new Set((items || []).map((item) => cleanOutputText(item)).filter(Boolean))];
+    const cleanItems = dedupeIssues(items);
     if (!cleanItems.length) return;
     cards.push({ title, items: cleanItems, badgeClass });
   };
@@ -1270,7 +1449,8 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
   pushCard("Dava riskleri", riskFlags, "danger");
   pushCard("Emsal denetimi", precedentProblems, "warning");
   pushCard("Kaynak denetimi", sourceProblems, "warning");
-  pushCard("Vakıa / kaynak grounding", groundingNotes, "info");
+  pushCard("Belge analizi", documentProblems, "warning");
+  pushCard("Vakıa / kaynak grounding", [...documentGrounding, ...groundingNotes], "info");
   pushCard("Dilekçe Notları", languageProblems, "info");
 
   els.riskCount.textContent = String(cards.reduce((total, card) => total + card.items.length, 0));
@@ -1763,20 +1943,33 @@ async function prepareQuestions(force = false) {
 
 async function runDraft(options = {}) {
   const caseText = assertCaseText();
-  assertDocumentFlowReady();
   answerCurrentQuestion();
+  assertDocumentFlowReady();
   if (!options.force && !questionsAreCurrent()) {
     await prepareQuestions(false);
     return;
   }
+
+  const readinessIssues = draftReadinessIssues();
+  if (readinessIssues.length && !options.preliminaryApproved) {
+    showDraftReadinessDialog(readinessIssues, options);
+    setStatus("Kritik bilgi ve belge analizi tamamlanmadı. Ön taslak için açık onayınız gerekiyor.", true);
+    return null;
+  }
+
+  const unresolvedMissingFacts = dedupeIssues([
+    ...(lastCaseEnrichment?.missing_facts || []),
+    ...documentMissingFields(),
+  ].filter((item) => !missingItemResolvedByDocuments(item))).slice(0, 30);
 
   setBusy(true, "Dilekçe taslağı hazırlanıyor...");
   try {
     const data = await apiPost("/petition/draft", {
       case_text: caseText,
       case_enrichment: lastCaseEnrichment || {},
-      confirmed_facts: [...new Set([...(lastCaseEnrichment?.confirmed_facts || []), ...documentConfirmedFactTexts()])].slice(0, 30),
-      missing_facts: [...new Set([...(lastCaseEnrichment?.missing_facts || []), ...documentMissingFields()])].slice(0, 30),
+      confirmed_facts: [...new Set(lastCaseEnrichment?.confirmed_facts || [])].slice(0, 30),
+      missing_facts: unresolvedMissingFacts,
+      document_ids: (lastDocumentAnalysis?.documents || []).map((documentItem) => documentItem.document_id),
       document_facts: documentFactPayload(),
       petition_strategy_hint: lastCaseEnrichment?.petition_strategy_hint || "",
       answers: buildAnswers(),
@@ -1786,6 +1979,12 @@ async function runDraft(options = {}) {
       use_legal_brain: true,
       legal_language_level: "usta_avukat",
     });
+    if (readinessIssues.length) {
+      data.warnings = [
+        ...(data.warnings || []),
+        `Bu metin ön taslaktır. Tamamlanmayan adımlar: ${readinessIssues.join(" ")}`,
+      ];
+    }
     lastDraftData = data;
     renderDraft(data);
     let draftAudit = null;
@@ -1877,6 +2076,7 @@ async function runRefineDraft() {
 
 async function runFullReview() {
   const caseText = assertCaseText();
+  reviewWorkflowComplete = false;
   setBusy(true, "1/11 Olay analizi yapılıyor...");
   switchTab("summary");
   let analysis = null;
@@ -2009,6 +2209,7 @@ async function runFullReview() {
       precedentCount: lastDecisions.length,
       qualityScore: null,
     });
+    reviewWorkflowComplete = true;
     switchTab("summary");
     setStatus("Kaynak ve emsal incelemesi hazır. Soru kartlarını cevaplayıp son kartta Dilekçeyi Hazırla'ya bas.");
   } finally {
@@ -2099,7 +2300,10 @@ function clearAll() {
   lastDraftAudit = null;
   lastSourceAudit = null;
   lastPrecedentAudit = null;
+  reviewWorkflowComplete = false;
   lastDocumentAnalysis = null;
+  selectedDocumentFiles = [];
+  els.documentFiles.value = "";
   els.documentApproval.checked = false;
   resetQuestions();
   els.analysisCount.textContent = "0";
@@ -2128,6 +2332,7 @@ function clearAll() {
   els.officialSourcesOutput.textContent = "Henüz resmî kaynak takibi yok.";
   switchTab("summary");
   renderDocuments();
+  renderDocumentSelection();
   setStatus("");
 }
 
@@ -2157,8 +2362,9 @@ function wireEvents() {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
   });
   els.questionFields.addEventListener("click", handleQuestionOptionClick);
-  els.questionFields.addEventListener("input", () => {
-    answerCurrentQuestion();
+  els.questionFields.addEventListener("input", (event) => {
+    const field = event.target.closest("[data-question]");
+    if (field) saveQuestionField(field);
     renderRisks();
   });
   els.analysisOutput.addEventListener("click", (event) => {
@@ -2180,6 +2386,15 @@ function wireEvents() {
     lastStrategyRequest = getRequestType();
     setStatus("AI analizi aktif akışa alındı.");
   });
+  els.documentFiles.addEventListener("change", () => {
+    selectedDocumentFiles = Array.from(els.documentFiles.files || []);
+    lastDocumentAnalysis = null;
+    els.documentApproval.checked = false;
+    renderDocumentSelection();
+    if (selectedDocumentFiles.length) {
+      setStatus(`${selectedDocumentFiles.length} dosya seçildi. Backend'e göndermek için Belgeleri Yükle'ye basın.`);
+    }
+  });
   $("uploadDocumentsBtn").addEventListener("click", () => uploadDocuments().catch((error) => setStatus(error.message, true)));
   $("analyzeDocumentsBtn").addEventListener("click", () => analyzeDocuments().catch((error) => setStatus(error.message, true)));
   els.documentOutput.addEventListener("click", (event) => {
@@ -2188,6 +2403,23 @@ function wireEvents() {
     const documentId = button.dataset.deleteDocument;
     if (!window.confirm("Bu belgeyi kalıcı olarak silmek istiyor musunuz?")) return;
     deleteDocument(documentId).catch((error) => setStatus(error.message, true));
+  });
+  $("cancelPreliminaryDraftBtn").addEventListener("click", () => {
+    pendingPreliminaryDraftOptions = null;
+    els.draftReadinessDialog.close();
+    setStatus("Dilekçe üretilmedi. Önce kritik bilgi, belge ve inceleme adımlarını tamamlayın.", true);
+  });
+  $("confirmPreliminaryDraftBtn").addEventListener("click", () => {
+    const options = pendingPreliminaryDraftOptions;
+    pendingPreliminaryDraftOptions = null;
+    els.draftReadinessDialog.close();
+    if (options) runDraft(options).catch((error) => setStatus(error.message, true));
+  });
+  els.draftReadinessDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    pendingPreliminaryDraftOptions = null;
+    els.draftReadinessDialog.close();
+    setStatus("Dilekçe üretilmedi. Önce kritik bilgi, belge ve inceleme adımlarını tamamlayın.", true);
   });
   $("reviewBtn").addEventListener("click", () => runFullReview().catch((error) => setStatus(error.message, true)));
   $("aiEnrichBtn").addEventListener("click", () => runAIEnrich().catch((error) => setStatus(error.message, true)));
@@ -2249,9 +2481,11 @@ function wireEvents() {
     lastCaseEnrichment = null;
     lastBetterSearches = null;
     lastYargitaySearch = null;
+    reviewWorkflowComplete = false;
   });
   els.requestType.addEventListener("input", () => {
     lastStrategyRequest = "";
+    reviewWorkflowComplete = false;
   });
 }
 

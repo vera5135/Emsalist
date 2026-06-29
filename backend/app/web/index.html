@@ -113,9 +113,10 @@
               <option>diğer</option>
             </select>
           </label>
-          <button id="uploadDocumentsBtn" class="ghost-btn" type="button">Belgeleri Yükle</button>
-          <button id="analyzeDocumentsBtn" class="primary-btn" type="button">Belgeleri Analiz Et</button>
+          <button id="uploadDocumentsBtn" class="ghost-btn" type="button" disabled>Belgeleri Yükle</button>
+          <button id="analyzeDocumentsBtn" class="primary-btn" type="button" disabled>Belgeleri Analiz Et</button>
         </div>
+        <div id="documentSelectionState" class="document-selection-state" aria-live="polite">Yükleme için dosya seçilmedi.</div>
         <div class="privacy-warning">
           <strong>Kişisel veri uyarısı:</strong> Yalnızca bu hukuki çalışma için gerekli belgeleri yükleyin; gereksiz özel nitelikli verileri paylaşmayın.
         </div>
@@ -158,6 +159,7 @@
           <button class="tab-button" type="button" data-tab="clientQuestions">Müvekkile Sorular</button>
           <button class="tab-button" type="button" data-tab="defense">Savunma Simülasyonu</button>
           <button class="tab-button" type="button" data-tab="sources">Kaynaklar</button>
+          <button class="tab-button" type="button" data-tab="evidence">Deliller</button>
           <button class="tab-button" type="button" data-tab="officialSources">Resmî Kaynak Takibi</button>
           <button class="tab-button" type="button" data-tab="risks">Eksikler / Riskler</button>
         </div>
@@ -225,6 +227,14 @@
           <div id="brainOutput" class="empty-state">Henüz kaynak sonucu yok.</div>
         </article>
 
+        <article class="tab-panel" data-tab-panel="evidence">
+          <div class="section-head">
+            <h2>Belge Delilleri</h2>
+            <span id="evidenceCount">0</span>
+          </div>
+          <div id="evidenceOutput" class="empty-state">Henüz analiz edilmiş belge delili yok.</div>
+        </article>
+
         <article class="tab-panel" data-tab-panel="officialSources">
           <div class="section-head">
             <h2>Resmî Hukuk Kaynakları</h2>
@@ -243,6 +253,16 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260629-document-intake-1" defer></script>
+    <dialog id="draftReadinessDialog" class="draft-readiness-dialog" aria-labelledby="draftReadinessTitle">
+      <h2 id="draftReadinessTitle">Kritik analiz adımları tamamlanmadı</h2>
+      <p>Nihai dilekçe yerine yalnızca ön taslak üretilebilir. Eksik adımlar:</p>
+      <ul id="draftReadinessIssues" class="compact-list"></ul>
+      <div class="dialog-actions">
+        <button id="cancelPreliminaryDraftBtn" class="ghost-btn" type="button">Vazgeç</button>
+        <button id="confirmPreliminaryDraftBtn" class="primary-btn" type="button">Ön Taslak Üret</button>
+      </div>
+    </dialog>
+
+    <script src="app.js?v=20260629-document-intake-3" defer></script>
   </body>
 </html>

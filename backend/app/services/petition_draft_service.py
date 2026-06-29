@@ -712,6 +712,28 @@ class PetitionDraftService:
         confirmed = PetitionDraftService._clean_list(confirmed_facts)
         missing = PetitionDraftService._clean_list(missing_facts)
         seen_titles: set[str] = set()
+        grounding_text = " ".join([case_text, *answers.values(), *confirmed])
+
+        def concept(value: str) -> str:
+            plain = PetitionDraftService._plain(value)
+            if "satis bedel" in plain or "sale_price" in plain:
+                return "sale_price"
+            if ("marka" in plain or "model" in plain) and ("plaka" in plain or "sasi" in plain or "sase" in plain):
+                return "vehicle_identity"
+            if "marka" in plain or "model" in plain:
+                return "vehicle_make_model"
+            if "plaka" in plain or "vehicle_plate" in plain:
+                return "vehicle_plate"
+            if "sasi" in plain or "sase" in plain or "vehicle_vin" in plain:
+                return "vehicle_vin"
+            if "satis tarih" in plain or "sale_date" in plain:
+                return "sale_date"
+            return plain
+
+        confirmed_concepts = {concept(fact) for fact in confirmed}
+        if {"vehicle_make_model", "vehicle_plate", "vehicle_vin"}.issubset(confirmed_concepts):
+            confirmed_concepts.add("vehicle_identity")
+        missing = [detail for detail in missing if concept(detail) not in confirmed_concepts]
 
         if confirmed:
             for fact in confirmed[:6]:
@@ -742,7 +764,7 @@ class PetitionDraftService:
                 )
 
         if profile.key == "defective_vehicle":
-            if PetitionDraftService._has_any(case_text, answers, ("galeri", "şirket", "sirket", "tacir")):
+            if PetitionDraftService._has_any(grounding_text, {}, ("galeri", "şirket", "sirket", "tacir")):
                 title = "Satıcı sıfatı"
                 detail = "Davalının galeri/şirket/tacir sıfatı mevcut kayıtlar ve satış belgeleri üzerinden ayrıca doğrulanmalıdır."
                 key = PetitionDraftService._plain(title + detail)
@@ -769,7 +791,7 @@ class PetitionDraftService:
                         )
                     )
 
-            if PetitionDraftService._has_any(case_text, answers, ("noter ihtar", "whatsapp", "sms", "bildirim", "ihbar", "teblig", "tebligat")):
+            if PetitionDraftService._has_any(grounding_text, {}, ("noter ihtar", "whatsapp", "sms", "bildirim", "ihbar", "teblig", "tebligat")):
                 title = "Ayıp bildirimi"
                 detail = "Ayıp bildiriminin tarihi, yöntemi ve tebliğ bilgisi somutlaştırılmalıdır."
                 key = PetitionDraftService._plain(title + detail)
@@ -796,7 +818,7 @@ class PetitionDraftService:
                         )
                     )
 
-            if PetitionDraftService._has_any(case_text, answers, ("servis", "ekspertiz", "tramer", "bilirkişi", "bilirkisi", "rapor")):
+            if PetitionDraftService._has_any(grounding_text, {}, ("servis", "ekspertiz", "tramer", "bilirkişi", "bilirkisi", "rapor")):
                 title = "Teknik tespit"
                 detail = "Varsa gizli onarım/hasar/TRAMER kaydı servis, ekspertiz veya bilirkişi incelemesiyle ortaya konulmalıdır."
                 key = PetitionDraftService._plain(title + detail)
@@ -823,7 +845,7 @@ class PetitionDraftService:
                         )
                     )
 
-            if re.search(r"(₺|\btl\b|\blira\b|\b\d{4,}\b)", PetitionDraftService._plain(" ".join([case_text, *answers.values()]))) and PetitionDraftService._has_any(case_text, answers, ("satış bedeli", "satis bedeli", "ödeme", "odeme", "dekont")):
+            if re.search(r"(₺|\btl\b|\blira\b|\b\d{4,}\b)", PetitionDraftService._plain(grounding_text)) and PetitionDraftService._has_any(grounding_text, {}, ("satış bedeli", "satis bedeli", "sale_price", "ödeme", "odeme", "dekont")):
                 title = "Satış bedeli"
                 detail = "Satış bedeli dosya kapsamındaki belge ve beyanlarla somutlaştırılmış görünmektedir."
                 key = PetitionDraftService._plain(title + detail)
@@ -852,6 +874,9 @@ class PetitionDraftService:
 
         for detail in missing[:4]:
             title = "Eksik husus"
+            detail_concept = concept(detail)
+            if any(concept(f"{note.title} {note.detail}") == detail_concept for note in notes):
+                continue
             key = PetitionDraftService._plain(title + detail)
             if key not in seen_titles:
                 seen_titles.add(key)
