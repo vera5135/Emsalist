@@ -1,8 +1,10 @@
 """Pydantic contracts for petition strategy and draft endpoints."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+from app.models.document_models import ExtractedFact
 
 
 ToneOption = Literal[
@@ -78,15 +80,60 @@ class SelectedDecisionForDraft(BaseModel):
         return " ".join(value.split())
 
 
+class PrecedentAnalysis(BaseModel):
+    precedent_id: str = Field(min_length=1)
+    citation: str = Field(min_length=1)
+    verification_status: Literal[
+        "verified_supportive_precedent",
+        "verification_required_precedent_candidate",
+        "weak_or_partial_precedent",
+        "adverse_or_distinguishable_precedent",
+    ]
+    similarity_reasons: list[str] = Field(default_factory=list)
+    shared_facts: list[str] = Field(default_factory=list)
+    shared_legal_issues: list[str] = Field(default_factory=list)
+    supported_arguments: list[str] = Field(default_factory=list)
+    evidence_connection: list[str] = Field(default_factory=list)
+    distinguishing_risks: list[str] = Field(default_factory=list)
+    recommended_use: str = Field(min_length=1)
+    confidence_score: int = Field(ge=0, le=100)
+
+    @field_validator("precedent_id", "citation", "recommended_use")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        return " ".join(value.split())
+
+    @field_validator(
+        "similarity_reasons",
+        "shared_facts",
+        "shared_legal_issues",
+        "supported_arguments",
+        "evidence_connection",
+        "distinguishing_risks",
+    )
+    @classmethod
+    def normalize_list(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            cleaned = " ".join(str(value).split())
+            if cleaned and cleaned not in seen:
+                seen.add(cleaned)
+                normalized.append(cleaned)
+        return normalized
+
+
 class PetitionDraftRequest(BaseModel):
     case_text: str = Field(min_length=10)
     enriched_case_text: str | None = None
     case_enrichment: dict[str, object] = Field(default_factory=dict)
     confirmed_facts: list[str] = Field(default_factory=list, max_length=30)
     missing_facts: list[str] = Field(default_factory=list, max_length=30)
+    document_facts: list[ExtractedFact] = Field(default_factory=list, max_length=100)
     petition_strategy_hint: str = ""
     answers: dict[str, str] = Field(default_factory=dict)
     selected_decisions: list[SelectedDecisionForDraft] = Field(default_factory=list, max_length=20)
+    precedent_candidates: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
     audited_precedents: list[SelectedDecisionForDraft] = Field(default_factory=list, max_length=20)
     tone: ToneOption = "Ölçülü ve ikna edici"
     request_type: str = Field(default="Talebimizin kabulü", min_length=3)
@@ -121,4 +168,5 @@ class PetitionDraftResponse(BaseModel):
     draft_text: str
     checklist: list[str]
     grounding_notes: list[GroundingNote] = Field(default_factory=list)
+    precedent_analyses: list[PrecedentAnalysis] = Field(default_factory=list)
     warnings: list[str]

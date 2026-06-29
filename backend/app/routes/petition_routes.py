@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.models.petition_models import (
+    GroundingNote,
     PetitionDraftRequest,
     PetitionDraftResponse,
     PetitionStrategyRequest,
@@ -29,16 +30,41 @@ def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse
     # AI enrichment fields are internal signals for search, questions and quality checks.
     # They must not be appended to the petition narrative as raw analysis text.
     case_text = request.case_text
-    return petition_draft_service.build_draft(
+    document_fact_lines = [
+        (
+            f"{fact.fact_key}: {fact.fact_value} "
+            f"(Kaynak belge: {fact.source_file_name}"
+            f"{f', s. {fact.page_number}' if fact.page_number else ''}; alıntı: {fact.excerpt})"
+        )
+        for fact in request.document_facts
+        if fact.verification_status == "fact_confirmed"
+    ]
+    confirmed_facts = list(dict.fromkeys([*request.confirmed_facts, *document_fact_lines]))[:30]
+    response = petition_draft_service.build_draft(
         case_text=case_text,
         case_enrichment=request.case_enrichment,
-        confirmed_facts=request.confirmed_facts,
+        confirmed_facts=confirmed_facts,
         missing_facts=request.missing_facts,
         petition_strategy_hint=request.petition_strategy_hint,
         answers=request.answers,
         selected_decisions=selected_decisions,
+        precedent_candidates=request.precedent_candidates,
         tone=request.tone,
         request_type=request.request_type,
         use_legal_brain=request.use_legal_brain,
         legal_language_level=request.legal_language_level,
     )
+    response.grounding_notes.extend(
+        GroundingNote(
+            status="source_confirmed",
+            title=f"Belgeyle doğrulanan bilgi: {fact.fact_key}",
+            detail=(
+                f"{fact.fact_value} — Kaynak: {fact.source_file_name}"
+                f"{f', sayfa {fact.page_number}' if fact.page_number else ''}; "
+                f"alıntı: {fact.excerpt}; güven: %{round(fact.confidence_score * 100)}"
+            ),
+        )
+        for fact in request.document_facts
+        if fact.verification_status == "fact_confirmed"
+    )
+    return response

@@ -23,6 +23,12 @@ const els = {
   clientQuestionsOutput: $("clientQuestionsOutput"),
   defenseOutput: $("defenseOutput"),
   officialSourcesOutput: $("officialSourcesOutput"),
+  documentFiles: $("documentFiles"),
+  documentType: $("documentType"),
+  documentApproval: $("documentApproval"),
+  documentOutput: $("documentOutput"),
+  documentCount: $("documentCount"),
+  documentGroundingState: $("documentGroundingState"),
   analysisCount: $("analysisCount"),
   brainCount: $("brainCount"),
   decisionCount: $("decisionCount"),
@@ -53,6 +59,8 @@ const els = {
     $("downloadPdfBtn"),
     $("downloadUdfBtn"),
     $("copyClientQuestionsBtn"),
+    $("uploadDocumentsBtn"),
+    $("analyzeDocumentsBtn"),
   ].filter(Boolean),
 };
 
@@ -75,6 +83,33 @@ let lastDraftAudit = null;
 let lastSourceAudit = null;
 let lastPrecedentAudit = null;
 let lastYargitaySearch = null;
+let lastDocuments = [];
+let lastDocumentAnalysis = null;
+
+const DOCUMENT_FACT_LABELS = {
+  court: "Mahkeme",
+  case_number: "Dosya numarası",
+  parties: "Taraflar",
+  document_date: "Belge tarihi",
+  service_date: "Tebliğ tarihi",
+  hearing_date: "Duruşma tarihi",
+  deadlines: "Süre",
+  sale_date: "Satış tarihi",
+  sale_price: "Satış bedeli",
+  vehicle_make_model: "Araç marka/model",
+  vehicle_plate: "Plaka",
+  vehicle_vin: "Şasi",
+  notary_info: "Noterlik",
+  notice_date: "İhtar tarihi",
+  claim_result: "Talep sonucu",
+  evidence: "Deliller",
+  report_date: "Rapor tarihi",
+  report_number: "Rapor numarası",
+  technical_findings: "Teknik tespit",
+  payment_info: "Ödeme/dekont",
+  power_of_attorney_info: "Vekalet",
+  risk_signals: "Risk sinyali",
+};
 
 const sampleCase = `Müvekkil, maliki olduğu konutu davalı kiracıya yazılı kira sözleşmesi ile kiraya vermiştir. Müvekkilin evlenen oğlu ve gelini için bağımsız konuta ihtiyaç doğmuştur. Müvekkilin aynı ilçe sınırlarında oturmaya elverişli başka bir konutu bulunmamaktadır. Kiracıya durum sözlü olarak bildirilmiş, ancak kiracı taşınmayı kabul etmemiştir. Kira sözleşmesi dönem sonunda sona ermiş olmasına rağmen kiracı taşınmazı kullanmaya devam etmektedir. Müvekkilin ve ailesinin gerçek, samimi ve zorunlu konut ihtiyacı bulunduğundan ihtiyaç nedeniyle tahliye davası açılması istenmektedir.`;
 const THEME_STORAGE_KEY = "emsalist-theme";
@@ -315,6 +350,17 @@ function cleanOutputText(value, fallback = "") {
   return text || fallback;
 }
 
+function renderListItems(values, fallback = "") {
+  const items = (Array.isArray(values) ? values : [])
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .map((value) => `<li>${escapeHtml(value)}</li>`);
+  if (items.length) {
+    return `<ul class="compact-list">${items.join("")}</ul>`;
+  }
+  return fallback ? `<span>${escapeHtml(fallback)}</span>` : "";
+}
+
 function getCaseText() {
   return els.caseText.value.trim();
 }
@@ -391,6 +437,224 @@ async function apiPost(path, payload) {
     throw new Error(detail);
   }
   return data;
+}
+
+async function apiUpload(path, formData) {
+  const response = await apiFetch(path, { method: "POST", body: formData });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = Array.isArray(data.detail)
+      ? data.detail.map((item) => item.msg || JSON.stringify(item)).join("; ")
+      : data.detail || response.statusText;
+    throw new Error(detail);
+  }
+  return data;
+}
+
+function renderDocuments() {
+  els.documentCount.textContent = `${lastDocuments.length} belge`;
+  if (!lastDocuments.length) {
+    els.documentOutput.className = "document-list empty-state";
+    els.documentOutput.textContent = "Henüz dosya evrakı eklenmedi.";
+    els.documentGroundingState.className = "document-grounding-state";
+    els.documentGroundingState.textContent = "Dilekçe için henüz analiz edilmiş belge yok.";
+    return;
+  }
+
+  els.documentOutput.className = "document-list";
+  els.documentOutput.innerHTML = lastDocuments
+    .map((documentItem) => {
+      const status = String(documentItem.extraction_status || "failed");
+      const statusClass = ["extracted", "partial", "ocr_required", "conversion_required", "unsupported", "failed"].includes(status)
+        ? `status-${status}`
+        : "status-failed";
+      const facts = (documentItem.extracted_facts || []).slice(0, 10);
+      const missing = documentItem.missing_fields || [];
+      const conflicts = documentItem.conflicts || [];
+      return `
+        <article class="document-card">
+          <div class="document-card-head">
+            <div>
+              <h3>${escapeHtml(documentItem.file_name)}</h3>
+              <div class="meta-row">
+                <span class="chip">${escapeHtml(documentItem.document_type || "diğer")}</span>
+                <span class="chip ${statusClass}">${escapeHtml(status)}</span>
+                <span class="chip">${escapeHtml(documentItem.file_extension || "")}</span>
+              </div>
+            </div>
+            <button class="ghost-btn small-btn" type="button" data-delete-document="${escapeHtml(documentItem.document_id)}">Sil</button>
+          </div>
+          ${documentItem.extraction_warning ? `<p class="document-warning"><strong>Uyarı:</strong> ${escapeHtml(documentItem.extraction_warning)}</p>` : ""}
+          ${facts.length ? `
+            <ol class="document-facts">
+              ${facts.map((fact) => `
+                <li>
+                  <strong>${escapeHtml(DOCUMENT_FACT_LABELS[fact.fact_key] || fact.fact_key)}:</strong>
+                  ${escapeHtml(fact.fact_value)}
+                  <small>Kaynak: ${escapeHtml(fact.source_file_name)}${fact.page_number ? `, s. ${escapeHtml(fact.page_number)}` : ""}; güven ${Math.round(Number(fact.confidence_score || 0) * 100)}% — “${escapeHtml(fact.excerpt || "")}”</small>
+                </li>
+              `).join("")}
+            </ol>
+          ` : ""}
+          ${missing.length ? `<p><strong>Eksikler:</strong> ${escapeHtml(missing.map((key) => DOCUMENT_FACT_LABELS[key] || key).join(", "))}</p>` : ""}
+          ${conflicts.map((conflict) => `<p class="document-conflict"><strong>Çelişki:</strong> ${escapeHtml(conflict.warning)}</p>`).join("")}
+        </article>
+      `;
+    })
+    .join("");
+
+  if (!lastDocumentAnalysis) {
+    els.documentGroundingState.className = "document-grounding-state warning";
+    els.documentGroundingState.textContent = "Belgeler yüklendi. Dilekçe akışından önce Belgeleri Analiz Et adımını çalıştırın.";
+    return;
+  }
+  const conflictCount = (lastDocumentAnalysis.conflicts || []).length;
+  const warningCount = (lastDocumentAnalysis.warnings || []).length;
+  els.documentGroundingState.className = `document-grounding-state ${lastDocumentAnalysis.grounding_ready ? "ready" : "warning"}`;
+  els.documentGroundingState.textContent = lastDocumentAnalysis.grounding_ready
+    ? `${(lastDocumentAnalysis.confirmed_facts || []).length} bilgi kaynaklandırıldı; dilekçe akışı için analizi onaylayın.`
+    : `Analiz tamamlandı: ${conflictCount} çelişki, ${warningCount} okuma/OCR uyarısı. Kesin bilgi olarak yalnızca doğrulanan olgular kullanılacak.`;
+}
+
+function userClaimsFromCase() {
+  const text = `${getCaseText()} ${getRequestType()}`;
+  const patterns = {
+    sale_price: /satış\s+bedel(?:i)?\s*[:\-]?(?:nin)?\s*((?:\d{1,3}(?:[. ]\d{3})+|\d+)(?:,\d{1,2})?\s*(?:TL|TRY|₺))/i,
+    sale_date: /satış\s+tarih(?:i)?\s*[:\-]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{4})/i,
+    vehicle_plate: /plaka(?:\s+numarası)?\s*[:\-]?\s*(\d{2}\s*[A-ZÇĞİÖŞÜ]{1,3}\s*\d{2,5})/i,
+    vehicle_vin: /(?:şasi|şase|VIN)(?:\s+numarası)?\s*[:\-]?\s*([A-HJ-NPR-Z0-9]{17})/i,
+    case_number: /(?:esas|dosya)\s*(?:no|numarası)?\s*[:\-]?\s*(\d{4}\s*\/\s*\d+)/i,
+  };
+  return Object.fromEntries(
+    Object.entries(patterns)
+      .map(([key, pattern]) => [key, text.match(pattern)?.[1]?.trim()])
+      .filter(([, value]) => value),
+  );
+}
+
+function documentFactPayload() {
+  return (lastDocumentAnalysis?.confirmed_facts || []).filter((fact) => fact.verification_status === "fact_confirmed");
+}
+
+function documentConfirmedFactTexts() {
+  return documentFactPayload().map((fact) => {
+    const label = DOCUMENT_FACT_LABELS[fact.fact_key] || fact.fact_key;
+    const page = fact.page_number ? `, s. ${fact.page_number}` : "";
+    return `${label}: ${fact.fact_value} (Kaynak belge: ${fact.source_file_name}${page}; alıntı: ${fact.excerpt})`;
+  });
+}
+
+function documentMissingFields() {
+  return (lastDocumentAnalysis?.missing_fields || []).map((key) => DOCUMENT_FACT_LABELS[key] || key);
+}
+
+function documentMissingQuestions() {
+  return documentMissingFields().map((label) => `Belgeden çıkarılamayan ${label} bilgisi nedir?`);
+}
+
+function prefillQuestionsFromDocuments() {
+  const facts = documentFactPayload();
+  if (!facts.length || !questionFlow.questions.length) return;
+  const termsByFact = {
+    parties: ["taraf", "satıcı", "alıcı"],
+    sale_price: ["satış bedeli", "bedel"],
+    sale_date: ["satış tarihi"],
+    vehicle_make_model: ["marka", "model", "araç bilgisi"],
+    vehicle_plate: ["plaka"],
+    vehicle_vin: ["şasi", "şase"],
+    evidence: ["delil"],
+    claim_result: ["talep"],
+    service_date: ["tebliğ"],
+    hearing_date: ["duruşma"],
+    payment_info: ["ödeme", "dekont"],
+    technical_findings: ["arıza", "tespit", "rapor"],
+  };
+  questionFlow.questions.forEach((item) => {
+    if (questionFlow.answers[item.question]) return;
+    const question = plainText(item.question);
+    const matching = facts.filter((fact) => (termsByFact[fact.fact_key] || []).some((term) => question.includes(plainText(term))));
+    if (matching.length) {
+      questionFlow.answers[item.question] = matching
+        .map((fact) => `${fact.fact_value} (Kaynak: ${fact.source_file_name}${fact.page_number ? `, s. ${fact.page_number}` : ""})`)
+        .join("; ");
+    }
+  });
+  renderQuestionCard();
+}
+
+function assertDocumentFlowReady() {
+  if (!lastDocuments.length) return;
+  if (!lastDocumentAnalysis) {
+    throw new Error("Dilekçeden önce yüklenen belgeleri analiz edin.");
+  }
+  if (!els.documentApproval.checked) {
+    throw new Error("Dilekçeden önce belge analizini, kaynakları ve uyarıları inceleyip onaylayın.");
+  }
+}
+
+async function loadDocuments() {
+  const response = await apiFetch("/documents");
+  if (!response.ok) throw new Error("Belge listesi alınamadı.");
+  lastDocuments = await response.json();
+  lastDocumentAnalysis = null;
+  renderDocuments();
+}
+
+async function uploadDocuments() {
+  const files = Array.from(els.documentFiles.files || []);
+  if (!files.length) throw new Error("Yüklenecek en az bir belge seçin.");
+  setBusy(true, "Belgeler güvenli alana yükleniyor...");
+  try {
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      if (els.documentType.value) formData.append("document_type", els.documentType.value);
+      const uploaded = await apiUpload("/documents/upload", formData);
+      lastDocuments = [uploaded, ...lastDocuments.filter((item) => item.document_id !== uploaded.document_id)];
+    }
+    lastDocumentAnalysis = null;
+    els.documentApproval.checked = false;
+    els.documentFiles.value = "";
+    renderDocuments();
+    setStatus(`${files.length} belge yüklendi. Şimdi belgeleri analiz edin.`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function analyzeDocuments() {
+  if (!lastDocuments.length) throw new Error("Analiz edilecek belge yok.");
+  setBusy(true, "Belgeler okunuyor, bilgiler kaynaklandırılıyor ve çelişkiler denetleniyor...");
+  try {
+    const data = await apiPost("/documents/analyze", {
+      document_ids: lastDocuments.map((item) => item.document_id),
+      user_claims: userClaimsFromCase(),
+      document_types: {},
+    });
+    lastDocumentAnalysis = data;
+    lastDocuments = data.documents || [];
+    els.documentApproval.checked = false;
+    renderDocuments();
+    prefillQuestionsFromDocuments();
+    const conflictSuffix = data.conflicts?.length ? ` ${data.conflicts.length} çelişki doğrulama bekliyor.` : "";
+    setStatus(`Belge analizi tamamlandı; ${data.confirmed_facts?.length || 0} bilgi kaynaklandırıldı.${conflictSuffix}`);
+    return data;
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteDocument(documentId) {
+  const response = await apiFetch(`/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Belge silinemedi.");
+  }
+  lastDocuments = lastDocuments.filter((item) => item.document_id !== documentId);
+  lastDocumentAnalysis = null;
+  els.documentApproval.checked = false;
+  renderDocuments();
+  setStatus("Belge silindi. Kalan belgeler yeniden analiz edilmelidir.");
 }
 
 function renderAnalysis(data) {
@@ -607,40 +871,11 @@ function decisionScoreBreakdown(item) {
 
 function renderDecisions(data) {
   const decisions = data.top_decisions || [];
-  lastYargitaySearch = data || lastYargitaySearch;
   lastDecisions = decisions;
   els.decisionCount.textContent = String(decisions.length);
   if (!decisions.length) {
-    const queries = data.queries || lastYargitaySearch?.queries || [];
-    const errors = data.errors || lastYargitaySearch?.errors || [];
-    const searched = Boolean(data.yargitay_search_started || queries.length);
-    els.decisionOutput.className = "result-list";
-    els.decisionOutput.innerHTML = `
-      <div class="result-item">
-        <h3>Emsal arama özeti</h3>
-        <div class="meta-row">
-          <span class="chip blue">${searched ? "Arama yapıldı" : "Henüz arama yok"}</span>
-          <span class="chip">${escapeHtml(data.yargitay_result_count ?? 0)} ham sonuç</span>
-          <span class="chip">${data.fallback_query_used ? "Fallback sorgular denendi" : "Özel sorgular denendi"}</span>
-          <span class="chip">${escapeHtml(data.final_precedent_count ?? 0)} kullanılabilir emsal</span>
-        </div>
-        <p>${
-          searched
-            ? "Bu aramada dilekçeye güvenle aktarılabilecek doğrudan emsal bulunamadı veya Yargıtay erişimi sonuç döndürmedi."
-            : "Emsal araması henüz çalıştırılmadı."
-        }</p>
-      </div>
-      ${
-        queries.length
-          ? `<div class="result-item"><h3>Denenen sorgular</h3><ol class="compact-list">${queries.map((query) => `<li>${escapeHtml(query)}</li>`).join("")}</ol></div>`
-          : ""
-      }
-      ${
-        errors.length
-          ? `<div class="result-item"><h3>Bağlantı / arama uyarıları</h3><ol class="compact-list">${errors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ol></div>`
-          : `<div class="result-item"><h3>Sonuç nedeni</h3><p>Sonuç bulunamadı; sorgular daraltılarak veya Yargıtay bağlantısı tekrar denenerek arama yenilenebilir.</p></div>`
-      }
-    `;
+    els.decisionOutput.className = "empty-state";
+    els.decisionOutput.textContent = "Karar sonucu bulunamadı.";
     return;
   }
   els.decisionOutput.className = "result-list";
@@ -650,11 +885,15 @@ function renderDecisions(data) {
       const detailLink = item.detail_url ? `<a href="${escapeHtml(item.detail_url)}" target="_blank" rel="noreferrer">Detay</a>` : "";
       const paragraph = cleanDecisionParagraph(item);
       const scores = decisionScoreBreakdown(item);
-      const summary = cleanDecisionText(item.short_summary || paragraph, CLEAN_PRECEDENT_EXPLANATION);
-      const topic = cleanDecisionText(item.legal_principle || item.short_summary || paragraph, "Ayıp, ihbar ve seçimlik haklar yönünden değerlendirme.");
-      const similar = cleanDecisionText(item.why_relevant || paragraph, "Karar; ayıp, ihbar, seçimlik hak ve delil bağlantısı bakımından somut olayla karşılaştırılabilir.");
-      const different = plainText(item.lehe_aleyhe || "").includes("riskli") ? "Ayıp ihbarı, süre veya ispat yönünden somut olaydan ayrılabilir." : "Somut olayın belge ve tarihleri ayrıca karşılaştırılmalıdır.";
-      const usage = plainText(item.lehe_aleyhe || "").includes("riskli") ? RISK_PRECEDENT_PARAGRAPH : "Karar numarası, tarih ve kısa özetle destekleyici emsal olarak kullanılabilir.";
+      const topic = item.legal_principle || item.short_summary || paragraph;
+      const similar = item.why_relevant || paragraph;
+      const isRisky = ["riskli", "aleyhe"].some((label) => plainText(item.lehe_aleyhe || "").includes(label));
+      const different = isRisky
+        ? "Süre, ihbar veya ispat yönünden somut olaydan ayrılabilir."
+        : "Somut olayın belge ve tarihleri ayrıca karşılaştırılmalıdır.";
+      const usage = isRisky
+        ? RISK_PRECEDENT_PARAGRAPH
+        : "Karar numarası, tarih ve kısa özetle destekleyici emsal olarak kullanılabilir.";
       return `
         <div class="result-item">
           <h3>${escapeHtml(title)}</h3>
@@ -665,20 +904,18 @@ function renderDecisions(data) {
             ${detailLink ? `<span class="chip">${detailLink}</span>` : ""}
           </div>
           <ol class="compact-list">
-            <li><strong>Karar kimliği:</strong> ${escapeHtml([item.court || "Yargıtay", item.esas_no, item.karar_no, item.date].filter(Boolean).join(" / "))}</li>
-            <li><strong>Temiz özet:</strong> ${escapeHtml(summary)}</li>
-            <li><strong>Uyuşmazlık konusu:</strong> ${escapeHtml(topic)}</li>
+            <li><strong>Özet:</strong> ${escapeHtml(cleanOutputText(item.short_summary || paragraph, DEFAULT_PRECEDENT_PARAGRAPH))}</li>
+            <li><strong>Uyuşmazlık konusu:</strong> ${escapeHtml(cleanOutputText(topic, "Hukuki uyuşmazlık yönünden değerlendirme."))}</li>
             <li><strong>Yargıtay'ın temel değerlendirmesi:</strong> ${escapeHtml(paragraph)}</li>
             <li><strong>Somut olaya benzer yönleri:</strong> ${escapeHtml(similar)}</li>
             <li><strong>Somut olaydan ayrılan yönleri:</strong> ${escapeHtml(different)}</li>
-            <li><strong>Lehe / riskli / aleyhe:</strong> ${escapeHtml(item.lehe_aleyhe || "Değerlendirme")}</li>
             <li><strong>Kullanım önerisi:</strong> ${escapeHtml(usage)}</li>
           </ol>
           <div class="score-grid">
             <span>Benzerlik: ${scores.similarity}</span>
             <span>Hukuki uygunluk: ${scores.legalFit}</span>
             <span>Güncellik: ${scores.recency}</span>
-            <span>Kullanım riski: ${scores.riskLevel}</span>
+            <span>Risk: ${scores.riskLevel}</span>
             <span>Genel güç: ${scores.strength}</span>
           </div>
         </div>
@@ -686,6 +923,8 @@ function renderDecisions(data) {
     })
     .join("");
 }
+
+
 
 function renderStrategy(data) {
   lastStrategy = data;
@@ -1282,7 +1521,7 @@ async function runAIQuestions() {
       case_enrichment: lastCaseEnrichment || {},
       use_gemini: true,
     });
-    const questions = (data.questions || []).map((item) => item.question);
+    const questions = [...(data.questions || []).map((item) => item.question), ...documentMissingQuestions()];
     lastStrategy = {
       petition_type: lastCaseEnrichment?.detected_case_type || "AI soruları",
       legal_basis: lastCaseEnrichment?.relevant_articles || [],
@@ -1290,6 +1529,7 @@ async function runAIQuestions() {
     };
     renderStrategy(lastStrategy);
     renderQuestionFields(questions);
+    prefillQuestionsFromDocuments();
     lastStrategyCase = caseText;
     lastStrategyRequest = getRequestType();
     setStatus(`${questions.length} AI sorusu hazır.`);
@@ -1464,22 +1704,21 @@ function draftableDecisions(limit = 3) {
 
 function decisionUsableForDraft(item) {
   if (item.use_in_petition === false) return false;
-  const score = Number(item.similarity_score ?? 0);
+  const verification = plainText(`${item.verification_status || ""}`);
   const alignment = plainText(`${item.lehe_aleyhe || ""} ${item.petition_paragraph || ""}`);
-  if (alignment.includes("riskli") || alignment.includes("aleyhe")) {
+  if (verification.includes("adverse_or_distinguishable_precedent") || alignment.includes("riskli") || alignment.includes("aleyhe")) {
     return false;
   }
-  const usefulness = String(item.usefulness_score || "").toLocaleLowerCase("tr-TR");
-  if (plainText(usefulness).includes("dusuk")) {
-    return false;
-  }
-  return score >= 45 && !usefulness.includes("düşük");
+  if (!verification.includes("verified_supportive_precedent")) return false;
+  const usefulness = plainText(item.usefulness_score || "");
+  return Number(item.similarity_score ?? 0) >= 50 && !usefulness.includes("dusuk");
 }
 
 function decisionSafeForDraft(item) {
   if (item.use_in_petition === false) return false;
+  const verification = plainText(`${item.verification_status || ""}`);
   const alignment = plainText(`${item.lehe_aleyhe || ""} ${item.usefulness_score || ""} ${item.petition_paragraph || ""}`);
-  if (alignment.includes("riskli") || alignment.includes("aleyhe") || alignment.includes("dusuk")) return false;
+  if (verification.includes("adverse_or_distinguishable_precedent") || alignment.includes("riskli") || alignment.includes("aleyhe") || alignment.includes("dusuk")) return false;
   return Number(item.similarity_score ?? 0) >= 35;
 }
 
@@ -1511,7 +1750,8 @@ async function prepareQuestions(force = false) {
     });
     applyProfileRequestDefault(data);
     renderStrategy(data);
-    renderQuestionFields(data.missing_information_questions);
+    renderQuestionFields([...(data.missing_information_questions || []), ...documentMissingQuestions()]);
+    prefillQuestionsFromDocuments();
     lastStrategyCase = caseText;
     lastStrategyRequest = getRequestType();
     setStatus("Sorular hazır. Cevapları doldurup Dilekçe'ye tekrar bas.");
@@ -1523,6 +1763,7 @@ async function prepareQuestions(force = false) {
 
 async function runDraft(options = {}) {
   const caseText = assertCaseText();
+  assertDocumentFlowReady();
   answerCurrentQuestion();
   if (!options.force && !questionsAreCurrent()) {
     await prepareQuestions(false);
@@ -1534,11 +1775,13 @@ async function runDraft(options = {}) {
     const data = await apiPost("/petition/draft", {
       case_text: caseText,
       case_enrichment: lastCaseEnrichment || {},
-      confirmed_facts: lastCaseEnrichment?.confirmed_facts || [],
-      missing_facts: lastCaseEnrichment?.missing_facts || [],
+      confirmed_facts: [...new Set([...(lastCaseEnrichment?.confirmed_facts || []), ...documentConfirmedFactTexts()])].slice(0, 30),
+      missing_facts: [...new Set([...(lastCaseEnrichment?.missing_facts || []), ...documentMissingFields()])].slice(0, 30),
+      document_facts: documentFactPayload(),
       petition_strategy_hint: lastCaseEnrichment?.petition_strategy_hint || "",
       answers: buildAnswers(),
       selected_decisions: mapSelectedDecisions(),
+      precedent_candidates: lastDecisions,
       request_type: getRequestType(),
       use_legal_brain: true,
       legal_language_level: "usta_avukat",
@@ -1664,7 +1907,7 @@ async function runFullReview() {
       case_enrichment: enrichment,
       use_gemini: true,
     });
-    const questions = (questionData.questions || []).map((item) => item.question);
+    const questions = [...(questionData.questions || []).map((item) => item.question), ...documentMissingQuestions()];
     lastStrategy = {
       petition_type: enrichment.detected_case_type || "Dilekçe",
       legal_basis: enrichment.relevant_articles || [],
@@ -1673,6 +1916,7 @@ async function runFullReview() {
     applyProfileRequestDefault(lastStrategy);
     renderStrategy(lastStrategy);
     renderQuestionFields(questions);
+    prefillQuestionsFromDocuments();
     lastStrategyCase = caseText;
     lastStrategyRequest = getRequestType();
 
@@ -1855,6 +2099,8 @@ function clearAll() {
   lastDraftAudit = null;
   lastSourceAudit = null;
   lastPrecedentAudit = null;
+  lastDocumentAnalysis = null;
+  els.documentApproval.checked = false;
   resetQuestions();
   els.analysisCount.textContent = "0";
   els.brainCount.textContent = "0";
@@ -1881,6 +2127,7 @@ function clearAll() {
   els.defenseOutput.textContent = "Henüz savunma simülasyonu yok.";
   els.officialSourcesOutput.textContent = "Henüz resmî kaynak takibi yok.";
   switchTab("summary");
+  renderDocuments();
   setStatus("");
 }
 
@@ -1932,6 +2179,15 @@ function wireEvents() {
     lastStrategyCase = getCaseText();
     lastStrategyRequest = getRequestType();
     setStatus("AI analizi aktif akışa alındı.");
+  });
+  $("uploadDocumentsBtn").addEventListener("click", () => uploadDocuments().catch((error) => setStatus(error.message, true)));
+  $("analyzeDocumentsBtn").addEventListener("click", () => analyzeDocuments().catch((error) => setStatus(error.message, true)));
+  els.documentOutput.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-document]");
+    if (!button) return;
+    const documentId = button.dataset.deleteDocument;
+    if (!window.confirm("Bu belgeyi kalıcı olarak silmek istiyor musunuz?")) return;
+    deleteDocument(documentId).catch((error) => setStatus(error.message, true));
   });
   $("reviewBtn").addEventListener("click", () => runFullReview().catch((error) => setStatus(error.message, true)));
   $("aiEnrichBtn").addEventListener("click", () => runAIEnrich().catch((error) => setStatus(error.message, true)));
@@ -2002,3 +2258,4 @@ function wireEvents() {
 wireEvents();
 renderOfficialSourcesStatus();
 checkHealth();
+loadDocuments().catch((error) => setStatus(error.message, true));

@@ -36,6 +36,17 @@ class ResearchDecisionOutput(BaseModel):
     lehe_aleyhe: str
     petition_paragraph: str
     clean_text_preview: str
+    precedent_id: str
+    citation: str
+    verification_status: str
+    similarity_reasons: list[str] = Field(default_factory=list)
+    shared_facts: list[str] = Field(default_factory=list)
+    shared_legal_issues: list[str] = Field(default_factory=list)
+    supported_arguments: list[str] = Field(default_factory=list)
+    evidence_connection: list[str] = Field(default_factory=list)
+    distinguishing_risks: list[str] = Field(default_factory=list)
+    recommended_use: str
+    confidence_score: int = Field(ge=0, le=100)
 
 
 class ResearchYargitayResponse(BaseModel):

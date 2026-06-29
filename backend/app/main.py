@@ -19,6 +19,7 @@ from app.routes.research_routes import router as research_router
 from app.routes.petition_routes import router as petition_router
 from app.routes.legal_brain_routes import router as legal_brain_router
 from app.routes.ai_routes import router as ai_router
+from app.routes.document_routes import router as document_router
 
 settings = get_settings()
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -51,6 +52,7 @@ app.include_router(research_router)
 app.include_router(petition_router)
 app.include_router(legal_brain_router)
 app.include_router(ai_router)
+app.include_router(document_router)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

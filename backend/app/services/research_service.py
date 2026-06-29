@@ -14,6 +14,7 @@ from app.models.yargitay_models import YargitayDecision
 from app.services.case_analyzer import case_analyzer
 from app.services.decision_ranker import decision_ranker
 from app.services.legal_summary_service import legal_summary_service
+from app.services.precedent_analysis_service import precedent_analysis_service
 from app.services.search_builder import search_builder
 from app.services.yargitay_scraper import yargitay_scraper
 
@@ -50,12 +51,14 @@ class ResearchService:
         scraper=yargitay_scraper,
         ranker=decision_ranker,
         summarizer=legal_summary_service,
+        precedent_analyzer=precedent_analysis_service,
     ) -> None:
         self.analyzer = analyzer
         self.query_builder = query_builder
         self.scraper = scraper
         self.ranker = ranker
         self.summarizer = summarizer
+        self.precedent_analyzer = precedent_analyzer
 
     async def research_yargitay(
         self,
@@ -124,6 +127,30 @@ class ResearchService:
                 0,
                 min(100, ranked_item.similarity_score + summary.relevance_bonus - summary.rank_penalty),
             )
+            analysis = self.precedent_analyzer.analyze(
+                case_text=case_text,
+                decision={
+                    "source": decision.source,
+                    "title": decision.title,
+                    "detail_url": decision.detail_url,
+                    "court": decision.court,
+                    "esas_no": decision.esas_no,
+                    "karar_no": decision.karar_no,
+                    "date": decision.date,
+                    "similarity_score": final_score,
+                    "usefulness_score": self.summarizer.usefulness_label(
+                        score=final_score,
+                        lehe_aleyhe=summary.lehe_aleyhe,
+                        is_procedural=summary.is_procedural,
+                    ),
+                    "short_summary": summary.short_summary,
+                    "legal_principle": summary.legal_principle,
+                    "why_relevant": summary.why_relevant,
+                    "lehe_aleyhe": summary.lehe_aleyhe,
+                    "petition_paragraph": summary.petition_paragraph,
+                    "clean_text_preview": summary.clean_text_preview,
+                },
+            )
 
             top_decisions.append(
                 {
@@ -146,6 +173,17 @@ class ResearchService:
                     "lehe_aleyhe": summary.lehe_aleyhe,
                     "petition_paragraph": summary.petition_paragraph,
                     "clean_text_preview": summary.clean_text_preview,
+                    "precedent_id": analysis.precedent_id,
+                    "citation": analysis.citation,
+                    "verification_status": analysis.verification_status,
+                    "similarity_reasons": analysis.similarity_reasons,
+                    "shared_facts": analysis.shared_facts,
+                    "shared_legal_issues": analysis.shared_legal_issues,
+                    "supported_arguments": analysis.supported_arguments,
+                    "evidence_connection": analysis.evidence_connection,
+                    "distinguishing_risks": analysis.distinguishing_risks,
+                    "recommended_use": analysis.recommended_use,
+                    "confidence_score": analysis.confidence_score,
                 }
             )
 

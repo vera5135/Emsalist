@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Emsalist Legal Brain</title>
-    <link rel="stylesheet" href="styles.css?v=20260625-legal-flow-2" />
+    <link rel="stylesheet" href="styles.css?v=20260629-document-intake-1" />
   </head>
   <body>
     <header class="topbar">
@@ -74,6 +74,57 @@
             <div class="question-empty">Sorular henüz hazırlanmadı.</div>
           </div>
         </aside>
+      </section>
+
+      <section class="document-intake" aria-labelledby="documentIntakeTitle">
+        <div class="document-intake-head">
+          <div>
+            <h2 id="documentIntakeTitle">Dosya Evrakları</h2>
+            <p>PDF, TXT, DOCX, UDF, JPG, JPEG ve PNG belgelerini güvenli biçimde ekleyip dilekçeden önce analiz edin.</p>
+          </div>
+          <span id="documentCount" class="document-count">0 belge</span>
+        </div>
+        <div class="document-controls">
+          <label>
+            Döküman Ekle
+            <input id="documentFiles" type="file" multiple accept=".pdf,.txt,.docx,.udf,.jpg,.jpeg,.png" />
+          </label>
+          <label>
+            Belge türü
+            <select id="documentType">
+              <option value="">Otomatik algıla</option>
+              <option>vekaletname</option>
+              <option>noter satış sözleşmesi</option>
+              <option>ihtarname</option>
+              <option>tebligat belgesi</option>
+              <option>dava dilekçesi</option>
+              <option>cevap dilekçesi</option>
+              <option>tensip zaptı</option>
+              <option>bilirkişi raporu</option>
+              <option>ekspertiz raporu</option>
+              <option>servis raporu</option>
+              <option>dekont</option>
+              <option>ruhsat</option>
+              <option>TRAMER kaydı</option>
+              <option>mahkeme kararı</option>
+              <option>ara karar</option>
+              <option>delil listesi</option>
+              <option>UYAP evrakı</option>
+              <option>diğer</option>
+            </select>
+          </label>
+          <button id="uploadDocumentsBtn" class="ghost-btn" type="button">Belgeleri Yükle</button>
+          <button id="analyzeDocumentsBtn" class="primary-btn" type="button">Belgeleri Analiz Et</button>
+        </div>
+        <div class="privacy-warning">
+          <strong>Kişisel veri uyarısı:</strong> Yalnızca bu hukuki çalışma için gerekli belgeleri yükleyin; gereksiz özel nitelikli verileri paylaşmayın.
+        </div>
+        <label class="document-approval">
+          <input id="documentApproval" type="checkbox" />
+          Belge analizini, kaynak alıntılarını, eksikleri ve çelişki uyarılarını inceledim.
+        </label>
+        <div id="documentGroundingState" class="document-grounding-state">Dilekçe için henüz analiz edilmiş belge yok.</div>
+        <div id="documentOutput" class="document-list empty-state">Henüz dosya evrakı eklenmedi.</div>
       </section>
 
       <section class="primary-flow" aria-label="Ana inceleme">
@@ -192,6 +243,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260625-legal-flow-2" defer></script>
+    <script src="app.js?v=20260629-document-intake-1" defer></script>
   </body>
 </html>
