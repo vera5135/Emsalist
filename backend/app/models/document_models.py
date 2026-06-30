@@ -51,6 +51,7 @@ class DocumentRecord(BaseModel):
     file_extension: str
     mime_type: str
     file_size: int = Field(ge=0)
+    content_sha256: str = ""
     upload_time: str
     document_type: str
     detected_document_type: str

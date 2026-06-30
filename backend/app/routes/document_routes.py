@@ -3,7 +3,11 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.models.document_models import DocumentAnalyzeRequest, DocumentAnalyzeResponse, DocumentRecord
-from app.services.document_intake_service import DocumentIntakeError, document_intake_service
+from app.services.document_intake_service import (
+    DocumentDuplicateError,
+    DocumentIntakeError,
+    document_intake_service,
+)
 
 
 router = APIRouter(prefix="/documents", tags=["Document Intake"])
@@ -28,6 +32,8 @@ async def upload_document(
             content=bytes(content),
             document_type=document_type,
         )
+    except DocumentDuplicateError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except DocumentIntakeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     finally:

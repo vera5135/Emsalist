@@ -712,6 +712,39 @@ button:disabled {
   font-size: 16px;
 }
 
+.draft-panel .section-head {
+  min-height: 86px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.petition-description {
+  max-width: 680px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.petition-readiness {
+  width: min(calc(100% - 32px), 900px);
+  margin: 16px auto 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.petition-readiness.warning {
+  color: var(--warning);
+}
+
+.petition-readiness.ready {
+  color: var(--success);
+}
+
 .section-head span {
   min-width: 28px;
   height: 28px;

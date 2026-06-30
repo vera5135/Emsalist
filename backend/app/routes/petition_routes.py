@@ -3,6 +3,8 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.models.petition_models import (
+    FinalPetitionDraftRequest,
+    FinalPetitionDraftResponse,
     GroundingNote,
     PetitionDraftRequest,
     PetitionDraftResponse,
@@ -10,6 +12,7 @@ from app.models.petition_models import (
     PetitionStrategyResponse,
 )
 from app.services.petition_draft_service import petition_draft_service
+from app.services.final_petition_writer_service import final_petition_writer_service
 from app.services.petition_strategy_service import petition_strategy_service
 from app.services.document_intake_service import document_intake_service
 
@@ -92,3 +95,64 @@ def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse
         for fact in grounded_document_facts
     )
     return response
+
+
+@router.post("/final-draft", response_model=FinalPetitionDraftResponse)
+def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetitionDraftResponse:
+    if not request.analysis_approved or not request.review_completed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Dilekçe taslağı için önce belge analizi, kaynaklar, deliller ve riskler "
+                "incelenip onaylanmalıdır."
+            ),
+        )
+
+    grounded_document_facts = []
+    document_types: list[str] = []
+    if request.document_ids:
+        for document_id in dict.fromkeys(request.document_ids):
+            try:
+                record = document_intake_service.get_document(document_id)
+            except KeyError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Dilekçe belgesi bulunamadı: {document_id}",
+                ) from exc
+            if record.extraction_status not in {"extracted", "partial"}:
+                continue
+            document_types.append(record.document_type)
+            grounded_document_facts.extend(
+                fact for fact in record.extracted_facts
+                if fact.verification_status == "fact_confirmed"
+            )
+    else:
+        grounded_document_facts = [
+            fact for fact in request.document_facts
+            if fact.verification_status == "fact_confirmed"
+        ]
+
+    grounded_document_facts = list({
+        (fact.fact_key, fact.fact_value.casefold(), fact.source_file_name.casefold()): fact
+        for fact in grounded_document_facts
+    }.values())
+    package = final_petition_writer_service.build_package(
+        case_text=request.case_text,
+        request_type=request.request_type,
+        answers=request.answers,
+        confirmed_facts=[
+            *request.confirmed_facts,
+            *list(request.case_enrichment.get("confirmed_facts") or []),
+        ],
+        missing_facts=[
+            *request.missing_facts,
+            *list(request.case_enrichment.get("missing_facts") or []),
+        ],
+        document_facts=grounded_document_facts,
+        document_types=document_types,
+        evidence_items=request.evidence_items,
+        legal_grounds=request.legal_grounds,
+        relief_requests=request.relief_requests,
+        drafting_warnings=request.drafting_warnings,
+    )
+    return final_petition_writer_service.write(package)

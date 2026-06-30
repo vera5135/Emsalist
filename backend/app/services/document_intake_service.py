@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import os
 import re
@@ -122,6 +123,14 @@ class DocumentIntakeError(ValueError):
     """A safe validation error suitable for an HTTP 4xx response."""
 
 
+class DocumentDuplicateError(DocumentIntakeError):
+    """Raised when the exact same file content is already stored."""
+
+    def __init__(self, existing_document_id: str) -> None:
+        super().__init__("Bu belge zaten ekli.")
+        self.existing_document_id = existing_document_id
+
+
 class DocumentIntakeService:
     def __init__(self, storage_dir: Path | None = None, max_file_size: int | None = None) -> None:
         root = storage_dir or Path(__file__).resolve().parents[1] / "document_store"
@@ -147,32 +156,39 @@ class DocumentIntakeService:
             raise DocumentIntakeError(f"Dosya boyutu {self.max_file_size // (1024 * 1024)} MB sınırını aşıyor.")
 
         selected_type = self._normalize_document_type(document_type)
-        document_id = uuid.uuid4().hex
-        destination = self._file_path(document_id, extension)
-        destination.write_bytes(content)
-        record = DocumentRecord(
-            document_id=document_id,
-            file_name=Path(file_name or safe_name).name,
-            safe_file_name=safe_name,
-            file_extension=extension,
-            mime_type=MIME_TYPES[extension],
-            file_size=len(content),
-            upload_time=datetime.now(UTC).isoformat(),
-            document_type=selected_type or "diğer",
-            detected_document_type="UYAP evrakı" if extension == ".udf" else "diğer",
-            extraction_status="failed",
-            extraction_warning=None,
-            text_length=0,
-            extracted_text_preview="",
-            confidence_score=0,
-        )
-        try:
-            record = self._analyze_record(record, content, selected_type=selected_type)
-        except Exception:
-            record.extraction_status = "failed"
-            record.extraction_warning = "Belge işlenirken güvenli okuma tamamlanamadı; manuel inceleme gereklidir."
-        self._set_record(record)
-        return record
+        content_sha256 = hashlib.sha256(content).hexdigest()
+        with self._lock:
+            duplicate = self._find_duplicate(content_sha256)
+            if duplicate:
+                raise DocumentDuplicateError(duplicate.document_id)
+
+            document_id = uuid.uuid4().hex
+            destination = self._file_path(document_id, extension)
+            destination.write_bytes(content)
+            record = DocumentRecord(
+                document_id=document_id,
+                file_name=Path(file_name or safe_name).name,
+                safe_file_name=safe_name,
+                file_extension=extension,
+                mime_type=MIME_TYPES[extension],
+                file_size=len(content),
+                content_sha256=content_sha256,
+                upload_time=datetime.now(UTC).isoformat(),
+                document_type=selected_type or "diğer",
+                detected_document_type="UYAP evrakı" if extension == ".udf" else "diğer",
+                extraction_status="failed",
+                extraction_warning=None,
+                text_length=0,
+                extracted_text_preview="",
+                confidence_score=0,
+            )
+            try:
+                record = self._analyze_record(record, content, selected_type=selected_type)
+            except Exception:
+                record.extraction_status = "failed"
+                record.extraction_warning = "Belge işlenirken güvenli okuma tamamlanamadı; manuel inceleme gereklidir."
+            self._set_record(record)
+            return record
 
     def analyze_documents(
         self,
@@ -180,16 +196,22 @@ class DocumentIntakeService:
         user_claims: dict[str, str] | None = None,
         document_types: dict[str, str] | None = None,
     ) -> DocumentAnalyzeResponse:
-        ids = document_ids or list(self._records)
+        ids = list(dict.fromkeys(document_ids or list(self._records)))
         claims = {self._canonical_fact_key(key): str(value).strip() for key, value in (user_claims or {}).items() if str(value).strip()}
         overrides = document_types or {}
         documents: list[DocumentRecord] = []
         all_conflicts: list[DocumentConflict] = []
         all_facts: list[ExtractedFact] = []
         warnings: list[str] = []
+        analyzed_signatures: set[str] = set()
 
         for document_id in ids:
             existing = self.get_document(document_id)
+            signature = self._content_signature(existing)
+            if signature and signature in analyzed_signatures:
+                continue
+            if signature:
+                analyzed_signatures.add(signature)
             extension = existing.file_extension
             path = self._file_path(document_id, extension)
             if not path.exists():
@@ -211,7 +233,11 @@ class DocumentIntakeService:
             if record.extraction_warning:
                 warnings.append(record.extraction_warning)
 
-        confirmed = [fact for fact in all_facts if fact.verification_status == "fact_confirmed"]
+        confirmed = list({
+            (fact.fact_key, self._ascii_fold(fact.fact_value), self._ascii_fold(fact.source_file_name)): fact
+            for fact in all_facts
+            if fact.verification_status == "fact_confirmed"
+        }.values())
         confirmed_keys = {fact.fact_key for fact in confirmed}
         missing = sorted(
             {field for record in documents for field in record.missing_fields}
@@ -239,7 +265,16 @@ class DocumentIntakeService:
     def list_documents(self) -> list[DocumentRecord]:
         with self._lock:
             records = [record.model_copy(deep=True) for record in self._records.values()]
-        return sorted(records, key=lambda item: item.upload_time, reverse=True)
+        unique: list[DocumentRecord] = []
+        seen_signatures: set[str] = set()
+        for record in sorted(records, key=lambda item: item.upload_time, reverse=True):
+            signature = self._content_signature(record)
+            if signature and signature in seen_signatures:
+                continue
+            if signature:
+                seen_signatures.add(signature)
+            unique.append(record)
+        return unique
 
     def delete_document(self, document_id: str) -> None:
         with self._lock:
@@ -690,6 +725,32 @@ class DocumentIntakeService:
 
     def _file_path(self, document_id: str, extension: str) -> Path:
         return self.upload_dir / f"{document_id}{extension}"
+
+    def _find_duplicate(self, content_sha256: str) -> DocumentRecord | None:
+        for record in self._records.values():
+            record_hash = record.content_sha256
+            if not record_hash:
+                path = self._file_path(record.document_id, record.file_extension)
+                if path.exists():
+                    try:
+                        record_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+                        record.content_sha256 = record_hash
+                    except OSError:
+                        record_hash = ""
+            if record_hash == content_sha256:
+                return record
+        return None
+
+    def _content_signature(self, record: DocumentRecord) -> str:
+        if record.content_sha256:
+            return record.content_sha256
+        path = self._file_path(record.document_id, record.file_extension)
+        if path.exists():
+            try:
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+            except OSError:
+                pass
+        return f"{record.safe_file_name.casefold()}:{record.file_size}"
 
     def _set_record(self, record: DocumentRecord) -> None:
         with self._lock:

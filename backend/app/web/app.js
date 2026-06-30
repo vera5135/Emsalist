@@ -1,4 +1,4 @@
-const $ = (id) => document.getElementById(id);
+﻿const $ = (id) => document.getElementById(id);
 
 const FILE_API_BASES = ["http://127.0.0.1:8003", "http://127.0.0.1:8001", "http://127.0.0.1:8000"];
 let activeApiBase = window.location.protocol === "file:" ? FILE_API_BASES[0] : "";
@@ -18,6 +18,7 @@ const els = {
   brainOutput: $("brainOutput"),
   decisionOutput: $("decisionOutput"),
   draftOutput: $("draftOutput"),
+  petitionReadinessNotice: $("petitionReadinessNotice"),
   riskOutput: $("riskOutput"),
   strategyTabOutput: $("strategyTabOutput"),
   clientQuestionsOutput: $("clientQuestionsOutput"),
@@ -52,6 +53,7 @@ const els = {
     $("yargitayBtn"),
     $("auditPrecedentsBtn"),
     $("draftBtn"),
+    $("finalPetitionBtn"),
     $("auditDraftBtn"),
     $("refineDraftBtn"),
     $("sampleBtn"),
@@ -91,6 +93,7 @@ let lastPrecedentAudit = null;
 let lastYargitaySearch = null;
 let lastDocuments = [];
 let lastDocumentAnalysis = null;
+/** @type {File[]} Gerçek File objelerini saklar, plain object değil. */
 let selectedDocumentFiles = [];
 let uiBusy = false;
 let reviewWorkflowComplete = false;
@@ -468,10 +471,36 @@ function renderDocumentControls() {
   if (!els.documentFiles) return;
   $("uploadDocumentsBtn").disabled = uiBusy || selectedDocumentFiles.length === 0;
   $("analyzeDocumentsBtn").disabled = uiBusy || lastDocuments.length === 0;
+  updateFinalPetitionReadiness();
+}
+
+function finalPetitionReadinessIssues() {
+  const issues = [];
+  if (!lastDocuments.length) issues.push("Belge yüklenmedi.");
+  else if (!lastDocumentAnalysis) issues.push("Belge analizi tamamlanmadı.");
+  if (lastDocumentAnalysis && !els.documentApproval.checked) issues.push("Belge analizi ve kaynak/risk incelemesi onaylanmadı.");
+  if (!reviewWorkflowComplete) issues.push("Kaynaklar, deliller, emsaller ve risk incelemesi tamamlanmadı.");
+  if (questionAnswerCount() === 0) issues.push("Dilekçe soruları cevaplanmadı.");
+  return issues;
+}
+
+function updateFinalPetitionReadiness() {
+  if (!els.petitionReadinessNotice) return;
+  const issues = finalPetitionReadinessIssues();
+  const ready = issues.length === 0;
+  els.petitionReadinessNotice.className = `petition-readiness ${ready ? "ready" : "warning"}`;
+  els.petitionReadinessNotice.textContent = ready
+    ? "Analiz ve onaylar tamamlandı. Nihai dilekçe taslağını hazırlayabilirsiniz."
+    : "Dilekçe taslağı için önce belge analizi, kaynaklar, deliller ve riskler incelenip onaylanmalıdır.";
 }
 
 function renderDocumentSelection() {
-  const names = selectedDocumentFiles.map((file) => file.name);
+  const names = selectedDocumentFiles.map((file) => {
+    if (file instanceof File) {
+      return `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    }
+    return String(file.name || file);
+  });
   els.documentSelectionState.className = `document-selection-state${names.length ? " pending" : ""}`;
   els.documentSelectionState.textContent = names.length
     ? `${names.length} dosya seçildi, yükleme bekliyor: ${names.join(", ")}`
@@ -683,24 +712,66 @@ async function loadDocuments() {
 async function uploadDocuments() {
   const files = [...selectedDocumentFiles];
   if (!files.length) throw new Error("Önce yüklenecek belgeyi seçin.");
+
+  // Her dosyanın gerçek File objesi olduğunu doğrula
+  for (const file of files) {
+    if (!(file instanceof File)) {
+      throw new Error(`Geçersiz dosya: seçilen dosya bir File objesi değil. Lütfen dosyayı tekrar seçin.`);
+    }
+    if (file.size <= 0) {
+      throw new Error(`"${file.name}" dosyası boş. Seçilen dosya boş olamaz.`);
+    }
+  }
+
   setBusy(true, "Belgeler güvenli alana yükleniyor...");
   try {
+    // "Otomatik algıla" seçiliyse document_type hiç gönderme
+    const documentTypeValue = els.documentType.value;
+    const shouldSendDocumentType = documentTypeValue !== "";
+
+    let uploadedCount = 0;
+    let duplicateCount = 0;
     for (const file of files) {
       const formData = new FormData();
-      formData.append("file", file, file.name);
-      if (els.documentType.value) formData.append("document_type", els.documentType.value);
-      const uploaded = await apiUpload("/documents/upload", formData);
-      lastDocuments = [uploaded, ...lastDocuments.filter((item) => item.document_id !== uploaded.document_id)];
-      renderDocuments();
+      // Gerçek File objesini ekle - üçüncü parametre (filename) opsiyonel
+      formData.append("file", file);
+
+      if (shouldSendDocumentType) {
+        formData.append("document_type", documentTypeValue);
+      }
+      // "Otomatik algıla" (boş değer) seçiliyken document_type hiç gönderilmez
+      // Backend default=None olarak alır ve otomatik algılar
+
+      try {
+        const uploaded = await apiUpload("/documents/upload", formData);
+        lastDocuments = [uploaded, ...lastDocuments.filter((item) => item.document_id !== uploaded.document_id)];
+        uploadedCount += 1;
+        renderDocuments();
+      } catch (error) {
+        if (plainText(error.message).includes("bu belge zaten ekli")) {
+          duplicateCount += 1;
+          continue;
+        }
+        throw error;
+      }
     }
-    lastDocumentAnalysis = null;
-    reviewWorkflowComplete = false;
-    els.documentApproval.checked = false;
+    if (uploadedCount) {
+      lastDocumentAnalysis = null;
+      reviewWorkflowComplete = false;
+      els.documentApproval.checked = false;
+    }
+    // Upload başarılı olduktan sonra temizle
     selectedDocumentFiles = [];
     els.documentFiles.value = "";
     renderDocumentSelection();
     renderDocuments();
-    setStatus(`${files.length} belge yüklendi. Şimdi belgeleri analiz edin.`);
+    if (duplicateCount && !uploadedCount) {
+      setStatus("Bu belge zaten ekli.", true);
+    } else if (duplicateCount) {
+      setStatus(`${uploadedCount} belge yüklendi; ${duplicateCount} belge zaten ekli olduğu için atlandı.`);
+    } else {
+      setStatus(`${uploadedCount} belge yüklendi. Şimdi belgeleri analiz edin.`);
+    }
   } finally {
     setBusy(false);
   }
@@ -1228,7 +1299,7 @@ function handleQuestionOptionClick(event) {
     }
     if (action === "prepare-draft-from-questions") {
       answerCurrentQuestion();
-      runDraft({ force: true, auditAndRefine: true }).catch((error) => setStatus(error.message, true));
+      runDraft({ force: true }).catch((error) => setStatus(error.message, true));
       return;
     }
   }
@@ -1244,24 +1315,12 @@ function handleQuestionOptionClick(event) {
   saveQuestionField(field);
   button.classList.add("selected");
   renderRisks();
+  updateFinalPetitionReadiness();
   setStatus("Seçenek cevaba eklendi.");
 }
 
 function renderDraft(data) {
-  const checklist = (data.checklist || []).map((item) => `- ${item}`).join("\n");
-  const warnings = (data.warnings || []).map((item) => `- ${item}`).join("\n");
-  const grounding = (data.grounding_notes || [])
-    .map((item) => `- [${item.status || "note"}] ${item.title || "Not"}: ${item.detail || ""}`)
-    .join("\n");
-  const parts = [
-    data.draft_title || "Dilekçe Taslağı",
-    "",
-    cleanOutputText(data.draft_text || ""),
-    checklist ? "\nKontrol Listesi:\n" + checklist : "",
-    grounding ? "\nVakıa / Kaynak Grounding:\n" + grounding : "",
-    warnings ? "\nNotlar:\n" + warnings : "",
-  ];
-  els.draftOutput.textContent = parts.filter(Boolean).join("\n");
+  els.draftOutput.textContent = cleanOutputText(data.petition_text || data.draft_text || "");
 }
 
 function documentContextText() {
@@ -1650,7 +1709,7 @@ function renderOfficialSourcesStatus() {
 
 function currentDraftText() {
   const text = els.draftOutput.textContent.trim();
-  if (!text || plainText(text).includes("henuz dilekce taslagi yok")) {
+  if (!text || plainText(text).includes("henuz dilekce taslagi yok") || plainText(text).includes("analiz tamamlandiysa")) {
     throw new Error("Önce dilekçe taslağı oluşturmalısın.");
   }
   if (!text || text === "Henüz dilekçe taslağı yok.") {
@@ -1950,11 +2009,10 @@ async function runDraft(options = {}) {
     return;
   }
 
-  const readinessIssues = draftReadinessIssues();
-  if (readinessIssues.length && !options.preliminaryApproved) {
-    showDraftReadinessDialog(readinessIssues, options);
-    setStatus("Kritik bilgi ve belge analizi tamamlanmadı. Ön taslak için açık onayınız gerekiyor.", true);
-    return null;
+  const readinessIssues = finalPetitionReadinessIssues();
+  if (readinessIssues.length) {
+    updateFinalPetitionReadiness();
+    throw new Error("Dilekçe taslağı oluşturmak için önce belge analizi ve risk/kaynak incelemesini onaylayın.");
   }
 
   const unresolvedMissingFacts = dedupeIssues([
@@ -1964,7 +2022,7 @@ async function runDraft(options = {}) {
 
   setBusy(true, "Dilekçe taslağı hazırlanıyor...");
   try {
-    const data = await apiPost("/petition/draft", {
+    const data = await apiPost("/petition/final-draft", {
       case_text: caseText,
       case_enrichment: lastCaseEnrichment || {},
       confirmed_facts: [...new Set(lastCaseEnrichment?.confirmed_facts || [])].slice(0, 30),
@@ -1978,13 +2036,14 @@ async function runDraft(options = {}) {
       request_type: getRequestType(),
       use_legal_brain: true,
       legal_language_level: "usta_avukat",
+      analysis_approved: els.documentApproval.checked,
+      review_completed: reviewWorkflowComplete,
+      legal_grounds: lastStrategy?.legal_basis || [],
+      drafting_warnings: dedupeIssues([
+        ...(lastCaseEnrichment?.risk_flags || []),
+        ...(lastDocumentAnalysis?.warnings || []),
+      ]).slice(0, 50),
     });
-    if (readinessIssues.length) {
-      data.warnings = [
-        ...(data.warnings || []),
-        `Bu metin ön taslaktır. Tamamlanmayan adımlar: ${readinessIssues.join(" ")}`,
-      ];
-    }
     lastDraftData = data;
     renderDraft(data);
     let draftAudit = null;
@@ -2023,10 +2082,11 @@ async function runDraft(options = {}) {
       precedentAudit: lastPrecedentAudit,
       draftAudit: draftAudit || lastDraftAudit,
       draftWarnings: data.warnings || [],
-      draftGrounding: data.grounding_notes || [],
+      draftGrounding: [],
     });
     switchTab("petition");
-    setStatus(options.auditAndRefine ? "Dilekçe taslağı, kalite kontrol ve redaksiyon akışı hazır." : "Dilekçe taslağı hazır.");
+    const modeLabel = data.generation_mode === "gemini_mode" ? "Gemini" : "yerel güvenli şablon";
+    setStatus(`Nihai dilekçe taslağı ${modeLabel} ile hazırlandı.`);
     return data;
   } finally {
     setBusy(false);
@@ -2210,6 +2270,7 @@ async function runFullReview() {
       qualityScore: null,
     });
     reviewWorkflowComplete = true;
+    updateFinalPetitionReadiness();
     switchTab("summary");
     setStatus("Kaynak ve emsal incelemesi hazır. Soru kartlarını cevaplayıp son kartta Dilekçeyi Hazırla'ya bas.");
   } finally {
@@ -2219,14 +2280,14 @@ async function runFullReview() {
 
 async function copyDraft() {
   const text = els.draftOutput.textContent.trim();
-  if (!text || text === "Henüz dilekçe taslağı yok.") return;
+  if (!text || plainText(text).includes("analiz tamamlandiysa")) return;
   await navigator.clipboard.writeText(text);
   setStatus("Taslak panoya kopyalandı.");
 }
 
 function downloadDraft() {
   const text = els.draftOutput.textContent.trim();
-  if (!text || text === "Henüz dilekçe taslağı yok.") return;
+  if (!text || plainText(text).includes("analiz tamamlandiysa")) return;
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -2324,7 +2385,7 @@ function clearAll() {
   els.analysisOutput.textContent = "Henüz analiz yok.";
   els.brainOutput.textContent = "Henüz kaynak sonucu yok.";
   els.decisionOutput.textContent = "Henüz karar sonucu yok.";
-  els.draftOutput.textContent = "Henüz dilekçe taslağı yok.";
+  els.draftOutput.textContent = "Analiz tamamlandıysa “Dilekçe Taslağı Hazırla” butonuyla nihai taslak oluşturabilirsiniz.";
   els.riskOutput.textContent = "Henüz risk değerlendirmesi yok.";
   els.strategyTabOutput.textContent = "Henüz strateji hazırlanmadı.";
   els.clientQuestionsOutput.textContent = "Henüz müvekkil soru listesi yok.";
@@ -2333,6 +2394,7 @@ function clearAll() {
   switchTab("summary");
   renderDocuments();
   renderDocumentSelection();
+  updateFinalPetitionReadiness();
   setStatus("");
 }
 
@@ -2366,6 +2428,7 @@ function wireEvents() {
     const field = event.target.closest("[data-question]");
     if (field) saveQuestionField(field);
     renderRisks();
+    updateFinalPetitionReadiness();
   });
   els.analysisOutput.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action='use-ai-enrichment']");
@@ -2387,9 +2450,8 @@ function wireEvents() {
     setStatus("AI analizi aktif akışa alındı.");
   });
   els.documentFiles.addEventListener("change", () => {
+    // Gerçek File objelerini state'te sakla
     selectedDocumentFiles = Array.from(els.documentFiles.files || []);
-    lastDocumentAnalysis = null;
-    els.documentApproval.checked = false;
     renderDocumentSelection();
     if (selectedDocumentFiles.length) {
       setStatus(`${selectedDocumentFiles.length} dosya seçildi. Backend'e göndermek için Belgeleri Yükle'ye basın.`);
@@ -2422,6 +2484,7 @@ function wireEvents() {
     setStatus("Dilekçe üretilmedi. Önce kritik bilgi, belge ve inceleme adımlarını tamamlayın.", true);
   });
   $("reviewBtn").addEventListener("click", () => runFullReview().catch((error) => setStatus(error.message, true)));
+  $("finalPetitionBtn").addEventListener("click", () => runDraft({ force: true }).catch((error) => setStatus(error.message, true)));
   $("aiEnrichBtn").addEventListener("click", () => runAIEnrich().catch((error) => setStatus(error.message, true)));
   $("aiQuestionsBtn").addEventListener("click", () => runAIQuestions().catch((error) => setStatus(error.message, true)));
   $("aiSearchBtn").addEventListener("click", () => runAISearch().catch((error) => setStatus(error.message, true)));
@@ -2487,6 +2550,7 @@ function wireEvents() {
     lastStrategyRequest = "";
     reviewWorkflowComplete = false;
   });
+  els.documentApproval.addEventListener("change", updateFinalPetitionReadiness);
 }
 
 wireEvents();

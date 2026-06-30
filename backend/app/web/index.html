@@ -174,8 +174,12 @@
 
         <article class="tab-panel draft-panel" data-tab-panel="petition">
           <div class="section-head">
-            <h2>Dilekçe Taslağı</h2>
+            <div>
+              <h2>Nihai Dilekçe Taslağı</h2>
+              <p class="petition-description">Bu taslak, olay metni, cevaplar, yüklenen belgeler, kaynaklar, deliller ve risk analizleri dikkate alınarak hazırlanır.</p>
+            </div>
             <div class="draft-actions">
+              <button id="finalPetitionBtn" class="primary-btn" type="button">Dilekçe Taslağı Hazırla</button>
               <button id="copyDraftBtn" class="ghost-btn" type="button">Kopyala</button>
               <button id="printDraftBtn" class="ghost-btn" type="button">Yazdır</button>
               <button id="downloadDraftBtn" class="ghost-btn" type="button">TXT</button>
@@ -184,7 +188,8 @@
               <button id="downloadUdfBtn" class="ghost-btn" type="button">UDF</button>
             </div>
           </div>
-          <pre id="draftOutput">Henüz dilekçe taslağı yok.</pre>
+          <p id="petitionReadinessNotice" class="petition-readiness warning">Dilekçe taslağı için önce belge analizi, kaynaklar, deliller ve riskler incelenip onaylanmalıdır.</p>
+          <pre id="draftOutput">Analiz tamamlandıysa “Dilekçe Taslağı Hazırla” butonuyla nihai taslak oluşturabilirsiniz.</pre>
         </article>
 
         <article class="tab-panel" data-tab-panel="precedents">
@@ -263,6 +268,6 @@
       </div>
     </dialog>
 
-    <script src="app.js?v=20260629-document-intake-3" defer></script>
+    <script src="app.js?v=20260630-final-petition-1" defer></script>
   </body>
 </html>

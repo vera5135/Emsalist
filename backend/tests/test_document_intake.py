@@ -70,7 +70,7 @@ class DocumentIntakeServiceTests(unittest.TestCase):
         for index, encoding in enumerate(("utf-8", "cp1254", "iso-8859-9")):
             record = self.service.create_document(
                 file_name=f"ihtar_{index}.txt",
-                content=content.encode(encoding),
+                content=f"{content}\nBelge sıra no: {index}".encode(encoding),
                 document_type="ihtarname",
             )
             self.assertEqual(record.extraction_status, "extracted")

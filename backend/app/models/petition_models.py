@@ -171,3 +171,40 @@ class PetitionDraftResponse(BaseModel):
     grounding_notes: list[GroundingNote] = Field(default_factory=list)
     precedent_analyses: list[PrecedentAnalysis] = Field(default_factory=list)
     warnings: list[str]
+
+
+class DraftingParties(BaseModel):
+    claimant: str = ""
+    defendant: str = ""
+    attorney: str = "Av. ..."
+
+
+class FinalPetitionDraftRequest(PetitionDraftRequest):
+    analysis_approved: bool = False
+    review_completed: bool = False
+    evidence_items: list[str] = Field(default_factory=list, max_length=50)
+    legal_grounds: list[str] = Field(default_factory=list, max_length=50)
+    relief_requests: list[str] = Field(default_factory=list, max_length=30)
+    drafting_warnings: list[str] = Field(default_factory=list, max_length=50)
+
+
+class DraftingPackage(BaseModel):
+    petition_type: str
+    court_heading: str
+    court_safety_note: str = ""
+    parties: DraftingParties
+    confirmed_facts: list[str] = Field(default_factory=list)
+    uncertain_facts: list[str] = Field(default_factory=list)
+    missing_facts: list[str] = Field(default_factory=list)
+    evidence_items: list[str] = Field(default_factory=list)
+    legal_grounds: list[str] = Field(default_factory=list)
+    precedents_for_petition: list[str] = Field(default_factory=list)
+    relief_requests: list[str] = Field(default_factory=list)
+    drafting_warnings: list[str] = Field(default_factory=list)
+
+
+class FinalPetitionDraftResponse(BaseModel):
+    petition_text: str
+    generation_mode: Literal["local_template_mode", "gemini_mode"]
+    drafting_package: DraftingPackage
+    warnings: list[str] = Field(default_factory=list)
