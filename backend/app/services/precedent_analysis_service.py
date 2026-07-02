@@ -223,6 +223,33 @@ PROFILE_SIGNALS: dict[str, dict[str, list[tuple[tuple[str, ...], str]] | dict[st
 }
 
 
+IRRELEVANT_DOMAIN_TERMS: tuple[str, ...] = (
+    "iş hukuku",
+    "işçilik",
+    "kıdem tazminatı",
+    "ihbar tazminatı",
+    "fazla mesai",
+    "ceza",
+    "suç",
+    "tck",
+    "aile",
+    "boşanma",
+    "nafaka",
+    "velayet",
+    "kira",
+    "kiracı",
+    "tahliye",
+    "icra",
+    "itirazın iptali",
+    "şufa",
+    "kamulaştırma",
+    "yabancılar",
+    "idare",
+    "iptal davası",
+    "tam yargı",
+)
+
+
 class PrecedentAnalysisService:
     """Convert raw decision cards into structured precedent analysis cards."""
 
@@ -233,6 +260,15 @@ class PrecedentAnalysisService:
         case_plain = self._plain(case_text)
         decision_plain = self._plain(decision_text)
         score = self._int_value(decision_map.get("similarity_score"), default=0)
+        legal_area = self._legal_area(decision_map)
+        case_type = profile.key
+        matched_terms = self._matched_domain_terms(case_plain, decision_plain)
+        excluded_reason = self._excluded_reason(
+            profile_key=profile.key,
+            legal_area=legal_area,
+            decision_plain=decision_plain,
+            matched_terms=matched_terms,
+        )
 
         shared_facts = self._shared_labels(profile.key, "facts", case_plain, decision_plain)
         shared_legal_issues = self._shared_labels(profile.key, "issues", case_plain, decision_plain)
@@ -273,6 +309,10 @@ class PrecedentAnalysisService:
             distinguishing_risks=distinguishing_risks,
             recommended_use=recommended_use,
             confidence_score=confidence_score,
+            legal_area=legal_area,
+            case_type=case_type,
+            matched_terms=matched_terms,
+            excluded_reason=excluded_reason,
         )
 
     def analyze_many(self, *, case_text: str, decisions: list[dict[str, Any]]) -> list[PrecedentAnalysis]:
@@ -499,6 +539,75 @@ class PrecedentAnalysisService:
 
     def _profile_signals(self, profile_key: str) -> dict[str, Any]:
         return PROFILE_SIGNALS.get(profile_key, PROFILE_SIGNALS["generic"])
+
+    def _legal_area(self, decision_map: dict[str, Any]) -> str:
+        text = self._decision_text(decision_map)
+        plain = self._plain(
+            " ".join(
+                [
+                    text,
+                    str(decision_map.get("court") or ""),
+                    str(decision_map.get("title") or ""),
+                    str(decision_map.get("short_summary") or ""),
+                ]
+            )
+        )
+        legal_areas: tuple[tuple[str, tuple[str, ...]], ...] = (
+            ("labor", ("is hukuku", "iscilik", "kidem tazminati", "ihbar tazminati", "fazla mesai")),
+            ("criminal", ("ceza", "suc", "tck")),
+            ("family", ("aile", "bosanma", "nafaka", "velayet")),
+            ("rental", ("kira", "kiraci", "tahliye")),
+            ("enforcement", ("icra", "itirazin iptali", "odeme emri")),
+            ("administrative", ("idare", "iptal davasi", "tam yargi", "kamulastirma")),
+            ("property", ("sufa",)),
+            (
+                "defective_vehicle",
+                ("ayipli arac", "gizli ayip", "ikinci el arac", "motor arizasi", "tramer", "ekspertiz"),
+            ),
+        )
+        for label, terms in legal_areas:
+            if any(term in plain for term in terms):
+                return label
+        return "generic"
+
+    def _matched_domain_terms(self, case_plain: str, decision_plain: str) -> list[str]:
+        profile = get_petition_profile(case_plain)
+        profile_signals = self._profile_signals(profile.key)
+        candidate_terms: list[str] = []
+        for bucket in ("facts", "issues", "arguments"):
+            for patterns, _label in profile_signals.get(bucket, []):  # type: ignore[assignment]
+                candidate_terms.extend(patterns)
+
+        result: list[str] = []
+        seen: set[str] = set()
+        for term in candidate_terms:
+            normalized = self._plain(term)
+            if normalized and normalized in case_plain and normalized in decision_plain and normalized not in seen:
+                seen.add(normalized)
+                result.append(term)
+        return result[:12]
+
+    def _excluded_reason(
+        self,
+        *,
+        profile_key: str,
+        legal_area: str,
+        decision_plain: str,
+        matched_terms: list[str],
+    ) -> str:
+        if profile_key != "defective_vehicle":
+            return ""
+
+        if matched_terms:
+            return ""
+
+        matched_irrelevant = [term for term in IRRELEVANT_DOMAIN_TERMS if self._plain(term) in decision_plain]
+        if not matched_irrelevant and legal_area not in {"generic", "defective_vehicle"}:
+            return "Ayıplı araç uyuşmazlığıyla ilgisiz hukuk alanına ait emsal."
+        if matched_irrelevant:
+            labels = ", ".join(matched_irrelevant[:4])
+            return f"Ayıplı araç uyuşmazlığıyla ilgisiz terimler içeriyor: {labels}."
+        return ""
 
     @staticmethod
     def _matches_any(text: str, patterns: tuple[str, ...]) -> bool:

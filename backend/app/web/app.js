@@ -1,4 +1,4 @@
-﻿const $ = (id) => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
 const FILE_API_BASES = ["http://127.0.0.1:8003", "http://127.0.0.1:8001", "http://127.0.0.1:8000"];
 let activeApiBase = window.location.protocol === "file:" ? FILE_API_BASES[0] : "";
@@ -53,7 +53,8 @@ const els = {
     $("yargitayBtn"),
     $("auditPrecedentsBtn"),
     $("draftBtn"),
-    $("finalPetitionBtn"),
+    $("localDraftBtn"),
+    $("geminiDraftBtn"),
     $("auditDraftBtn"),
     $("refineDraftBtn"),
     $("sampleBtn"),
@@ -145,6 +146,17 @@ const fallbackQuestions = [
 ];
 
 const commonAnswerOptions = ["Belge mevcut", "Bilmiyorum", "Sonra tamamlanacak"];
+const defectiveVehicleSafeOptions = [
+  "Belge mevcut",
+  "Bilmiyorum",
+  "Sonra tamamlanacak",
+  "Servis raporu mevcut",
+  "Ekspertiz raporu mevcut",
+  "Noter ihtarnamesi mevcut",
+  "Mesaj yazışması mevcut",
+  "TRAMER kaydı araştırılacak",
+  "Bilirkişi incelemesi talep edilecek",
+];
 
 const vehicleQuestionBank = [
   {
@@ -292,6 +304,7 @@ function questionOptions(question) {
       item.requiredTerms.some((term) => normalizedQuestion.includes(term) || plainText(item.question).includes(normalizedQuestion)),
     );
     if (matchedVehicle) return matchedVehicle.options.slice(0, 5);
+    return defectiveVehicleSafeOptions.slice(0, 5);
   }
   const profileKey = currentProfileKey();
   const profileOptions = optionSets[profileKey] || [];
@@ -477,21 +490,19 @@ function renderDocumentControls() {
 function finalPetitionReadinessIssues() {
   const issues = [];
   if (!lastDocuments.length) issues.push("Belge yüklenmedi.");
-  else if (!lastDocumentAnalysis) issues.push("Belge analizi tamamlanmadı.");
-  if (lastDocumentAnalysis && !els.documentApproval.checked) issues.push("Belge analizi ve kaynak/risk incelemesi onaylanmadı.");
-  if (!reviewWorkflowComplete) issues.push("Kaynaklar, deliller, emsaller ve risk incelemesi tamamlanmadı.");
-  if (questionAnswerCount() === 0) issues.push("Dilekçe soruları cevaplanmadı.");
+  else if (!lastDocumentAnalysis) issues.push("Belge analizi henüz yapılmadı.");
+  if (!reviewWorkflowComplete) issues.push("Kaynak, emsal, delil veya risk incelemesi henüz tamamlanmadı.");
+  if (questionAnswerCount() === 0) issues.push("Dilekçe soruları henüz cevaplanmadı.");
   return issues;
 }
 
 function updateFinalPetitionReadiness() {
   if (!els.petitionReadinessNotice) return;
   const issues = finalPetitionReadinessIssues();
-  const ready = issues.length === 0;
-  els.petitionReadinessNotice.className = `petition-readiness ${ready ? "ready" : "warning"}`;
-  els.petitionReadinessNotice.textContent = ready
-    ? "Analiz ve onaylar tamamlandı. Nihai dilekçe taslağını hazırlayabilirsiniz."
-    : "Dilekçe taslağı için önce belge analizi, kaynaklar, deliller ve riskler incelenip onaylanmalıdır.";
+  els.petitionReadinessNotice.className = `petition-readiness ${issues.length ? "warning" : "ready"}`;
+  els.petitionReadinessNotice.textContent = issues.length
+    ? "Bazı eksik veya riskli hususlar tespit edildi. Taslak yine de hazırlanabilir; eksikler dilekçede ihtiyatlı dille işlenecektir."
+    : "Dosya verileri güncel görünüyor. Dilekçe taslağını hazırlayabilirsiniz.";
 }
 
 function renderDocumentSelection() {
@@ -678,9 +689,7 @@ function prefillQuestionsFromDocuments() {
 }
 
 function assertDocumentFlowReady() {
-  if (lastDocuments.length && lastDocumentAnalysis && !els.documentApproval.checked) {
-    throw new Error("Dilekçeden önce belge analizini, kaynakları ve uyarıları inceleyip onaylayın.");
-  }
+  return true;
 }
 
 function draftReadinessIssues() {
@@ -926,6 +935,9 @@ function renderBrain(data) {
   const filteredCount = results.length - visibleResults.length;
   els.brainCount.textContent = String(visibleResults.length);
   if (!visibleResults.length) {
+    const warningText = (data.warnings || []).length
+      ? `<p>${escapeHtml((data.warnings || []).join(" "))}</p>`
+      : "";
     els.brainOutput.className = "result-list";
     els.brainOutput.innerHTML = `
       <div class="result-item">
@@ -935,6 +947,7 @@ function renderBrain(data) {
           <span class="chip">${escapeHtml(filteredCount)} kaynak filtrelendi</span>
         </div>
         <p>Bu dosya için doğrudan kullanılabilir Legal Brain kaynağı bulunamadı. Mevzuat ve Yargıtay emsalleri üzerinden devam edildi.</p>
+        ${warningText}
       </div>
       ${filteredCount ? `<div class="result-item"><h3>Filtre sonucu</h3><p>Konu dışı kaynaklar filtrelendi.</p></div>` : ""}
     `;
@@ -1032,8 +1045,11 @@ function renderDecisions(data) {
   lastDecisions = decisions;
   els.decisionCount.textContent = String(decisions.length);
   if (!decisions.length) {
-    els.decisionOutput.className = "empty-state";
-    els.decisionOutput.textContent = "Karar sonucu bulunamadı.";
+    const infoMessage = (data.errors || []).length
+      ? "Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."
+      : "Bu dosya için uygun ve güvenli emsal bulunamadı. Konu dışı kararlar filtrelendi.";
+    els.decisionOutput.className = "result-list";
+    els.decisionOutput.innerHTML = `<div class="result-item"><h3>Emsal sonucu</h3><p>${escapeHtml(infoMessage)}</p></div>`;
     return;
   }
   els.decisionOutput.className = "result-list";
@@ -1741,10 +1757,10 @@ async function runAIEnrich() {
     const data = await apiPost("/ai/enrich-case", {
       case_text: caseText,
       practice_area: getPracticeArea() || "auto",
-      use_gemini: true,
+      use_gemini: false,
     });
     renderAIEnrichment(data);
-    setStatus(data.ai_used ? "AI olay analizi hazır." : "AI fallback olay analizi hazır.");
+    setStatus("Yerel olay analizi hazır.");
     return data;
   } finally {
     setBusy(false);
@@ -1758,7 +1774,7 @@ async function runAIQuestions() {
     const data = await apiPost("/ai/generate-legal-questions", {
       case_text: caseText,
       case_enrichment: lastCaseEnrichment || {},
-      use_gemini: true,
+      use_gemini: false,
     });
     const questions = [...(data.questions || []).map((item) => item.question), ...documentMissingQuestions()];
     lastStrategy = {
@@ -1771,7 +1787,7 @@ async function runAIQuestions() {
     prefillQuestionsFromDocuments();
     lastStrategyCase = caseText;
     lastStrategyRequest = getRequestType();
-    setStatus(`${questions.length} AI sorusu hazır.`);
+    setStatus(`${questions.length} yerel soru hazır.`);
     return data;
   } finally {
     setBusy(false);
@@ -1785,10 +1801,10 @@ async function runAISearch() {
     const data = await apiPost("/ai/build-better-searches", {
       case_text: caseText,
       case_enrichment: lastCaseEnrichment || {},
-      use_gemini: true,
+      use_gemini: false,
     });
     renderAISearch(data);
-    setStatus("AI arama sorguları hazır.");
+    setStatus("Yerel arama sorguları hazır.");
     return data;
   } finally {
     setBusy(false);
@@ -1807,6 +1823,14 @@ async function runBrain() {
     renderBrain(data);
     setStatus("Legal Brain sonuçları hazır.");
     return data;
+  } catch (error) {
+    const fallback = {
+      results: [],
+      warnings: ["Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."],
+    };
+    renderBrain(fallback);
+    setStatus(fallback.warnings[0], true);
+    return fallback;
   } finally {
     setBusy(false);
   }
@@ -1821,7 +1845,7 @@ async function runAuditSources() {
     const audit = await apiPost("/ai/audit-sources", {
       case_enrichment: lastCaseEnrichment || { original_case_text: getCaseText(), detected_case_type: getCaseText() },
       sources: lastBrainResults,
-      use_gemini: true,
+      use_gemini: false,
     });
     const auditMap = new Map((audit.audited_sources || []).map((item) => [item.source_id, item]));
     const auditedResults = lastBrainResults
@@ -1879,7 +1903,7 @@ async function runAuditPrecedents() {
       case_text: getCaseText(),
       case_enrichment: lastCaseEnrichment || {},
       precedents: lastDecisions,
-      use_gemini: true,
+      use_gemini: false,
     });
     const auditMap = new Map((audit.audited_precedents || []).map((item) => [plainText(item.decision_id), item]));
     lastDecisions = lastDecisions
@@ -2009,11 +2033,7 @@ async function runDraft(options = {}) {
     return;
   }
 
-  const readinessIssues = finalPetitionReadinessIssues();
-  if (readinessIssues.length) {
-    updateFinalPetitionReadiness();
-    throw new Error("Dilekçe taslağı oluşturmak için önce belge analizi ve risk/kaynak incelemesini onaylayın.");
-  }
+  updateFinalPetitionReadiness();
 
   const unresolvedMissingFacts = dedupeIssues([
     ...(lastCaseEnrichment?.missing_facts || []),
@@ -2036,6 +2056,7 @@ async function runDraft(options = {}) {
       request_type: getRequestType(),
       use_legal_brain: true,
       legal_language_level: "usta_avukat",
+      writer_mode: options.writer_mode === "gemini" ? "gemini" : "local",
       analysis_approved: els.documentApproval.checked,
       review_completed: reviewWorkflowComplete,
       legal_grounds: lastStrategy?.legal_basis || [],
@@ -2045,6 +2066,7 @@ async function runDraft(options = {}) {
       ]).slice(0, 50),
     });
     lastDraftData = data;
+    window.lastCaseState = data.case_state || {};
     renderDraft(data);
     let draftAudit = null;
     if (options.auditAndRefine) {
@@ -2054,7 +2076,7 @@ async function runDraft(options = {}) {
         draft_text: currentDraftText(),
         case_enrichment: lastCaseEnrichment || {},
         selected_decisions: mapSelectedDecisions(),
-        use_gemini: true,
+        use_gemini: false,
       });
       lastDraftAudit = draftAudit;
       renderDraftAudit(draftAudit);
@@ -2066,7 +2088,7 @@ async function runDraft(options = {}) {
           draft_text: currentDraftText(),
           case_enrichment: lastCaseEnrichment || {},
           selected_decisions: mapSelectedDecisions(),
-          use_gemini: true,
+          use_gemini: false,
         });
         if (refined.refined_draft && refined.accepted) {
           els.draftOutput.textContent = refined.refined_draft;
@@ -2086,7 +2108,12 @@ async function runDraft(options = {}) {
     });
     switchTab("petition");
     const modeLabel = data.generation_mode === "gemini_mode" ? "Gemini" : "yerel güvenli şablon";
-    setStatus(`Nihai dilekçe taslağı ${modeLabel} ile hazırlandı.`);
+    const fallbackWarning = (data.warnings || []).some((warning) => plainText(warning).includes("gemini"));
+    if (options.writer_mode === "gemini" && data.generation_mode !== "gemini_mode" && fallbackWarning) {
+      setStatus("Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu.");
+    } else {
+      setStatus(`Nihai dilekçe taslağı ${modeLabel} ile hazırlandı.`);
+    }
     return data;
   } finally {
     setBusy(false);
@@ -2102,7 +2129,7 @@ async function runAuditDraft() {
       draft_text: draftText,
       case_enrichment: lastCaseEnrichment || {},
       selected_decisions: mapSelectedDecisions(),
-      use_gemini: true,
+      use_gemini: false,
     });
     renderDraftAudit(data);
     setStatus(`Kalite kontrol tamamlandı: ${data.quality_score} puan.`);
@@ -2121,7 +2148,7 @@ async function runRefineDraft() {
       draft_text: draftText,
       case_enrichment: lastCaseEnrichment || {},
       selected_decisions: mapSelectedDecisions(),
-      use_gemini: true,
+      use_gemini: false,
     });
     if (data.refined_draft) {
       els.draftOutput.textContent = data.refined_draft;
@@ -2155,7 +2182,7 @@ async function runFullReview() {
     enrichment = await apiPost("/ai/enrich-case", {
       case_text: caseText,
       practice_area: getPracticeArea() || "auto",
-      use_gemini: true,
+      use_gemini: false,
     });
     lastCaseEnrichment = enrichment;
     renderAIEnrichment(enrichment);
@@ -2165,7 +2192,7 @@ async function runFullReview() {
     const questionData = await apiPost("/ai/generate-legal-questions", {
       case_text: caseText,
       case_enrichment: enrichment,
-      use_gemini: true,
+      use_gemini: false,
     });
     const questions = [...(questionData.questions || []).map((item) => item.question), ...documentMissingQuestions()];
     lastStrategy = {
@@ -2184,7 +2211,7 @@ async function runFullReview() {
     lastBetterSearches = await apiPost("/ai/build-better-searches", {
       case_text: caseText,
       case_enrichment: enrichment,
-      use_gemini: true,
+      use_gemini: false,
     });
     renderAISearch(lastBetterSearches);
 
@@ -2200,7 +2227,7 @@ async function runFullReview() {
     sourceAudit = await apiPost("/ai/audit-sources", {
       case_enrichment: enrichment,
       sources: lastBrainResults,
-      use_gemini: true,
+      use_gemini: false,
     });
     lastSourceAudit = sourceAudit;
     const sourceAuditMap = new Map((sourceAudit.audited_sources || []).map((item) => [item.source_id, item]));
@@ -2224,12 +2251,17 @@ async function runFullReview() {
     renderRisks({ caseEnrichment: enrichment, sourceAudit });
 
     setStatus("7/11 Yargıtay emsalleri aranıyor...");
-    const yargitay = await apiPost("/research/yargitay", {
-      case_text: `${caseText} ${getRequestType()}`,
-      max_results: getMaxResults(),
-      yargitay_query_templates: lastBetterSearches.yargitay_queries || enrichment.yargitay_query_templates || [],
-      case_enrichment: enrichment,
-    });
+    let yargitay;
+    try {
+      yargitay = await apiPost("/research/yargitay", {
+        case_text: `${caseText} ${getRequestType()}`,
+        max_results: getMaxResults(),
+        yargitay_query_templates: lastBetterSearches.yargitay_queries || enrichment.yargitay_query_templates || [],
+        case_enrichment: enrichment,
+      });
+    } catch (error) {
+      yargitay = { top_decisions: [], errors: ["Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."] };
+    }
     renderDecisions(yargitay);
 
     setStatus("8/11 Emsaller denetleniyor...");
@@ -2237,7 +2269,7 @@ async function runFullReview() {
       case_text: caseText,
       case_enrichment: enrichment,
       precedents: lastDecisions,
-      use_gemini: true,
+      use_gemini: false,
     });
     lastPrecedentAudit = precedentAudit;
     const precedentAuditMap = new Map((precedentAudit.audited_precedents || []).map((item) => [plainText(item.decision_id), item]));
@@ -2484,7 +2516,8 @@ function wireEvents() {
     setStatus("Dilekçe üretilmedi. Önce kritik bilgi, belge ve inceleme adımlarını tamamlayın.", true);
   });
   $("reviewBtn").addEventListener("click", () => runFullReview().catch((error) => setStatus(error.message, true)));
-  $("finalPetitionBtn").addEventListener("click", () => runDraft({ force: true }).catch((error) => setStatus(error.message, true)));
+  $("localDraftBtn").addEventListener("click", () => runDraft({ force: true, writer_mode: "local" }).catch((error) => setStatus(error.message, true)));
+  $("geminiDraftBtn").addEventListener("click", () => runDraft({ force: true, writer_mode: "gemini" }).catch((error) => setStatus(error.message, true)));
   $("aiEnrichBtn").addEventListener("click", () => runAIEnrich().catch((error) => setStatus(error.message, true)));
   $("aiQuestionsBtn").addEventListener("click", () => runAIQuestions().catch((error) => setStatus(error.message, true)));
   $("aiSearchBtn").addEventListener("click", () => runAISearch().catch((error) => setStatus(error.message, true)));

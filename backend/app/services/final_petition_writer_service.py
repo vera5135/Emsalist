@@ -61,6 +61,7 @@ class FinalPetitionWriterService:
         legal_grounds: list[str] | None = None,
         relief_requests: list[str] | None = None,
         drafting_warnings: list[str] | None = None,
+        writer_mode: str = "local",
     ) -> DraftingPackage:
         answers = answers or {}
         facts = self._dedupe_document_facts(document_facts or [])
@@ -132,7 +133,12 @@ class FinalPetitionWriterService:
             reject_technical=True,
         )
 
-        return DraftingPackage(
+        package = DraftingPackage(
+            event_text=self._clean_fact(case_text),
+            area=request_type,
+            case_type=profile.key,
+            question_answers={str(key): str(value) for key, value in answers.items() if str(key).strip() and str(value).strip()},
+            document_facts=[f"{fact.fact_key}: {fact.fact_value}" for fact in facts],
             petition_type=petition_type,
             court_heading=court_heading,
             court_safety_note=court_safety_note,
@@ -141,20 +147,34 @@ class FinalPetitionWriterService:
             uncertain_facts=uncertain,
             missing_facts=clean_missing,
             evidence_items=clean_evidence,
+            legal_sources=clean_grounds,
             legal_grounds=clean_grounds,
+            precedent_for_petition=[],
             precedents_for_petition=[],
+            risks=list(warnings),
             relief_requests=clean_relief,
             drafting_warnings=warnings,
         )
+        package.writer_mode = writer_mode
+        return package
 
     def write(self, package: DraftingPackage) -> FinalPetitionDraftResponse:
         local_text = self._local_template(package)
-        settings = get_settings()
-        if not settings.gemini_api_key:
+        writer_mode = getattr(package, "writer_mode", "local")
+        if writer_mode != "gemini":
             return FinalPetitionDraftResponse(
                 petition_text=local_text,
                 generation_mode="local_template_mode",
                 drafting_package=package,
+            )
+
+        settings = get_settings()
+        if not settings.gemini_api_key:
+            return FinalPetitionDraftResponse(
+                petition_text=local_text,
+                generation_mode="local_fallback",
+                drafting_package=package,
+                warnings=["Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu."],
             )
 
         prompt = (
@@ -182,7 +202,7 @@ class FinalPetitionWriterService:
             warnings.append("Gemini çıktısı dilekçe biçimi veya içerik güvenliği denetiminden geçmedi; yerel şablon kullanıldı.")
         return FinalPetitionDraftResponse(
             petition_text=local_text,
-            generation_mode="local_template_mode",
+            generation_mode="local_fallback" if writer_mode == "gemini" else "local_template_mode",
             drafting_package=package,
             warnings=warnings,
         )

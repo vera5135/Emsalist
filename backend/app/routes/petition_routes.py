@@ -15,6 +15,8 @@ from app.services.petition_draft_service import petition_draft_service
 from app.services.final_petition_writer_service import final_petition_writer_service
 from app.services.petition_strategy_service import petition_strategy_service
 from app.services.document_intake_service import document_intake_service
+from app.services.case_state_service import case_state_service
+from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_service
 
 
 router = APIRouter(prefix="/petition", tags=["Dilekçe"])
@@ -99,14 +101,7 @@ def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse
 
 @router.post("/final-draft", response_model=FinalPetitionDraftResponse)
 def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetitionDraftResponse:
-    if not request.analysis_approved or not request.review_completed:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Dilekçe taslağı için önce belge analizi, kaynaklar, deliller ve riskler "
-                "incelenip onaylanmalıdır."
-            ),
-        )
+    # Onay zorunluluğu kaldırıldı; dilekçe her durumda hazırlanabilir.
 
     grounded_document_facts = []
     document_types: list[str] = []
@@ -136,6 +131,11 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
         (fact.fact_key, fact.fact_value.casefold(), fact.source_file_name.casefold()): fact
         for fact in grounded_document_facts
     }.values())
+    reasoning = dynamic_legal_reasoner_service.analyze(
+        event_text=request.case_text,
+        document_facts=[f"{fact.fact_key}: {fact.fact_value}" for fact in grounded_document_facts],
+        question_answers=request.answers,
+    )
     package = final_petition_writer_service.build_package(
         case_text=request.case_text,
         request_type=request.request_type,
@@ -154,5 +154,25 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
         legal_grounds=request.legal_grounds,
         relief_requests=request.relief_requests,
         drafting_warnings=request.drafting_warnings,
+        writer_mode=getattr(request, "writer_mode", "local"),
     )
-    return final_petition_writer_service.write(package)
+    package.precedent_for_petition = [
+        " | ".join(part for part in [decision.court, decision.esas_no, decision.karar_no, decision.date, decision.petition_paragraph] if part)
+        for decision in (request.audited_precedents or request.selected_decisions)
+    ]
+    package.precedents_for_petition = list(package.precedent_for_petition)
+    package.risks = list(dict.fromkeys([*package.risks, *request.drafting_warnings, *list(request.case_enrichment.get("risk_flags") or []), *reasoning.get("risk_plan", [])]))
+    package.legal_sources = list(dict.fromkeys([*package.legal_sources, *reasoning.get("research_queries", [])]))
+    case_state = case_state_service.build(
+        event_text=request.case_text,
+        area=request.request_type,
+        case_type=package.case_type,
+        document_facts=package.document_facts,
+        question_answers=request.answers,
+        legal_sources=package.legal_sources,
+        precedent_candidates=request.precedent_candidates,
+        drafting_package=package.model_dump(mode="json"),
+    )
+    response = final_petition_writer_service.write(package)
+    response.case_state = case_state
+    return response

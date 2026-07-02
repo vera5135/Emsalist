@@ -97,6 +97,10 @@ class PrecedentAnalysis(BaseModel):
     distinguishing_risks: list[str] = Field(default_factory=list)
     recommended_use: str = Field(min_length=1)
     confidence_score: int = Field(ge=0, le=100)
+    legal_area: str = ""
+    case_type: str = ""
+    matched_terms: list[str] = Field(default_factory=list)
+    excluded_reason: str = ""
 
     @field_validator("precedent_id", "citation", "recommended_use")
     @classmethod
@@ -186,9 +190,15 @@ class FinalPetitionDraftRequest(PetitionDraftRequest):
     legal_grounds: list[str] = Field(default_factory=list, max_length=50)
     relief_requests: list[str] = Field(default_factory=list, max_length=30)
     drafting_warnings: list[str] = Field(default_factory=list, max_length=50)
+    writer_mode: str = "local"  # "local" | "gemini"
 
 
 class DraftingPackage(BaseModel):
+    event_text: str = ""
+    area: str = ""
+    case_type: str = ""
+    question_answers: dict[str, str] = Field(default_factory=dict)
+    document_facts: list[str] = Field(default_factory=list)
     petition_type: str
     court_heading: str
     court_safety_note: str = ""
@@ -197,14 +207,19 @@ class DraftingPackage(BaseModel):
     uncertain_facts: list[str] = Field(default_factory=list)
     missing_facts: list[str] = Field(default_factory=list)
     evidence_items: list[str] = Field(default_factory=list)
+    legal_sources: list[str] = Field(default_factory=list)
     legal_grounds: list[str] = Field(default_factory=list)
+    precedent_for_petition: list[str] = Field(default_factory=list)
     precedents_for_petition: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
     relief_requests: list[str] = Field(default_factory=list)
     drafting_warnings: list[str] = Field(default_factory=list)
+    writer_mode: str = "local"
 
 
 class FinalPetitionDraftResponse(BaseModel):
     petition_text: str
-    generation_mode: Literal["local_template_mode", "gemini_mode"]
+    generation_mode: Literal["local_template_mode", "gemini_mode", "local_fallback"]
     drafting_package: DraftingPackage
+    case_state: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)

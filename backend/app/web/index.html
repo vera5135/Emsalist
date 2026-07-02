@@ -179,7 +179,8 @@
               <p class="petition-description">Bu taslak, olay metni, cevaplar, yüklenen belgeler, kaynaklar, deliller ve risk analizleri dikkate alınarak hazırlanır.</p>
             </div>
             <div class="draft-actions">
-              <button id="finalPetitionBtn" class="primary-btn" type="button">Dilekçe Taslağı Hazırla</button>
+              <button id="localDraftBtn" class="primary-btn" type="button">Hızlı Yerel Taslak Oluştur</button>
+              <button id="geminiDraftBtn" class="primary-btn" type="button">Gemini ile Nihai Dilekçe Yaz</button>
               <button id="copyDraftBtn" class="ghost-btn" type="button">Kopyala</button>
               <button id="printDraftBtn" class="ghost-btn" type="button">Yazdır</button>
               <button id="downloadDraftBtn" class="ghost-btn" type="button">TXT</button>
@@ -188,8 +189,8 @@
               <button id="downloadUdfBtn" class="ghost-btn" type="button">UDF</button>
             </div>
           </div>
-          <p id="petitionReadinessNotice" class="petition-readiness warning">Dilekçe taslağı için önce belge analizi, kaynaklar, deliller ve riskler incelenip onaylanmalıdır.</p>
-          <pre id="draftOutput">Analiz tamamlandıysa “Dilekçe Taslağı Hazırla” butonuyla nihai taslak oluşturabilirsiniz.</pre>
+          <p id="petitionReadinessNotice" class="petition-readiness warning">Bazı eksik veya riskli hususlar tespit edildi. Taslak yine de hazırlanabilir; eksikler dilekçede ihtiyatlı dille işlenecektir.</p>
+          <pre id="draftOutput">Henüz nihai dilekçe taslağı oluşturulmadı. Analiz sonuçları, belge bilgileri, soru cevapları ve deliller kullanılarak taslak oluşturmak için aşağıdaki butonlardan birini kullanın.</pre>
         </article>
 
         <article class="tab-panel" data-tab-panel="precedents">
@@ -268,6 +269,6 @@
       </div>
     </dialog>
 
-    <script src="app.js?v=20260630-final-petition-1" defer></script>
+    <script src="app.js?v=20260702-case-state-1" defer></script>
   </body>
 </html>

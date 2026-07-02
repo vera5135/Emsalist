@@ -11,6 +11,7 @@ from app.main import app
 from app.models.petition_models import FinalPetitionDraftRequest
 from app.routes.petition_routes import build_final_petition_draft
 from app.services.document_intake_service import DocumentDuplicateError, DocumentIntakeService
+from app.services.dynamic_legal_reasoner_service import SAFE_SOURCE_DOMAINS, dynamic_legal_reasoner_service
 from app.services.final_petition_writer_service import FORBIDDEN_TEXT, final_petition_writer_service
 from app.services.gemini_client import GeminiJSONResult
 
@@ -72,14 +73,16 @@ class FinalPetitionWriterTests(unittest.TestCase):
         self.assertEqual(response.petition_text.count("TBK m. 219"), 1)
         self.assertNotIn("TBK 219", response.petition_text)
 
-    def test_final_route_requires_review_approval(self) -> None:
+    def test_final_route_allows_draft_without_review_approval(self) -> None:
         request = FinalPetitionDraftRequest(
             case_text=CASE_TEXT,
             request_type="Satış bedelinin iadesi",
         )
-        with self.assertRaises(Exception) as raised:
-            build_final_petition_draft(request)
-        self.assertEqual(getattr(raised.exception, "status_code", None), 409)
+        response = build_final_petition_draft(request)
+        self.assertIn(response.generation_mode, ("local_template_mode", "local_fallback"))
+        self.assertIn("DAVACI", response.petition_text)
+        self.assertIn("question_answers", response.case_state)
+        self.assertIn("document_facts", response.case_state)
 
     def test_gemini_receives_only_the_clean_drafting_package(self) -> None:
         package = final_petition_writer_service.build_package(
@@ -87,6 +90,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
             request_type="Sözleşmeden dönme ve satış bedelinin iadesi",
             document_facts=self.record.extracted_facts,
             document_types=[self.record.document_type],
+            writer_mode="gemini",
         )
         safe_text = final_petition_writer_service._local_template(package)
         with (
@@ -114,6 +118,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
             request_type="Sözleşmeden dönme ve satış bedelinin iadesi",
             document_facts=self.record.extracted_facts,
             document_types=[self.record.document_type],
+            writer_mode="gemini",
         )
         unsafe_text = final_petition_writer_service._local_template(package).replace(
             "Ayıp ihbarının tarihi ve yöntemi, sunulacak yazışma veya ihtar kayıtları üzerinden belirlenecektir.",
@@ -131,7 +136,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
             )
             response = final_petition_writer_service.write(package)
 
-        self.assertEqual(response.generation_mode, "local_template_mode")
+        self.assertEqual(response.generation_mode, "local_fallback")
         self.assertNotIn("WhatsApp üzerinden davalıya bildirmiştir", response.petition_text)
 
     def test_gemini_cannot_claim_preexisting_defect_without_a_report(self) -> None:
@@ -140,6 +145,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
             request_type="Sözleşmeden dönme ve satış bedelinin iadesi",
             document_facts=self.record.extracted_facts,
             document_types=[self.record.document_type],
+            writer_mode="gemini",
         )
         unsafe_text = final_petition_writer_service._local_template(package).replace(
             "Arızanın satıştan önce mevcut olduğu hususu servis/ekspertiz raporu ve bilirkişi incelemesiyle ortaya konulacaktır.",
@@ -157,7 +163,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
             )
             response = final_petition_writer_service.write(package)
 
-        self.assertEqual(response.generation_mode, "local_template_mode")
+        self.assertEqual(response.generation_mode, "local_fallback")
         self.assertNotIn("satış anında gizli ayıplı olduğunu göstermektedir", response.petition_text)
 
     def test_gemini_cannot_invent_a_signature_date(self) -> None:
@@ -166,6 +172,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
             request_type="Sözleşmeden dönme ve satış bedelinin iadesi",
             document_facts=self.record.extracted_facts,
             document_types=[self.record.document_type],
+            writer_mode="gemini",
         )
         unsafe_text = final_petition_writer_service._local_template(package) + "\n\n30.06.2026\nDavacı Vekili"
         with (
@@ -180,8 +187,52 @@ class FinalPetitionWriterTests(unittest.TestCase):
             )
             response = final_petition_writer_service.write(package)
 
-        self.assertEqual(response.generation_mode, "local_template_mode")
+        self.assertEqual(response.generation_mode, "local_fallback")
         self.assertNotIn("30.06.2026", response.petition_text)
+
+    def test_gemini_missing_key_uses_requested_local_fallback_warning(self) -> None:
+        package = final_petition_writer_service.build_package(
+            case_text=CASE_TEXT,
+            request_type="Sözleşmeden dönme ve satış bedelinin iadesi",
+            document_facts=self.record.extracted_facts,
+            document_types=[self.record.document_type],
+            writer_mode="gemini",
+        )
+        with patch("app.services.final_petition_writer_service.get_settings") as settings:
+            settings.return_value.gemini_api_key = ""
+            response = final_petition_writer_service.write(package)
+
+        self.assertEqual(response.generation_mode, "local_fallback")
+        self.assertIn("Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu.", response.warnings)
+
+    def test_dynamic_reasoner_builds_vehicle_issues_and_queries(self) -> None:
+        reasoning = dynamic_legal_reasoner_service.analyze(
+            event_text=CASE_TEXT,
+            document_facts=["sale_date: 12.04.2024", "notary_info: İzmir 12. Noterliği"],
+            question_answers={"Satıcı galeri/tacir/şirket mi?": "Bilmiyorum"},
+        )
+        self.assertEqual(
+            reasoning["legal_issues"],
+            [
+                "satış ilişkisi",
+                "gizli ayıp",
+                "ayıp ihbarı",
+                "ayıbın satıştan önce mevcut olması",
+                "seçimlik haklar",
+                "satıcı sıfatı / görevli mahkeme",
+            ],
+        )
+        self.assertEqual(
+            reasoning["research_queries"],
+            [
+                "ikinci el araç gizli ayıp Yargıtay",
+                "TBK 219 ayıba karşı tekeffül araç",
+                "TBK 223 ayıp ihbarı araç satışı",
+                "TBK 227 sözleşmeden dönme bedel indirimi",
+                "motor arızası gizli ayıp bilirkişi",
+            ],
+        )
+        self.assertIn("mevzuat.gov.tr", SAFE_SOURCE_DOMAINS)
 
 
 class FinalPetitionRouteTests(unittest.TestCase):

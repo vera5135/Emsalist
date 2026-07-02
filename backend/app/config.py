@@ -49,11 +49,18 @@ def _load_env_file() -> None:
 def get_settings() -> Settings:
     """Return the cached application settings."""
     _load_env_file()
+    gemini_api_key = getenv("GEMINI_API_KEY", "").strip()
+    gemini_enabled_value = getenv("GEMINI_ENABLED")
+    gemini_enabled = (
+        bool(gemini_api_key)
+        if gemini_enabled_value is None
+        else gemini_enabled_value.lower() in {"1", "true", "yes", "on"}
+    )
     return Settings(
         debug=getenv("EMSALIST_DEBUG", "false").lower() in {"1", "true", "yes"},
         max_ranked_decisions=int(getenv("EMSALIST_MAX_RANKED_DECISIONS", "10")),
-        gemini_enabled=getenv("GEMINI_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
-        gemini_api_key=getenv("GEMINI_API_KEY", ""),
+        gemini_enabled=gemini_enabled,
+        gemini_api_key=gemini_api_key,
         gemini_model=getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         gemini_timeout_seconds=int(getenv("GEMINI_TIMEOUT_SECONDS", "30")),
     )

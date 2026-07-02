@@ -31,11 +31,12 @@ class GeminiClient:
         prompt: str,
         fallback: dict[str, Any],
         use_gemini: bool = True,
+        respect_enabled_flag: bool = True,
     ) -> GeminiJSONResult:
         settings = get_settings()
         if not use_gemini:
             return GeminiJSONResult(ai_used=False, data=fallback, warnings=["Gemini isteği kullanıcı tercihiyle kapalı."])
-        if not settings.gemini_enabled:
+        if respect_enabled_flag and not settings.gemini_enabled:
             return GeminiJSONResult(ai_used=False, data=fallback, warnings=["Gemini kapalı; kural tabanlı fallback kullanıldı."])
         if not settings.gemini_api_key:
             return GeminiJSONResult(ai_used=False, data=fallback, warnings=["GEMINI_API_KEY tanımlı değil; fallback kullanıldı."])
