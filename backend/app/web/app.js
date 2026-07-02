@@ -102,6 +102,25 @@ let uiBusy = false;
 let reviewWorkflowComplete = false;
 let pendingPreliminaryDraftOptions = null;
 
+const DEFAULT_MAX_RESULTS = "5";
+const DEFAULT_REQUEST_TYPE = "Talebimizin kabul\u00fc";
+const DEFAULT_ACTIVE_CASE_LOADING_LABEL = "Aktif Dosya: haz\u0131rlan\u0131yor";
+const DEFAULT_ACTIVE_CASE_EMPTY_LABEL = "Aktif Dosya: bilinmiyor";
+const DEFAULT_NEW_CASE_LABEL = "Yeni Dosya Ba\u015flat";
+const DEFAULT_NEW_CASE_STATUS = "Yeni dosya ba\u015flat\u0131ld\u0131.";
+const DEFAULT_ANALYSIS_EMPTY = "Hen\u00fcz analiz yok.";
+const DEFAULT_BRAIN_EMPTY = "Hen\u00fcz kaynak sonucu yok.";
+const DEFAULT_DECISION_EMPTY = "Hen\u00fcz emsal aramas\u0131 yap\u0131lmad\u0131.";
+const DEFAULT_RISK_EMPTY = "Hen\u00fcz risk de\u011ferlendirmesi yok.";
+const DEFAULT_STRATEGY_EMPTY = "Hen\u00fcz strateji haz\u0131rlanmad\u0131.";
+const DEFAULT_CLIENT_QUESTIONS_EMPTY = "Sorular hen\u00fcz haz\u0131rlanmad\u0131.";
+const DEFAULT_DEFENSE_EMPTY = "Hen\u00fcz savunma sim\u00fclasyonu yok.";
+const DEFAULT_OFFICIAL_SOURCES_EMPTY = "Hen\u00fcz resm\u00ee kaynak takibi yok.";
+const DEFAULT_DOCUMENTS_EMPTY = "Hen\u00fcz dosya evrak\u0131 eklenmedi.";
+const DEFAULT_DOCUMENT_GROUNDING_EMPTY = "Dilek\u00e7e i\u00e7in hen\u00fcz analiz edilmi\u015f belge yok.";
+const DEFAULT_DRAFT_EMPTY = "Hen\u00fcz nihai dilek\u00e7e tasla\u011f\u0131 olu\u015fturulmad\u0131.";
+const DEFAULT_EVIDENCE_EMPTY = "Hen\u00fcz analiz edilmi\u015f belge delili yok.";
+
 const DOCUMENT_FACT_LABELS = {
   court: "Mahkeme",
   case_number: "Dosya numarası",
@@ -3111,6 +3130,140 @@ function wireEvents() {
     reviewWorkflowComplete = false;
   });
   els.documentApproval.addEventListener("change", updateFinalPetitionReadiness);
+}
+
+function ensureCaseControls() {
+  const nav = document.querySelector(".top-actions");
+  if (!nav) return;
+
+  let badge = document.getElementById("activeCaseBadge");
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.id = "activeCaseBadge";
+    badge.className = "status-pill";
+    nav.insertBefore(badge, els.healthPill || null);
+  }
+  badge.textContent = activeCaseId ? `Aktif Dosya: ${activeCaseId}` : DEFAULT_ACTIVE_CASE_LOADING_LABEL;
+
+  let button = document.getElementById("newCaseBtn");
+  if (!button) {
+    button = document.createElement("button");
+    button.id = "newCaseBtn";
+    button.type = "button";
+    button.className = "ghost-btn";
+    nav.insertBefore(button, els.healthPill || null);
+  }
+  button.textContent = DEFAULT_NEW_CASE_LABEL;
+}
+
+function renderActiveCaseBadge() {
+  const badge = document.getElementById("activeCaseBadge");
+  if (!badge) return;
+  badge.textContent = activeCaseId ? `Aktif Dosya: ${activeCaseId}` : DEFAULT_ACTIVE_CASE_EMPTY_LABEL;
+}
+
+async function initializeCaseSession() {
+  ensureCaseControls();
+  const current = await apiFetch("/case/current");
+  if (!current.ok) throw new Error("Aktif dosya bilgisi alınamadı.");
+  const data = await current.json();
+  activeCaseId = data.case_id || null;
+  renderActiveCaseBadge();
+}
+
+function resetCaseUiState({ preserveCaseId = true, clearStatus = true } = {}) {
+  if (!preserveCaseId) {
+    activeCaseId = null;
+  }
+
+  els.caseText.value = "";
+  els.practiceArea.value = "";
+  els.maxResults.value = DEFAULT_MAX_RESULTS;
+  els.requestType.value = DEFAULT_REQUEST_TYPE;
+
+  lastDecisions = [];
+  lastBrainResults = [];
+  lastCaseEnrichment = null;
+  lastBetterSearches = null;
+  lastDraftData = null;
+  lastDraftAudit = null;
+  lastSourceAudit = null;
+  lastPrecedentAudit = null;
+  lastYargitaySearch = null;
+  lastDocuments = [];
+  lastDocumentAnalysis = null;
+  reviewWorkflowComplete = false;
+  pendingPreliminaryDraftOptions = null;
+  selectedDocumentFiles = [];
+
+  els.documentFiles.value = "";
+  els.documentType.value = "";
+  els.documentApproval.checked = false;
+  els.draftReadinessIssues.innerHTML = "";
+  if (els.draftReadinessDialog.open) {
+    els.draftReadinessDialog.close();
+  }
+
+  resetQuestions();
+  setCaseState(null);
+
+  els.analysisCount.textContent = "0";
+  els.brainCount.textContent = "0";
+  els.decisionCount.textContent = "0";
+  els.riskCount.textContent = "0";
+  els.strategyCount.textContent = "0";
+  els.defenseCount.textContent = "0";
+  els.officialSourceCount.textContent = "0";
+  els.evidenceCount.textContent = "0";
+
+  els.analysisOutput.className = "empty-state";
+  els.analysisOutput.textContent = DEFAULT_ANALYSIS_EMPTY;
+  els.brainOutput.className = "empty-state";
+  els.brainOutput.textContent = DEFAULT_BRAIN_EMPTY;
+  els.decisionOutput.className = "empty-state";
+  els.decisionOutput.textContent = DEFAULT_DECISION_EMPTY;
+  els.draftOutput.textContent = "";
+  els.riskOutput.className = "empty-state";
+  els.riskOutput.textContent = DEFAULT_RISK_EMPTY;
+  els.strategyTabOutput.className = "empty-state";
+  els.strategyTabOutput.textContent = DEFAULT_STRATEGY_EMPTY;
+  els.clientQuestionsOutput.className = "empty-state";
+  els.clientQuestionsOutput.textContent = DEFAULT_CLIENT_QUESTIONS_EMPTY;
+  els.defenseOutput.className = "empty-state";
+  els.defenseOutput.textContent = DEFAULT_DEFENSE_EMPTY;
+  els.officialSourcesOutput.className = "empty-state";
+  els.officialSourcesOutput.textContent = DEFAULT_OFFICIAL_SOURCES_EMPTY;
+  els.evidenceOutput.className = "empty-state";
+  els.evidenceOutput.textContent = DEFAULT_EVIDENCE_EMPTY;
+
+  renderDocuments();
+  renderDocumentSelection();
+  updateFinalPetitionReadiness();
+  switchTab("summary");
+  renderActiveCaseBadge();
+
+  if (clearStatus) {
+    setStatus("");
+  }
+}
+
+function clearAll() {
+  resetCaseUiState({ preserveCaseId: true, clearStatus: true });
+}
+
+async function startNewCase() {
+  setBusy(true, "Yeni dosya oluşturuluyor...");
+  try {
+    const data = await apiPost("/case/new", {});
+    activeCaseId = data.case_id || activeCaseId;
+    resetCaseUiState({ preserveCaseId: true, clearStatus: true });
+    await loadDocuments();
+    renderActiveCaseBadge();
+    setStatus(DEFAULT_NEW_CASE_STATUS);
+    return data;
+  } finally {
+    setBusy(false);
+  }
 }
 
 wireEvents();

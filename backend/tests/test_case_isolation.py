@@ -43,6 +43,21 @@ class CaseIsolationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()["case_id"]
 
+    def test_new_case_returns_unique_ids_and_starts_empty(self) -> None:
+        case_a = self._new_case()
+        case_b = self._new_case()
+
+        self.assertNotEqual(case_a, case_b)
+
+        state_b = self.client.get(f"/case/state?case_id={case_b}")
+        self.assertEqual(state_b.status_code, 200, state_b.text)
+        payload = state_b.json()
+        self.assertEqual(payload["case_id"], case_b)
+        self.assertEqual(payload["documents"], [])
+        self.assertEqual(payload["document_facts"], [])
+        self.assertEqual(payload["question_answers"], {})
+        self.assertEqual(payload["final_precedents"], [])
+
     def test_case_b_does_not_see_case_a_document_or_fact(self) -> None:
         case_a = self._new_case()
         upload = self.client.post(
