@@ -21,6 +21,7 @@ const els = {
   petitionReadinessNotice: $("petitionReadinessNotice"),
   riskOutput: $("riskOutput"),
   strategyTabOutput: $("strategyTabOutput"),
+  legalIssueGraphOutput: $("legalIssueGraphOutput"),
   clientQuestionsOutput: $("clientQuestionsOutput"),
   defenseOutput: $("defenseOutput"),
   officialSourcesOutput: $("officialSourcesOutput"),
@@ -96,6 +97,7 @@ let lastYargitaySearch = null;
 let lastDocuments = [];
 let lastDocumentAnalysis = null;
 let lastCaseState = null;
+let lastLegalIssueGraph = null;
 /** @type {File[]} Gerçek File objelerini saklar, plain object değil. */
 let selectedDocumentFiles = [];
 let uiBusy = false;
@@ -113,6 +115,7 @@ const DEFAULT_BRAIN_EMPTY = "Hen\u00fcz kaynak sonucu yok.";
 const DEFAULT_DECISION_EMPTY = "Hen\u00fcz emsal aramas\u0131 yap\u0131lmad\u0131.";
 const DEFAULT_RISK_EMPTY = "Hen\u00fcz risk de\u011ferlendirmesi yok.";
 const DEFAULT_STRATEGY_EMPTY = "Hen\u00fcz strateji haz\u0131rlanmad\u0131.";
+const DEFAULT_LEGAL_ISSUE_GRAPH_EMPTY = "Hen\u00fcz hukuki mesele haritas\u0131 yok.";
 const DEFAULT_CLIENT_QUESTIONS_EMPTY = "Sorular hen\u00fcz haz\u0131rlanmad\u0131.";
 const DEFAULT_DEFENSE_EMPTY = "Hen\u00fcz savunma sim\u00fclasyonu yok.";
 const DEFAULT_OFFICIAL_SOURCES_EMPTY = "Hen\u00fcz resm\u00ee kaynak takibi yok.";
@@ -2035,6 +2038,66 @@ function defenseSimulationItems() {
   ];
 }
 
+function renderLegalIssueGraph() {
+  const graph = lastLegalIssueGraph;
+  const output = els.legalIssueGraphOutput;
+  if (!output) return;
+  if (!graph || !Array.isArray(graph.issues) || !graph.issues.length) {
+    output.style.display = "none";
+    return;
+  }
+  output.style.display = "block";
+  output.className = "legal-issue-graph";
+  const issueCards = graph.issues.map((issue) => {
+    const riskLabel = riskLevelLabel(issue.risk_level || "low");
+    const riskClass = plainText(riskLabel).includes("yuksek") ? "danger" : plainText(riskLabel).includes("orta") ? "warning" : "info";
+    const missingFacts = (issue.missing_facts || []).filter(Boolean);
+    const missingEvidence = (issue.missing_evidence || []).filter(Boolean);
+    const clientQuestions = (issue.client_questions || []).filter(Boolean);
+    const petitionArg = issue.petition_argument || "";
+    return `
+      <div class="result-item">
+        <h3>Hukuki Mesele: ${escapeHtml(issue.title || "Belirtilmemiş")}</h3>
+        <div class="meta-row">
+          <span class="chip ${riskClass}">Risk: ${escapeHtml(riskLabel)}</span>
+        </div>
+        <ol class="compact-list">
+          ${missingFacts.length ? `<li><strong>Eksik vakıa:</strong> ${escapeHtml(missingFacts.join("; "))}</li>` : ""}
+          ${missingEvidence.length ? `<li><strong>Eksik delil:</strong> ${escapeHtml(missingEvidence.join("; "))}</li>` : ""}
+          ${clientQuestions.length ? `<li><strong>Sorulacak soru:</strong> ${escapeHtml(clientQuestions[0])}</li>` : ""}
+          ${petitionArg ? `<li><strong>Dilekçe argümanı:</strong> ${escapeHtml(petitionArg)}</li>` : ""}
+        </ol>
+      </div>
+    `;
+  }).join("");
+  output.innerHTML = `
+    <div class="section-head" style="margin-top:1.5rem">
+      <h3>Hukuki Mesele Haritası</h3>
+    </div>
+    ${issueCards}
+  `;
+}
+
+async function fetchLegalIssueGraph() {
+  if (!activeCaseId) return null;
+  try {
+    const data = await apiFetch(caseQuery("/case/legal-issue-graph"));
+    if (!data.ok) {
+      lastLegalIssueGraph = null;
+      renderLegalIssueGraph();
+      return null;
+    }
+    const graph = await data.json();
+    lastLegalIssueGraph = graph && typeof graph === "object" ? graph : null;
+    renderLegalIssueGraph();
+    return lastLegalIssueGraph;
+  } catch {
+    lastLegalIssueGraph = null;
+    renderLegalIssueGraph();
+    return null;
+  }
+}
+
 function renderStrategyToolkit() {
   const caseState = currentCaseState();
   const questionPlan = caseStatePlanItems(caseState, "question_plan");
@@ -3204,6 +3267,8 @@ function resetCaseUiState({ preserveCaseId = true, clearStatus = true } = {}) {
     els.draftReadinessDialog.close();
   }
 
+  lastLegalIssueGraph = null;
+
   resetQuestions();
   setCaseState(null);
 
@@ -3270,5 +3335,8 @@ wireEvents();
 renderOfficialSourcesStatus();
 checkHealth();
 initializeCaseSession()
-  .then(() => loadDocuments())
+  .then(() => {
+    loadDocuments();
+    fetchLegalIssueGraph();
+  })
   .catch((error) => setStatus(error.message, true));
