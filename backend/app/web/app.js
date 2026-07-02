@@ -1185,8 +1185,11 @@ function renderDecisions(data) {
       ? "Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."
       : "Bu dosya için uygun ve güvenli emsal bulunamadı. Konu dışı kararlar filtrelendi.";
     const resolvedInfoMessage = (data.errors || []).length ? precedentSearchMessage(data.errors || []) : infoMessage;
+    const fallbackNote = lastBrainResults.length
+      ? "<p>Yargıtay canlı araması sonuç döndürmedi. Legal Brain yerel kaynaklarıyla devam edildi.</p>"
+      : "";
     els.decisionOutput.className = "result-list";
-    els.decisionOutput.innerHTML = `<div class="result-item"><h3>Emsal sonucu</h3><p>${escapeHtml(resolvedInfoMessage)}</p></div>`;
+    els.decisionOutput.innerHTML = `<div class="result-item"><h3>Emsal sonucu</h3><p>${escapeHtml(resolvedInfoMessage)}</p>${fallbackNote}</div>`;
     return;
   }
   els.decisionOutput.className = "result-list";

@@ -16,6 +16,7 @@ from app.services.decision_ranker import decision_ranker
 from app.services.legal_summary_service import legal_summary_service
 from app.services.precedent_analysis_service import precedent_analysis_service
 from app.services.search_builder import search_builder
+from app.services.yargitay_search_service import build_vehicle_yargitay_queries, sanitize_yargitay_query
 from app.services.yargitay_scraper import yargitay_scraper
 
 
@@ -31,6 +32,8 @@ VEHICLE_YARGITAY_FALLBACK_QUERIES = (
     '"ayıplı araç" "servis raporu"',
     '"gizli ayıp" "ayıp ihbarı"',
 )
+VEHICLE_YARGITAY_QUERY_PLAN = tuple(build_vehicle_yargitay_queries())
+
 POVERTY_ALIMONY_PRIORITY_QUERIES = (
     '"yoksulluk nafakası" "nafakanın kaldırılması"',
     '"yoksulluk nafakası" "nafaka indirimi"',
@@ -84,7 +87,7 @@ class ResearchService:
             generated_queries=query_response.queries,
             preferred_queries=yargitay_query_templates or [],
         )
-        fallback_query_used = any(query in queries for query in VEHICLE_YARGITAY_FALLBACK_QUERIES)
+        fallback_query_used = any(query in queries for query in VEHICLE_YARGITAY_QUERY_PLAN[3:])
         logger.info("yargitay_search_started queries=%s fallback_query_used=%s", queries, fallback_query_used)
 
         scraper_response = await self.scraper.search(
@@ -223,10 +226,10 @@ class ResearchService:
         )
 
         if preferred_queries:
-            queries = list(preferred_queries)
-            queries.extend(generated_queries)
+            queries = [sanitize_yargitay_query(query) for query in preferred_queries]
+            queries.extend(sanitize_yargitay_query(query) for query in generated_queries)
             if is_vehicle_case:
-                queries.extend(VEHICLE_YARGITAY_FALLBACK_QUERIES)
+                queries.extend(VEHICLE_YARGITAY_QUERY_PLAN)
             return self._dedupe_queries(queries)[:RESEARCH_QUERY_LIMIT]
 
         if self._is_poverty_alimony_case(
@@ -243,11 +246,11 @@ class ResearchService:
             return self._dedupe_queries(queries)[:RESEARCH_QUERY_LIMIT]
 
         if is_vehicle_case:
-            queries = list(VEHICLE_YARGITAY_FALLBACK_QUERIES)
-            queries.extend(generated_queries)
-            return self._dedupe_queries(queries)[:RESEARCH_QUERY_LIMIT]
+            queries = list(VEHICLE_YARGITAY_QUERY_PLAN)
+            queries.extend(sanitize_yargitay_query(query) for query in generated_queries)
+            return self._dedupe_queries(queries)[:5]
 
-        return self._dedupe_queries(generated_queries)[:RESEARCH_QUERY_LIMIT]
+        return self._dedupe_queries([sanitize_yargitay_query(query) for query in generated_queries])[:RESEARCH_QUERY_LIMIT]
 
     def _to_rankable_decisions(
         self,
@@ -367,7 +370,7 @@ class ResearchService:
         result: list[str] = []
         seen: set[str] = set()
         for query in queries:
-            cleaned = " ".join(query.split())
+            cleaned = sanitize_yargitay_query(query)
             key = cleaned.casefold()
             if cleaned and key not in seen:
                 seen.add(key)
