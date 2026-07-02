@@ -478,6 +478,9 @@ function switchTab(tabName) {
   document.querySelectorAll("[data-tab-panel]").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.tabPanel === tabName);
   });
+  if (tabName === "strategy" || tabName === "risks") {
+    fetchLegalIssueGraph();
+  }
 }
 
 function cleanOutputText(value, fallback = "") {
@@ -2894,6 +2897,7 @@ async function runFullReview() {
       qualityScore: null,
     });
     reviewWorkflowComplete = true;
+    fetchLegalIssueGraph();
     updateFinalPetitionReadiness();
     switchTab("summary");
     setStatus("Kaynak ve emsal incelemesi hazır. Soru kartlarını cevaplayıp son kartta Dilekçeyi Hazırla'ya bas.");
@@ -3268,6 +3272,7 @@ function resetCaseUiState({ preserveCaseId = true, clearStatus = true } = {}) {
   }
 
   lastLegalIssueGraph = null;
+  renderLegalIssueGraph();
 
   resetQuestions();
   setCaseState(null);
