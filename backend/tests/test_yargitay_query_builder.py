@@ -155,6 +155,8 @@ class YargitayQueryBuilderTests(unittest.TestCase):
         self.assertTrue(response["fallback_query_used"])
         self.assertTrue(response["skipped_due_to_rate_limit"])
         self.assertIn("hız sınırı", response["user_message"])
+        self.assertEqual(response["source_summary"]["live_yargitay_count"], 0)
+        self.assertEqual(response["failure_reason"], "rate_limited")
 
 
 if __name__ == "__main__":

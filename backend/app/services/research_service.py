@@ -69,8 +69,10 @@ class ResearchService:
         case_text: str,
         max_results: int,
         yargitay_query_templates: list[str] | None = None,
+        case_enrichment: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         effective_max_results = min(max(max_results, 1), RESEARCH_MAX_RESULTS_CAP)
+        case_enrichment = case_enrichment or {}
         case_analysis = self.analyzer.analyze(case_text)
         is_vehicle_case = self._is_vehicle_case(
             case_text=case_text,
@@ -98,6 +100,7 @@ class ResearchService:
             preferred_queries=yargitay_query_templates or [],
         )
         logger.info("yargitay_queries_final=%s", queries)
+        logger.info("yargitay_live_attempt_started=%s", True)
 
         scraper_response = await self.scraper.search(
             queries=queries,
@@ -105,6 +108,7 @@ class ResearchService:
         )
         errors = list(scraper_response.errors)
         attempted_queries = list(scraper_response.attempted_queries or queries)
+        attempted_query_count = len(attempted_queries)
         fallback_queries = [
             query for query in attempted_queries if query in VEHICLE_YARGITAY_QUERY_PLAN[3:]
         ]
@@ -112,12 +116,16 @@ class ResearchService:
         skipped_due_to_rate_limit = bool(
             scraper_response.skipped_due_to_rate_limit or any(self._is_rate_limit_error(error) for error in errors)
         )
+        raw_live_result_count = int(scraper_response.raw_live_result_count or 0)
+        parsed_live_result_count = int(scraper_response.parsed_live_result_count or len(scraper_response.results))
         logger.info(
             "yargitay_search_started attempted_queries=%s fallback_query_used=%s skipped_due_to_rate_limit=%s",
             attempted_queries,
             fallback_query_used,
             skipped_due_to_rate_limit,
         )
+        logger.info("raw_live_result_count=%s", raw_live_result_count)
+        logger.info("parsed_live_result_count=%s", parsed_live_result_count)
         logger.info("yargitay_result_count=%s", len(scraper_response.results))
         if errors:
             logger.warning("yargitay_error=%s", errors)
@@ -137,7 +145,7 @@ class ResearchService:
         for item in rankable_decisions:
             decisions_by_identity.setdefault(item["identity"], []).append(item["decision"])
 
-        top_decisions: list[dict[str, Any]] = []
+        live_yargitay_results: list[dict[str, Any]] = []
         for ranked_item in ranked_items:
             matching_decisions = decisions_by_identity.get(ranked_item.decision_identity) or []
             if not matching_decisions:
@@ -178,7 +186,7 @@ class ResearchService:
                 },
             )
 
-            top_decisions.append(
+            live_yargitay_results.append(
                 {
                     "similarity_score": final_score,
                     "usefulness_score": self.summarizer.usefulness_label(
@@ -202,6 +210,8 @@ class ResearchService:
                     "precedent_id": analysis.precedent_id,
                     "citation": analysis.citation,
                     "verification_status": analysis.verification_status,
+                    "source_type": "yargitay_live",
+                    "official_verification_status": "verified_live",
                     "similarity_reasons": analysis.similarity_reasons,
                     "shared_facts": analysis.shared_facts,
                     "shared_legal_issues": analysis.shared_legal_issues,
@@ -213,32 +223,78 @@ class ResearchService:
                 }
             )
 
-        top_decisions.sort(key=lambda item: item["similarity_score"], reverse=True)
-        top_decisions = self._dedupe_top_decisions(top_decisions)
+        live_yargitay_results.sort(key=lambda item: item["similarity_score"], reverse=True)
+        live_yargitay_results = self._dedupe_top_decisions(live_yargitay_results)
 
-        if scraper_response.results and not top_decisions:
+        if scraper_response.results and not live_yargitay_results:
             errors.append("Sıralama için yeterli karar metni bulunamadı.")
 
-        final_precedent_count = len(top_decisions[:5])
+        final_live_result_count = len(live_yargitay_results[:5])
+        failure_reason = str(scraper_response.failure_reason or "")
+        if not failure_reason:
+            if skipped_due_to_rate_limit:
+                failure_reason = "rate_limited"
+            elif raw_live_result_count > 0 and parsed_live_result_count == 0:
+                failure_reason = "parser_failed"
+            elif scraper_response.official_yargitay_reached and raw_live_result_count == 0:
+                failure_reason = "no_results"
+        if parsed_live_result_count > 0 and final_live_result_count == 0:
+            failure_reason = "filtered_all"
+        fallback_precedents, fallback_source = self._fallback_precedents(
+            case_enrichment=case_enrichment,
+            use_fallback=final_live_result_count == 0,
+        )
+        if final_live_result_count == 0 and fallback_precedents and not failure_reason:
+            failure_reason = "no_results"
+        final_precedents = live_yargitay_results[:5] if final_live_result_count else fallback_precedents[:5]
+        source_summary = {
+            "live_yargitay_count": final_live_result_count,
+            "legal_brain_fallback_count": len([item for item in fallback_precedents if item.get("source_type") == "legal_brain"]),
+            "local_seed_count": len([item for item in fallback_precedents if item.get("source_type") == "local_seed"]),
+            "official_yargitay_reached": bool(scraper_response.official_yargitay_reached),
+            "official_yargitay_returned_results": bool(scraper_response.official_yargitay_returned_results),
+            "used_fallback": bool(final_live_result_count == 0 and fallback_precedents),
+        }
         user_message = self._build_user_message(
             skipped_due_to_rate_limit=skipped_due_to_rate_limit,
             has_errors=bool(errors),
-            final_precedent_count=final_precedent_count,
+            final_precedent_count=len(final_precedents),
+            used_fallback=source_summary["used_fallback"],
+            source_summary=source_summary,
         )
-        logger.info("final_precedent_count=%s", final_precedent_count)
+        logger.info("final_live_result_count=%s", final_live_result_count)
+        logger.info("failure_reason=%s", failure_reason)
+        logger.info("used_fallback=%s", source_summary["used_fallback"])
+        logger.info("fallback_source=%s", fallback_source)
         return {
             "case_analysis": case_analysis.model_dump(),
             "queries": queries,
             "generated_queries": generated_queries_filtered,
             "attempted_queries": attempted_queries,
             "fallback_queries": fallback_queries,
+            "attempted_query_count": attempted_query_count,
             "yargitay_search_started": True,
-            "yargitay_result_count": len(scraper_response.results),
+            "yargitay_result_count": parsed_live_result_count,
+            "raw_live_result_count": raw_live_result_count,
+            "parsed_live_result_count": parsed_live_result_count,
+            "final_live_result_count": final_live_result_count,
             "fallback_query_used": fallback_query_used,
             "skipped_due_to_rate_limit": skipped_due_to_rate_limit,
+            "failure_reason": failure_reason,
             "user_message": user_message,
-            "final_precedent_count": final_precedent_count,
-            "top_decisions": top_decisions[:5],
+            "final_precedent_count": len(final_precedents),
+            "live_yargitay_results": live_yargitay_results[:5],
+            "fallback_precedents": fallback_precedents[:5],
+            "final_precedents": final_precedents,
+            "source_summary": source_summary,
+            "debug_source_summary": {
+                "failure_reason": failure_reason,
+                "fallback_source": fallback_source,
+                "raw_live_result_count": raw_live_result_count,
+                "parsed_live_result_count": parsed_live_result_count,
+                "final_live_result_count": final_live_result_count,
+            },
+            "top_decisions": final_precedents,
             "errors": errors,
         }
 
@@ -449,15 +505,74 @@ class ResearchService:
         normalized = ResearchService._plain(error)
         return "hiz siniri" in normalized or "rate limit" in normalized or "http 429" in normalized
 
+    def _fallback_precedents(
+        self,
+        *,
+        case_enrichment: dict[str, Any],
+        use_fallback: bool,
+    ) -> tuple[list[dict[str, Any]], str]:
+        if not use_fallback:
+            return [], "none"
+        candidates = list(case_enrichment.get("fallback_precedent_candidates") or [])
+        if not candidates:
+            return [], "none"
+        result: list[dict[str, Any]] = []
+        for index, item in enumerate(candidates, start=1):
+            title = str(item.get("title") or item.get("citation_label") or item.get("source_id") or f"Yerel kaynak adayı {index}").strip()
+            paragraph = str(
+                item.get("usable_argument")
+                or item.get("doctrine_principle")
+                or item.get("chunk_preview")
+                or item.get("summary")
+                or "Canlı Yargıtay doğrulaması yapılamayan yerel kaynak adayı."
+            ).strip()
+            result.append(
+                {
+                    "similarity_score": 20,
+                    "usefulness_score": "Düşük",
+                    "source": "Legal Brain",
+                    "source_type": "legal_brain",
+                    "official_verification_status": "not_verified",
+                    "court": str(item.get("court") or "Legal Brain yerel kaynak"),
+                    "esas_no": str(item.get("esas_no") or "-"),
+                    "karar_no": str(item.get("karar_no") or "-"),
+                    "date": str(item.get("date") or item.get("decision_date") or "-"),
+                    "title": title,
+                    "detail_url": str(item.get("detail_url") or item.get("url") or ""),
+                    "short_summary": paragraph,
+                    "legal_principle": paragraph,
+                    "why_relevant": str(item.get("relevance_reason") or "Canlı Yargıtay doğrulaması yapılamadı; yerel kaynak adayı olarak ayrıldı."),
+                    "lehe_aleyhe": "Nötr",
+                    "petition_paragraph": paragraph,
+                    "clean_text_preview": paragraph,
+                    "precedent_id": str(item.get("source_id") or title),
+                    "citation": str(item.get("citation_label") or title),
+                    "verification_status": "verification_required_precedent_candidate",
+                    "similarity_reasons": [],
+                    "shared_facts": [],
+                    "shared_legal_issues": [],
+                    "supported_arguments": [],
+                    "evidence_connection": [],
+                    "distinguishing_risks": ["Canlı Yargıtay doğrulaması yapılamadı."],
+                    "recommended_use": "Resmi doğrulama yapılmadan kesin emsal gibi kullanılmamalıdır.",
+                    "confidence_score": 20,
+                }
+            )
+        return result[:5], "legal_brain"
+
     @staticmethod
     def _build_user_message(
         *,
         skipped_due_to_rate_limit: bool,
         has_errors: bool,
         final_precedent_count: int,
+        used_fallback: bool,
+        source_summary: dict[str, Any],
     ) -> str:
         if skipped_due_to_rate_limit:
             return "Yargıtay geçici hız sınırı uyguladı; mevcut yerel analizle devam edildi."
+        if source_summary.get("live_yargitay_count", 0) == 0 and used_fallback:
+            return "Canlı Yargıtay araması sonuç döndürmedi. Legal Brain yerel kaynak adaylarıyla devam edildi."
         if has_errors and final_precedent_count == 0:
             return "Yargıtay canlı araması sonuç döndürmedi; yerel hukuki analizle devam edildi."
         return ""

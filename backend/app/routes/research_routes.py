@@ -24,6 +24,8 @@ class ResearchDecisionOutput(BaseModel):
     similarity_score: int = Field(ge=0, le=100)
     usefulness_score: str
     source: str
+    source_type: str = "unknown"
+    official_verification_status: str = "not_verified"
     court: str
     esas_no: str
     karar_no: str
@@ -49,18 +51,45 @@ class ResearchDecisionOutput(BaseModel):
     confidence_score: int = Field(ge=0, le=100)
 
 
+class ResearchSourceSummary(BaseModel):
+    live_yargitay_count: int = 0
+    legal_brain_fallback_count: int = 0
+    local_seed_count: int = 0
+    official_yargitay_reached: bool = False
+    official_yargitay_returned_results: bool = False
+    used_fallback: bool = False
+
+
+class ResearchDebugSourceSummary(BaseModel):
+    failure_reason: str = ""
+    fallback_source: str = "none"
+    raw_live_result_count: int = 0
+    parsed_live_result_count: int = 0
+    final_live_result_count: int = 0
+
+
 class ResearchYargitayResponse(BaseModel):
     case_analysis: CaseAnalyzeResponse
     queries: list[str]
     generated_queries: list[str] = Field(default_factory=list)
     attempted_queries: list[str] = Field(default_factory=list)
     fallback_queries: list[str] = Field(default_factory=list)
+    attempted_query_count: int = 0
     yargitay_search_started: bool = False
     yargitay_result_count: int = 0
+    raw_live_result_count: int = 0
+    parsed_live_result_count: int = 0
+    final_live_result_count: int = 0
     fallback_query_used: bool = False
     skipped_due_to_rate_limit: bool = False
+    failure_reason: str = ""
     user_message: str = ""
     final_precedent_count: int = 0
+    live_yargitay_results: list[ResearchDecisionOutput] = Field(default_factory=list)
+    fallback_precedents: list[ResearchDecisionOutput] = Field(default_factory=list)
+    final_precedents: list[ResearchDecisionOutput] = Field(default_factory=list)
+    source_summary: ResearchSourceSummary = Field(default_factory=ResearchSourceSummary)
+    debug_source_summary: ResearchDebugSourceSummary = Field(default_factory=ResearchDebugSourceSummary)
     top_decisions: list[ResearchDecisionOutput]
     errors: list[str]
 
@@ -76,4 +105,5 @@ async def research_yargitay(request: ResearchYargitayRequest) -> dict:
         yargitay_query_templates=request.yargitay_query_templates
         or request.case_enrichment.get("yargitay_query_templates")
         or [],
+        case_enrichment=request.case_enrichment,
     )

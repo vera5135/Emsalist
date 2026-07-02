@@ -1155,6 +1155,64 @@ function cleanDecisionText(value, fallback = CLEAN_PRECEDENT_EXPLANATION) {
   return text;
 }
 
+function legalBrainFallbackCandidates() {
+  return (lastBrainResults || [])
+    .filter((item) => item.is_directly_relevant !== false && cleanOutputText(item.usable_argument) !== UNRELATED_ARGUMENT)
+    .slice(0, 5)
+    .map((item, index) => ({
+      source_id: item.source_id || `legal_brain_${index + 1}`,
+      title: item.title || item.section_title || item.citation_label || `Legal Brain kaynak ${index + 1}`,
+      citation_label: item.citation_label || item.title || "",
+      usable_argument: item.usable_argument || item.doctrine_principle || item.chunk_preview || "",
+      relevance_reason: item.relevance_reason || item.reason || "",
+      detail_url: item.detail_url || item.url || "",
+      source_type: "legal_brain",
+    }));
+}
+
+function decisionSourceLabel(item) {
+  const sourceType = item.source_type || "unknown";
+  if (sourceType === "yargitay_live") return "Canl? Yarg?tay sonucu";
+  if (sourceType === "legal_brain") return "Legal Brain yerel kaynak aday? ? canl? Yarg?tay do?rulamas? yap?lmad?";
+  if (sourceType === "local_seed") return "Yerel emsal aday? ? canl? Yarg?tay do?rulamas? yap?lmad?";
+  if (sourceType === "manual_uploaded") return "Elle y?klenen karar aday?";
+  return "Kayna?? s?n?rl? emsal aday?";
+}
+
+function renderDecisionCard(item, groupTitle) {
+  const title = item.title || `${item.court || "Karar"} ${item.esas_no || ""}`;
+  const detailLink = item.detail_url ? `<a href="${escapeHtml(item.detail_url)}" target="_blank" rel="noreferrer">Detay</a>` : "";
+  const paragraph = cleanDecisionParagraph(item);
+  const sourceLabel = decisionSourceLabel(item);
+  const verification = item.official_verification_status || "not_verified";
+  const showScores = (item.source_type || "unknown") === "yargitay_live";
+  const scores = showScores ? decisionScoreBreakdown(item) : null;
+  return `
+    <div class="result-item">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="meta-row">
+        <span class="chip blue">${escapeHtml(groupTitle)}</span>
+        <span class="chip">${escapeHtml(sourceLabel)}</span>
+        <span class="chip">${escapeHtml(verification)}</span>
+        ${detailLink ? `<span class="chip">${detailLink}</span>` : ""}
+      </div>
+      <ol class="compact-list">
+        <li><strong>?zet:</strong> ${escapeHtml(cleanOutputText(item.short_summary || paragraph, DEFAULT_PRECEDENT_PARAGRAPH))}</li>
+        <li><strong>Kaynak durumu:</strong> ${escapeHtml(sourceLabel)}</li>
+        <li><strong>Resm? do?rulama:</strong> ${escapeHtml(verification)}</li>
+        <li><strong>Somut olaya ba?lant?:</strong> ${escapeHtml(item.why_relevant || paragraph)}</li>
+      </ol>
+      ${showScores && scores ? `<div class="score-grid">
+        <span>Benzerlik: ${scores.similarity}</span>
+        <span>Hukuki uygunluk: ${scores.legalFit}</span>
+        <span>G?ncellik: ${scores.recency}</span>
+        <span>Risk: ${scores.riskLevel}</span>
+        <span>Genel g??: ${scores.strength}</span>
+      </div>` : ""}
+    </div>
+  `;
+}
+
 function decisionScoreBreakdown(item) {
   const similarity = Math.max(0, Math.min(100, Number(item.similarity_score ?? 55)));
   const plain = plainText(`${item.short_summary || ""} ${item.legal_principle || ""} ${item.petition_paragraph || ""} ${item.lehe_aleyhe || ""}`);
@@ -1177,67 +1235,38 @@ function decisionScoreBreakdown(item) {
 }
 
 function renderDecisions(data) {
-  const decisions = data.top_decisions || [];
+  lastYargitaySearch = data;
+  const liveResults = data.live_yargitay_results || [];
+  const fallbackResults = data.fallback_precedents || [];
+  const decisions = data.final_precedents || data.top_decisions || [];
+  const summary = data.source_summary || {};
   lastDecisions = decisions;
   els.decisionCount.textContent = String(decisions.length);
-  if (!decisions.length) {
-    const infoMessage = (data.errors || []).length
-      ? "Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."
-      : "Bu dosya için uygun ve güvenli emsal bulunamadı. Konu dışı kararlar filtrelendi.";
-    const resolvedInfoMessage = (data.errors || []).length ? precedentSearchMessage(data.errors || []) : infoMessage;
-    const fallbackNote = lastBrainResults.length
-      ? "<p>Yargıtay canlı araması sonuç döndürmedi. Legal Brain yerel kaynaklarıyla devam edildi.</p>"
-      : "";
+  const infoMessage = summary.live_yargitay_count > 0
+    ? "Canl? Yarg?tay aramas?ndan gelen kararlar listeleniyor."
+    : fallbackResults.length
+      ? "Canl? Yarg?tay aramas? sonu? d?nd?rmedi. A?a??daki kararlar Legal Brain/yerel kaynak adaylar?d?r; resmi do?rulama yap?lmal?d?r."
+      : (data.errors || []).length
+        ? precedentSearchMessage(data.errors || [])
+        : "Bu denemede canl? Yarg?tay sonucu bulunamad?.";
+  if (!liveResults.length && !fallbackResults.length) {
     els.decisionOutput.className = "result-list";
-    els.decisionOutput.innerHTML = `<div class="result-item"><h3>Emsal sonucu</h3><p>${escapeHtml(resolvedInfoMessage)}</p>${fallbackNote}</div>`;
+    els.decisionOutput.innerHTML = `<div class="result-item"><h3>Emsal sonucu</h3><p>${escapeHtml(infoMessage)}</p></div>`;
     return;
   }
+  const liveGroup = liveResults.length
+    ? liveResults.map((item) => renderDecisionCard(item, "Canl? Yarg?tay Sonu?lar?")).join("")
+    : `<div class="result-item"><h3>Canl? Yarg?tay Sonu?lar?</h3><p>Canl? Yarg?tay aramas? bu denemede sonu? d?nd?rmedi.</p></div>`;
+  const fallbackGroup = fallbackResults.length
+    ? fallbackResults.map((item) => renderDecisionCard(item, "Legal Brain / Yerel Kaynak Adaylar?")).join("")
+    : "";
   els.decisionOutput.className = "result-list";
-  els.decisionOutput.innerHTML = decisions
-    .map((item) => {
-      const title = item.title || `${item.court || "Yargıtay"} ${item.esas_no || ""}`;
-      const detailLink = item.detail_url ? `<a href="${escapeHtml(item.detail_url)}" target="_blank" rel="noreferrer">Detay</a>` : "";
-      const paragraph = cleanDecisionParagraph(item);
-      const scores = decisionScoreBreakdown(item);
-      const topic = item.legal_principle || item.short_summary || paragraph;
-      const similar = item.why_relevant || paragraph;
-      const isRisky = ["riskli", "aleyhe"].some((label) => plainText(item.lehe_aleyhe || "").includes(label));
-      const different = isRisky
-        ? "Süre, ihbar veya ispat yönünden somut olaydan ayrılabilir."
-        : "Somut olayın belge ve tarihleri ayrıca karşılaştırılmalıdır.";
-      const usage = isRisky
-        ? RISK_PRECEDENT_PARAGRAPH
-        : "Karar numarası, tarih ve kısa özetle destekleyici emsal olarak kullanılabilir.";
-      return `
-        <div class="result-item">
-          <h3>${escapeHtml(title)}</h3>
-          <div class="meta-row">
-            <span class="chip blue">${escapeHtml(scores.strength)} güç</span>
-            <span class="chip">${escapeHtml(item.lehe_aleyhe || "Değerlendirme")}</span>
-            <span class="chip">${escapeHtml([item.esas_no, item.karar_no, item.date].filter(Boolean).join(" / "))}</span>
-            ${detailLink ? `<span class="chip">${detailLink}</span>` : ""}
-          </div>
-          <ol class="compact-list">
-            <li><strong>Özet:</strong> ${escapeHtml(cleanOutputText(item.short_summary || paragraph, DEFAULT_PRECEDENT_PARAGRAPH))}</li>
-            <li><strong>Uyuşmazlık konusu:</strong> ${escapeHtml(cleanOutputText(topic, "Hukuki uyuşmazlık yönünden değerlendirme."))}</li>
-            <li><strong>Yargıtay'ın temel değerlendirmesi:</strong> ${escapeHtml(paragraph)}</li>
-            <li><strong>Somut olaya benzer yönleri:</strong> ${escapeHtml(similar)}</li>
-            <li><strong>Somut olaydan ayrılan yönleri:</strong> ${escapeHtml(different)}</li>
-            <li><strong>Kullanım önerisi:</strong> ${escapeHtml(usage)}</li>
-          </ol>
-          <div class="score-grid">
-            <span>Benzerlik: ${scores.similarity}</span>
-            <span>Hukuki uygunluk: ${scores.legalFit}</span>
-            <span>Güncellik: ${scores.recency}</span>
-            <span>Risk: ${scores.riskLevel}</span>
-            <span>Genel güç: ${scores.strength}</span>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  els.decisionOutput.innerHTML = `
+    <div class="result-item"><h3>Emsal Durumu</h3><p>${escapeHtml(infoMessage)}</p></div>
+    ${liveGroup}
+    ${fallbackGroup}
+  `;
 }
-
 
 
 function renderStrategy(data) {
@@ -1574,7 +1603,7 @@ function userFriendlyGroundingItems() {
 
 function precedentSearchMessage(errors = []) {
   const joined = plainText((errors || []).join(" "));
-  if (joined.includes("chromium") || joined.includes("playwright") || joined.includes("captcha") || joined.includes("erişim")) {
+  if (joined.includes("chromium") || joined.includes("playwright") || joined.includes("captcha") || joined.includes("erişim") || joined.includes("runtime exception") || joined.includes("traceback")) {
     return "Emsal araması yapılamadı, yerel hukuki analiz devam etti.";
   }
   if (joined.includes("legal brain") || joined.includes("kaynak")) {
@@ -2192,7 +2221,7 @@ async function runYargitay() {
       case_text: `${caseText} ${getRequestType()}`,
       max_results: getMaxResults(),
       yargitay_query_templates: lastBetterSearches?.yargitay_queries || lastCaseEnrichment?.yargitay_query_templates || [],
-      case_enrichment: lastCaseEnrichment || {},
+      case_enrichment: { ...(lastCaseEnrichment || {}), fallback_precedent_candidates: legalBrainFallbackCandidates() },
     });
     renderAnalysis(data.case_analysis || {});
     renderDecisions(data);
@@ -2570,10 +2599,54 @@ async function runFullReview() {
         case_text: `${caseText} ${getRequestType()}`,
         max_results: getMaxResults(),
         yargitay_query_templates: lastBetterSearches.yargitay_queries || enrichment.yargitay_query_templates || [],
-        case_enrichment: enrichment,
+        case_enrichment: { ...(enrichment || {}), fallback_precedent_candidates: legalBrainFallbackCandidates() },
       });
     } catch (error) {
-      yargitay = { top_decisions: [], errors: ["Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."] };
+      const fallbackPrecedents = legalBrainFallbackCandidates().map((item) => ({
+        ...item,
+        source: "Legal Brain",
+        source_type: "legal_brain",
+        official_verification_status: "not_verified",
+        similarity_score: 20,
+        usefulness_score: "Düşük",
+        court: "Legal Brain yerel kaynak",
+        esas_no: "-",
+        karar_no: "-",
+        date: "-",
+        short_summary: item.usable_argument || item.title,
+        legal_principle: item.usable_argument || item.title,
+        why_relevant: item.relevance_reason || "Canlı Yargıtay doğrulaması yapılamadı.",
+        lehe_aleyhe: "Nötr",
+        petition_paragraph: item.usable_argument || item.title,
+        clean_text_preview: item.usable_argument || item.title,
+        precedent_id: item.source_id || item.title,
+        citation: item.citation_label || item.title,
+        verification_status: "verification_required_precedent_candidate",
+        similarity_reasons: [],
+        shared_facts: [],
+        shared_legal_issues: [],
+        supported_arguments: [],
+        evidence_connection: [],
+        distinguishing_risks: ["Canlı Yargıtay doğrulaması yapılamadı."],
+        recommended_use: "Resmi doğrulama yapılmadan kesin emsal gibi kullanılmamalıdır.",
+        confidence_score: 20,
+      }));
+      yargitay = {
+        top_decisions: fallbackPrecedents,
+        final_precedents: fallbackPrecedents,
+        fallback_precedents: fallbackPrecedents,
+        live_yargitay_results: [],
+        source_summary: {
+          live_yargitay_count: 0,
+          legal_brain_fallback_count: fallbackPrecedents.length,
+          local_seed_count: 0,
+          official_yargitay_reached: false,
+          official_yargitay_returned_results: false,
+          used_fallback: Boolean(fallbackPrecedents.length),
+        },
+        user_message: "Canlı Yargıtay araması sonuç döndürmedi. Legal Brain yerel kaynak adaylarıyla devam edildi.",
+        errors: ["Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."],
+      };
     }
     if ((yargitay.errors || []).length) {
       yargitay.errors = ["Emsal araması yapılamadı, yerel hukuki analiz devam etti."];

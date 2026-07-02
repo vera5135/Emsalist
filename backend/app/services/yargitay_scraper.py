@@ -112,15 +112,19 @@ class YargitayScraper:
         attempted_queries: list[str] = []
         seen_detail_urls: set[str] = set()
         skipped_due_to_rate_limit = False
+        raw_live_result_count = 0
+        official_yargitay_reached = False
 
         if async_playwright is None:
             message = self._short_error(PLAYWRIGHT_IMPORT_ERROR or RuntimeError("Playwright kullanılamıyor."))
             errors.append(f"Playwright kullanılamıyor; Yargıtay araması çalıştırılamadı: {message}")
-            return YargitaySearchResponse(
+            return self._build_search_response(
                 results=results,
                 errors=errors,
                 attempted_queries=attempted_queries,
                 skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+                raw_live_result_count=raw_live_result_count,
+                official_yargitay_reached=official_yargitay_reached,
             )
 
         browser: Browser | None = None
@@ -140,32 +144,39 @@ class YargitayScraper:
                         wait_until="domcontentloaded",
                         timeout=NAVIGATION_TIMEOUT_MS,
                     )
+                    official_yargitay_reached = True
                     if response is None or response.status >= 400:
                         status = response.status if response else "yanıt yok"
                         errors.append(f"Yargıtay sitesine erişilemedi (HTTP: {status}).")
-                        return YargitaySearchResponse(
+                        return self._build_search_response(
                             results=results,
                             errors=errors,
                             attempted_queries=attempted_queries,
                             skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+                            raw_live_result_count=raw_live_result_count,
+                            official_yargitay_reached=official_yargitay_reached,
                         )
 
                     if await self._captcha_is_active(page):
                         errors.append("Yargıtay sitesi CAPTCHA doğrulaması istiyor; otomatik arama durduruldu.")
-                        return YargitaySearchResponse(
+                        return self._build_search_response(
                             results=results,
                             errors=errors,
                             attempted_queries=attempted_queries,
                             skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+                            raw_live_result_count=raw_live_result_count,
+                            official_yargitay_reached=official_yargitay_reached,
                         )
 
                     if await self._access_is_blocked(page):
                         errors.append("Yargıtay sitesi otomatik erişimi engelledi; arama durduruldu.")
-                        return YargitaySearchResponse(
+                        return self._build_search_response(
                             results=results,
                             errors=errors,
                             attempted_queries=attempted_queries,
                             skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+                            raw_live_result_count=raw_live_result_count,
+                            official_yargitay_reached=official_yargitay_reached,
                         )
 
                     await page.locator(SEARCH_INPUT_SELECTOR).wait_for(state="visible")
@@ -175,6 +186,7 @@ class YargitayScraper:
                             break
 
                         attempted_queries.append(query)
+                        metrics = {"raw_live_result_count": raw_live_result_count}
                         may_continue = await self._search_one_query(
                             page=page,
                             context=context,
@@ -183,7 +195,9 @@ class YargitayScraper:
                             results=results,
                             errors=errors,
                             seen_detail_urls=seen_detail_urls,
+                            metrics=metrics,
                         )
+                        raw_live_result_count = metrics["raw_live_result_count"]
 
                         if not may_continue:
                             skipped_due_to_rate_limit = self._has_rate_limit_error(errors)
@@ -222,11 +236,13 @@ class YargitayScraper:
             errors.append(f"Yargıtay araması sırasında beklenmeyen hata: {self._short_error(exc)}")
 
         skipped_due_to_rate_limit = skipped_due_to_rate_limit or self._has_rate_limit_error(errors)
-        return YargitaySearchResponse(
+        return self._build_search_response(
             results=results,
             errors=errors,
             attempted_queries=attempted_queries,
             skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+            raw_live_result_count=raw_live_result_count,
+            official_yargitay_reached=official_yargitay_reached,
         )
 
     async def _search_one_query(
@@ -239,6 +255,7 @@ class YargitayScraper:
         results: list[YargitayDecision],
         errors: list[str],
         seen_detail_urls: set[str],
+        metrics: dict[str, int],
     ) -> bool:
         try:
             logger.info("yargitay_query_raw=%s", query)
@@ -262,6 +279,7 @@ class YargitayScraper:
                 results=results,
                 errors=errors,
                 seen_detail_urls=seen_detail_urls,
+                metrics=metrics,
             )
             return True
 
@@ -294,6 +312,7 @@ class YargitayScraper:
         results: list[YargitayDecision],
         errors: list[str],
         seen_detail_urls: set[str],
+        metrics: dict[str, int],
     ) -> None:
         current_response = first_response
         examined_for_query = 0
@@ -307,6 +326,7 @@ class YargitayScraper:
                     errors.append(f"'{query}' sorgusu için sonuç bulunamadı.")
                 return
 
+            metrics["raw_live_result_count"] = metrics.get("raw_live_result_count", 0) + len(records)
             examined_for_query += len(records)
             for record in records:
                 if len(results) >= max_results:
@@ -523,6 +543,62 @@ class YargitayScraper:
     def _has_rate_limit_error(errors: list[str]) -> bool:
         markers = ("hız sınırı", "rate limit", "http 429")
         return any(any(marker in error.casefold() for marker in markers) for error in errors)
+
+    @staticmethod
+    def _build_search_response(
+        *,
+        results: list[YargitayDecision],
+        errors: list[str],
+        attempted_queries: list[str],
+        skipped_due_to_rate_limit: bool,
+        raw_live_result_count: int,
+        official_yargitay_reached: bool,
+    ) -> YargitaySearchResponse:
+        parsed_live_result_count = len(results)
+        return YargitaySearchResponse(
+            results=results,
+            errors=errors,
+            attempted_queries=attempted_queries,
+            skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+            raw_live_result_count=raw_live_result_count,
+            parsed_live_result_count=parsed_live_result_count,
+            final_live_result_count=parsed_live_result_count,
+            official_yargitay_reached=official_yargitay_reached,
+            official_yargitay_returned_results=raw_live_result_count > 0,
+            failure_reason=YargitayScraper._failure_reason(
+                errors=errors,
+                raw_live_result_count=raw_live_result_count,
+                parsed_live_result_count=parsed_live_result_count,
+                official_yargitay_reached=official_yargitay_reached,
+            ),
+        )
+
+    @staticmethod
+    def _failure_reason(
+        *,
+        errors: list[str],
+        raw_live_result_count: int,
+        parsed_live_result_count: int,
+        official_yargitay_reached: bool,
+    ) -> str:
+        combined = " ".join(errors).casefold()
+        if "runtime exception" in combined or "hata oluştu" in combined:
+            return "runtime_exception"
+        if "zaman aşımı" in combined or "timeout" in combined:
+            return "timeout"
+        if "hız sınırı" in combined or "rate limit" in combined or "http 429" in combined:
+            return "rate_limited"
+        if "erişilemedi" in combined or "network" in combined or "connection" in combined:
+            return "network_error"
+        if raw_live_result_count > 0 and parsed_live_result_count == 0:
+            if any(marker in combined for marker in ("beklenmeyen sonuç biçimi", "karar listesi okunamadı", "geçersiz json")):
+                return "selector_changed"
+            return "parser_failed"
+        if official_yargitay_reached and raw_live_result_count == 0:
+            return "no_results"
+        if errors:
+            return "unknown"
+        return ""
 
 
 yargitay_scraper = YargitayScraper()

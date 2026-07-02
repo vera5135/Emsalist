@@ -25,6 +25,8 @@ class YargitaySearchRequest(BaseModel):
 
 class YargitayDecision(BaseModel):
     source: str = "Yargıtay"
+    source_type: str = "yargitay_live"
+    official_verification_status: str = "verified_live"
     query: str
     court: str
     esas_no: str
@@ -41,3 +43,9 @@ class YargitaySearchResponse(BaseModel):
     errors: list[str]
     attempted_queries: list[str] = Field(default_factory=list)
     skipped_due_to_rate_limit: bool = False
+    raw_live_result_count: int = 0
+    parsed_live_result_count: int = 0
+    final_live_result_count: int = 0
+    official_yargitay_reached: bool = False
+    official_yargitay_returned_results: bool = False
+    failure_reason: str = ""
