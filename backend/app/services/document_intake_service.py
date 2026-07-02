@@ -145,6 +145,7 @@ class DocumentIntakeService:
     def create_document(
         self,
         *,
+        case_id: str = "legacy",
         file_name: str,
         content: bytes,
         document_type: str | None = None,
@@ -158,7 +159,7 @@ class DocumentIntakeService:
         selected_type = self._normalize_document_type(document_type)
         content_sha256 = hashlib.sha256(content).hexdigest()
         with self._lock:
-            duplicate = self._find_duplicate(content_sha256)
+            duplicate = self._find_duplicate(content_sha256, case_id=case_id)
             if duplicate:
                 raise DocumentDuplicateError(duplicate.document_id)
 
@@ -167,6 +168,7 @@ class DocumentIntakeService:
             destination.write_bytes(content)
             record = DocumentRecord(
                 document_id=document_id,
+                case_id=case_id,
                 file_name=Path(file_name or safe_name).name,
                 safe_file_name=safe_name,
                 file_extension=extension,
@@ -192,11 +194,16 @@ class DocumentIntakeService:
 
     def analyze_documents(
         self,
+        case_id: str = "legacy",
         document_ids: list[str] | None = None,
         user_claims: dict[str, str] | None = None,
         document_types: dict[str, str] | None = None,
     ) -> DocumentAnalyzeResponse:
-        ids = list(dict.fromkeys(document_ids or list(self._records)))
+        ids = list(dict.fromkeys(document_ids or [
+            record.document_id
+            for record in self._records.values()
+            if record.case_id == case_id
+        ]))
         claims = {self._canonical_fact_key(key): str(value).strip() for key, value in (user_claims or {}).items() if str(value).strip()}
         overrides = document_types or {}
         documents: list[DocumentRecord] = []
@@ -206,7 +213,7 @@ class DocumentIntakeService:
         analyzed_signatures: set[str] = set()
 
         for document_id in ids:
-            existing = self.get_document(document_id)
+            existing = self.get_document(document_id, case_id=case_id)
             signature = self._content_signature(existing)
             if signature and signature in analyzed_signatures:
                 continue
@@ -255,16 +262,20 @@ class DocumentIntakeService:
             warnings=list(dict.fromkeys(warnings)),
         )
 
-    def get_document(self, document_id: str) -> DocumentRecord:
+    def get_document(self, document_id: str, *, case_id: str | None = None) -> DocumentRecord:
         with self._lock:
             record = self._records.get(document_id)
-            if record is None:
+            if record is None or (case_id and record.case_id != case_id):
                 raise KeyError(document_id)
             return record.model_copy(deep=True)
 
-    def list_documents(self) -> list[DocumentRecord]:
+    def list_documents(self, *, case_id: str | None = None) -> list[DocumentRecord]:
         with self._lock:
-            records = [record.model_copy(deep=True) for record in self._records.values()]
+            records = [
+                record.model_copy(deep=True)
+                for record in self._records.values()
+                if case_id is None or record.case_id == case_id
+            ]
         unique: list[DocumentRecord] = []
         seen_signatures: set[str] = set()
         for record in sorted(records, key=lambda item: item.upload_time, reverse=True):
@@ -276,11 +287,12 @@ class DocumentIntakeService:
             unique.append(record)
         return unique
 
-    def delete_document(self, document_id: str) -> None:
+    def delete_document(self, document_id: str, *, case_id: str | None = None) -> None:
         with self._lock:
-            record = self._records.pop(document_id, None)
-            if record is None:
+            record = self._records.get(document_id)
+            if record is None or (case_id and record.case_id != case_id):
                 raise KeyError(document_id)
+            self._records.pop(document_id, None)
             path = self._file_path(record.document_id, record.file_extension)
             if path.exists():
                 path.unlink()
@@ -726,8 +738,10 @@ class DocumentIntakeService:
     def _file_path(self, document_id: str, extension: str) -> Path:
         return self.upload_dir / f"{document_id}{extension}"
 
-    def _find_duplicate(self, content_sha256: str) -> DocumentRecord | None:
+    def _find_duplicate(self, content_sha256: str, *, case_id: str) -> DocumentRecord | None:
         for record in self._records.values():
+            if record.case_id != case_id:
+                continue
             record_hash = record.content_sha256
             if not record_hash:
                 path = self._file_path(record.document_id, record.file_extension)

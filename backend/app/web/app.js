@@ -75,6 +75,7 @@ const els = {
 
 let lastDecisions = [];
 let lastBrainResults = [];
+let activeCaseId = null;
 let lastCaseEnrichment = null;
 let lastBetterSearches = null;
 let lastStrategy = null;
@@ -395,6 +396,40 @@ function setStatus(message, isError = false) {
   els.statusLine.classList.toggle("error", isError);
 }
 
+function ensureCaseControls() {
+  const nav = document.querySelector(".top-actions");
+  if (!nav) return;
+  if (!document.getElementById("activeCaseBadge")) {
+    const badge = document.createElement("span");
+    badge.id = "activeCaseBadge";
+    badge.className = "status-pill";
+    badge.textContent = "Aktif Dosya: hazÄ±rlanÄ±yor";
+    nav.insertBefore(badge, els.healthPill || null);
+  }
+  if (!document.getElementById("newCaseBtn")) {
+    const button = document.createElement("button");
+    button.id = "newCaseBtn";
+    button.type = "button";
+    button.className = "ghost-btn";
+    button.textContent = "Yeni Dosya BaÅŸlat";
+    nav.insertBefore(button, els.healthPill || null);
+  }
+}
+
+function renderActiveCaseBadge() {
+  const badge = document.getElementById("activeCaseBadge");
+  if (!badge) return;
+  badge.textContent = activeCaseId ? `Aktif Dosya: ${activeCaseId}` : "Aktif Dosya: bilinmiyor";
+}
+
+async function initializeCaseSession() {
+  const current = await apiFetch("/case/current");
+  if (!current.ok) throw new Error("Aktif dosya bilgisi alÄ±namadÄ±.");
+  const data = await current.json();
+  activeCaseId = data.case_id || null;
+  renderActiveCaseBadge();
+}
+
 function setCaseState(state) {
   lastCaseState = state && typeof state === "object" ? state : null;
   window.lastCaseState = lastCaseState || {};
@@ -532,6 +567,18 @@ function assertCaseText() {
   return caseText;
 }
 
+function withCaseId(payload = {}) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  if ("case_id" in payload) return payload;
+  return activeCaseId ? { ...payload, case_id: activeCaseId } : payload;
+}
+
+function caseQuery(path) {
+  if (!activeCaseId) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}case_id=${encodeURIComponent(activeCaseId)}`;
+}
+
 async function apiFetch(path, options = {}) {
   if (window.location.protocol !== "file:") {
     return fetch(path, options);
@@ -556,7 +603,7 @@ async function apiPost(path, payload) {
   const response = await apiFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(withCaseId(payload)),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -569,6 +616,9 @@ async function apiPost(path, payload) {
 }
 
 async function apiUpload(path, formData) {
+  if (activeCaseId && !formData.has("case_id")) {
+    formData.append("case_id", activeCaseId);
+  }
   const response = await apiFetch(path, { method: "POST", body: formData });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -827,7 +877,7 @@ function showDraftReadinessDialog(issues, options) {
 }
 
 async function loadDocuments() {
-  const response = await apiFetch("/documents");
+  const response = await apiFetch(caseQuery("/documents"));
   if (!response.ok) throw new Error("Belge listesi alınamadı.");
   lastDocuments = await response.json();
   lastDocumentAnalysis = null;
@@ -930,7 +980,7 @@ async function analyzeDocuments() {
 }
 
 async function deleteDocument(documentId) {
-  const response = await apiFetch(`/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+  const response = await apiFetch(caseQuery(`/documents/${encodeURIComponent(documentId)}`), { method: "DELETE" });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.detail || "Belge silinemedi.");
@@ -2890,6 +2940,21 @@ function clearAll() {
   setStatus("");
 }
 
+async function startNewCase() {
+  setBusy(true, "Yeni dosya oluÅŸturuluyor...");
+  try {
+    const data = await apiPost("/case/new", {});
+    activeCaseId = data.case_id || null;
+    renderActiveCaseBadge();
+    clearAll();
+    await loadDocuments();
+    setCaseState(null);
+    setStatus(data.message || "Yeni dosya baÅŸlatÄ±ldÄ±.");
+  } finally {
+    setBusy(false);
+  }
+}
+
 async function checkHealth() {
   try {
     const response = await apiFetch("/health");
@@ -2909,6 +2974,7 @@ function updateApiLinks() {
 }
 
 function wireEvents() {
+  ensureCaseControls();
   updateApiLinks();
   initTheme();
   els.themeToggle?.addEventListener("change", () => applyTheme(els.themeToggle.checked ? "dark" : "light"));
@@ -3001,6 +3067,7 @@ function wireEvents() {
     setStatus("Örnek olay yüklendi.");
   });
   $("clearBtn").addEventListener("click", clearAll);
+  $("newCaseBtn")?.addEventListener("click", () => startNewCase().catch((error) => setStatus(error.message, true)));
   $("copyDraftBtn").addEventListener("click", () => copyDraft().catch((error) => setStatus(error.message, true)));
   $("downloadDraftBtn").addEventListener("click", downloadDraft);
   $("printDraftBtn")?.addEventListener("click", () => {
@@ -3049,4 +3116,6 @@ function wireEvents() {
 wireEvents();
 renderOfficialSourcesStatus();
 checkHealth();
-loadDocuments().catch((error) => setStatus(error.message, true));
+initializeCaseSession()
+  .then(() => loadDocuments())
+  .catch((error) => setStatus(error.message, true));

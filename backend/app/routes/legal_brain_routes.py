@@ -16,6 +16,7 @@ from app.models.legal_brain_models import (
     LegalBrainSearchResponse,
     LegalBrainStatuteArticleResponse,
 )
+from app.services.case_session_service import case_session_service
 from app.services.legal_brain_service import legal_brain_service
 
 
@@ -94,19 +95,31 @@ def create_doctrine_cards(request: DoctrineCardRequest) -> DoctrineCardResponse:
 
 @router.post("/search", response_model=LegalBrainSearchResponse)
 def search_legal_brain(request: LegalBrainSearchRequest) -> LegalBrainSearchResponse:
-    return legal_brain_service.search(
+    response = legal_brain_service.search(
         query=request.query,
         practice_area=request.practice_area,
         max_results=request.max_results,
     )
+    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    case_session_service.update_case(
+        resolved_case_id,
+        legal_brain_results=[item.model_dump(mode="json") for item in response.results],
+    )
+    return response
 
 
 @router.post("/retrieve-for-case", response_model=LegalBrainRetrieveForCaseResponse)
 def retrieve_for_case(request: LegalBrainRetrieveForCaseRequest) -> LegalBrainRetrieveForCaseResponse:
-    return legal_brain_service.retrieve_for_case(
+    response = legal_brain_service.retrieve_for_case(
         case_text=request.case_text,
         practice_area=request.practice_area,
         max_sources=request.max_sources,
         legal_brain_query=request.legal_brain_query,
         blocked_topics=request.blocked_topics,
     )
+    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    case_session_service.update_case(
+        resolved_case_id,
+        legal_brain_results=[item.model_dump(mode="json") for item in response.book_sources],
+    )
+    return response

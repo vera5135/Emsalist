@@ -12,6 +12,7 @@ class CaseStateService:
     def build(
         self,
         *,
+        case_id: str | None = None,
         event_text: str,
         area: str = "",
         case_type: str = "",
@@ -47,7 +48,7 @@ class CaseStateService:
             ]
         )
         return {
-            "case_id": self._case_id(clean_event_text, document_facts, answers),
+            "case_id": case_id or self._case_id(clean_event_text, document_facts, answers),
             "event_text": clean_event_text,
             "area": " ".join(str(area or context.get("area") or "").split()),
             "case_type": " ".join(str(case_type or context.get("case_type") or "").split()),

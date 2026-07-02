@@ -46,6 +46,7 @@ class DocumentConflict(BaseModel):
 
 class DocumentRecord(BaseModel):
     document_id: str
+    case_id: str = ""
     file_name: str
     safe_file_name: str
     file_extension: str
@@ -66,6 +67,7 @@ class DocumentRecord(BaseModel):
 
 
 class DocumentAnalyzeRequest(BaseModel):
+    case_id: str | None = None
     document_ids: list[str] = Field(default_factory=list, max_length=100)
     user_claims: dict[str, str] = Field(default_factory=dict)
     document_types: dict[str, str] = Field(default_factory=dict)

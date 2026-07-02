@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CaseAnalyzeRequest(BaseModel):
+    case_id: str | None = None
     case_text: str = Field(min_length=10, description="Avukat tarafından yazılan olay özeti")
     enriched_case_text: str | None = None
 
@@ -24,6 +25,7 @@ class CaseAnalyzeResponse(BaseModel):
 
 
 class CaseStateRequest(BaseModel):
+    case_id: str | None = None
     event_text: str = Field(min_length=1)
     area: str = ""
     case_type: str = ""
@@ -36,6 +38,7 @@ class CaseStateRequest(BaseModel):
 
 
 class DynamicReasonerRequest(BaseModel):
+    case_id: str | None = None
     event_text: str = Field(min_length=1)
     document_facts: list[str] = Field(default_factory=list)
     question_answers: dict[str, str] = Field(default_factory=dict)
