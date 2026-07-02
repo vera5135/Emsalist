@@ -146,6 +146,16 @@ const fallbackQuestions = [
 ];
 
 const commonAnswerOptions = ["Belge mevcut", "Bilmiyorum", "Sonra tamamlanacak"];
+const laborOnlyOptions = new Set([
+  "SGK hizmet dÃ¶kÃ¼mÃ¼ var",
+  "Ä°ÅŸe giriÅŸ tarihi belli",
+  "Ä°ÅŸten Ã§Ä±kÄ±ÅŸ tarihi belli",
+  "TanÄ±kla desteklenecek",
+  "Banka + elden Ã¶deme",
+  "Bordro gerÃ§eÄŸi yansÄ±tmÄ±yor",
+  "Emsal Ã¼cret araÅŸtÄ±rmasÄ±",
+  "Fiili gÃ¶rev farklÄ±",
+]);
 const defectiveVehicleSafeOptions = [
   "Belge mevcut",
   "Bilmiyorum",
@@ -295,15 +305,40 @@ function currentProfileKey() {
   return "generic";
 }
 
+function vehicleContextActive() {
+  const text = plainText(`${lastStrategy?.petition_type || ""} ${getRequestType()} ${getCaseText()}`);
+  return [
+    "arac",
+    "ikinci el",
+    "plaka",
+    "sasi",
+    "motor arizasi",
+    "gizli ayip",
+    "tramer",
+    "ekspertiz",
+    "noter satis",
+    "ayipli mal",
+    "volkswagen",
+    "satis bedeli",
+  ].some((term) => text.includes(term));
+}
+
+function sanitizeAnswerOptions(options) {
+  const incoming = [...new Set((options || []).filter(Boolean))];
+  if (!vehicleContextActive()) return incoming;
+  const filtered = incoming.filter((option) => !laborOnlyOptions.has(option));
+  return filtered.length ? filtered : defectiveVehicleSafeOptions.slice(0, 5);
+}
+
 function questionOptions(question) {
   const normalizedQuestion = plainText(question);
-  if (currentProfileKey() === "defectiveVehicle") {
+  if (currentProfileKey() === "defectiveVehicle" || vehicleContextActive()) {
     const direct = vehicleQuestionBank.find((item) => plainText(item.question) === normalizedQuestion);
-    if (direct) return direct.options.slice(0, 5);
+    if (direct) return sanitizeAnswerOptions(direct.options).slice(0, 5);
     const matchedVehicle = vehicleQuestionBank.find((item) =>
       item.requiredTerms.some((term) => normalizedQuestion.includes(term) || plainText(item.question).includes(normalizedQuestion)),
     );
-    if (matchedVehicle) return matchedVehicle.options.slice(0, 5);
+    if (matchedVehicle) return sanitizeAnswerOptions(matchedVehicle.options).slice(0, 5);
     return defectiveVehicleSafeOptions.slice(0, 5);
   }
   const profileKey = currentProfileKey();
@@ -317,7 +352,7 @@ function questionOptions(question) {
   }
 
   if (!matched.length) matched.push(...commonAnswerOptions);
-  return [...new Set(matched)].slice(0, 5);
+  return sanitizeAnswerOptions(matched).slice(0, 5);
 }
 
 function appendAnswerOption(field, value) {
@@ -1114,7 +1149,7 @@ function normalizeQuestionFlow(questions) {
   const incoming = (questions?.length ? questions : fallbackQuestions).map((item) =>
     typeof item === "string" ? { question: item } : { question: item.question || String(item), options: item.suggested_answers || item.options || [] },
   );
-  const base = currentProfileKey() === "defectiveVehicle" ? vehicleQuestionBank : incoming;
+  const base = currentProfileKey() === "defectiveVehicle" || vehicleContextActive() ? vehicleQuestionBank : incoming;
   return [...base, ...incoming]
     .filter((item) => item.question)
     .reduce((acc, item) => {
@@ -1122,7 +1157,7 @@ function normalizeQuestionFlow(questions) {
       if (!acc.some((existing) => plainText(existing.question) === key)) {
         acc.push({
           question: item.question,
-          options: (item.options?.length ? item.options : questionOptions(item.question)).slice(0, 5),
+          options: sanitizeAnswerOptions(item.options?.length ? item.options : questionOptions(item.question)).slice(0, 5),
           requiredTerms: item.requiredTerms || [],
         });
       }

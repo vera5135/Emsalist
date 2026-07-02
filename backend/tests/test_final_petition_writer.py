@@ -72,6 +72,11 @@ class FinalPetitionWriterTests(unittest.TestCase):
         self.assertEqual(response.petition_text.count("motor arızası"), 1)
         self.assertEqual(response.petition_text.count("TBK m. 219"), 1)
         self.assertNotIn("TBK 219", response.petition_text)
+        self.assertEqual(response.petition_text.count("12.04.2024"), 1)
+        self.assertEqual(response.petition_text.count("500.000 TL"), 2)
+        self.assertEqual(response.petition_text.count("35 ABC 123"), 1)
+        self.assertEqual(response.petition_text.count("WVWZZZ123456789"), 1)
+        self.assertNotIn("Satış işlemi İzmir 12. Noterliği", response.petition_text)
 
     def test_final_route_allows_draft_without_review_approval(self) -> None:
         request = FinalPetitionDraftRequest(

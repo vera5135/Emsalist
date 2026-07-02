@@ -259,6 +259,7 @@ class FinalPetitionWriterService:
         is_vehicle_case: bool,
     ) -> list[str]:
         result: list[str] = []
+        sale_fact_written = False
         if is_vehicle_case:
             sale_date = fact_map.get("sale_date", "")
             sale_price = fact_map.get("sale_price", "")
@@ -272,6 +273,7 @@ class FinalPetitionWriterService:
                     f"{plate} plakalı, {vin} şasi numaralı aracı {sale_date} tarihinde "
                     f"{sale_price} bedelle satın almıştır."
                 )
+                sale_fact_written = True
             else:
                 labels = {
                     "sale_date": "Satış tarihi",
@@ -283,7 +285,8 @@ class FinalPetitionWriterService:
                 known = [f"{labels[key]} {fact_map[key]}" for key in labels if fact_map.get(key)]
                 if known:
                     result.append("Noter satış belgesinde " + ", ".join(known) + " olarak yer almaktadır.")
-            if fact_map.get("notary_info"):
+                    sale_fact_written = True
+            if fact_map.get("notary_info") and not sale_fact_written:
                 result.append(f"Satış işlemi {fact_map['notary_info']} nezdinde düzenlenen noter satış sözleşmesiyle gerçekleştirilmiştir.")
 
             plain_case = self._plain(case_text)
@@ -313,6 +316,22 @@ class FinalPetitionWriterService:
             if (
                 any(term in plain_cleaned for term in ("sorunsuz", "kazasiz", "hasarsiz"))
                 and any(term in self._plain(" ".join(result)) for term in ("sorunsuz", "kazasiz", "hasarsiz"))
+            ):
+                continue
+            if (
+                is_vehicle_case
+                and sale_fact_written
+                and self._is_duplicate_sale_fact(
+                    cleaned,
+                    sale_date=fact_map.get("sale_date", ""),
+                    sale_price=fact_map.get("sale_price", ""),
+                    vehicle=fact_map.get("vehicle_make_model", ""),
+                    plate=fact_map.get("vehicle_plate", ""),
+                    vin=fact_map.get("vehicle_vin", ""),
+                    claimant=parties.claimant,
+                    defendant=parties.defendant,
+                    notary_info=fact_map.get("notary_info", ""),
+                )
             ):
                 continue
             if (
@@ -357,7 +376,7 @@ class FinalPetitionWriterService:
         if not fact_map.get("notice_date") and not self._answer_confirms_notice(answers):
             result.append("Ayıp ihbarının tarihi ve yöntemi, sunulacak yazışma veya ihtar kayıtları üzerinden belirlenecektir.")
         if not any(term in self._plain(combined) for term in ("tramer kaydi vardir", "agir hasar kaydi vardir")):
-            result.append("Araçta gizli onarım veya ağır hasar kaydı bulunup bulunmadığı ilgili kayıtlar ve bilirkişi incelemesiyle araştırılmalıdır.")
+            result.append("Araçta gizli onarım veya ağır hasar kaydı bulunup bulunmadığının ilgili kayıtların celbi ve bilirkişi incelemesiyle ortaya konulması gerekmektedir.")
         return result
 
     def _missing_facts(self, *, values: list[str], fact_map: dict[str, str], is_vehicle_case: bool) -> list[str]:
@@ -369,6 +388,33 @@ class FinalPetitionWriterService:
                 result.append("Ayıp ihbarı tarihi ve yöntemi")
             result.extend(("Noter ihtarnamesi tarihi ve tebliğ bilgisi", "Satıcının tacir, galeri veya şirket sıfatı"))
         return self._dedupe_clean(result, reject_technical=True)[:30]
+
+    def _is_duplicate_sale_fact(
+        self,
+        value: str,
+        *,
+        sale_date: str,
+        sale_price: str,
+        vehicle: str,
+        plate: str,
+        vin: str,
+        claimant: str,
+        defendant: str,
+        notary_info: str,
+    ) -> bool:
+        plain_value = self._plain(value)
+        sale_terms = [
+            self._plain(part)
+            for part in (sale_date, sale_price, vehicle, plate, vin, claimant, defendant, notary_info)
+            if str(part).strip()
+        ]
+        if not sale_terms:
+            return False
+        matches = sum(1 for term in sale_terms if term in plain_value)
+        return (
+            ("satin al" in plain_value or "noter satis" in plain_value or "satis sozles" in plain_value)
+            and matches >= 2
+        ) or matches >= 3
 
     def _evidence_items(
         self,
@@ -425,7 +471,7 @@ class FinalPetitionWriterService:
             return self._dedupe_clean(requested, reject_technical=True)
         if is_vehicle_case:
             return [
-                "Öncelikle sözleşmeden dönülerek satış bedelinin davacıya iadesine",
+                "500.000 TL satış bedelinin ödeme tarihinden, mahkeme aksi kanaatte ise dava tarihinden itibaren işleyecek yasal faiziyle birlikte davalıdan tahsiline",
                 "Mahkeme aksi kanaatte ise ayıp oranında bedel indirimine",
                 "Kanıtlanan servis, ekspertiz, onarım ve sair zararların davalıdan tahsiline",
                 "Araçtaki ayıbın ve değer farkının bilirkişi marifetiyle tespitine",
