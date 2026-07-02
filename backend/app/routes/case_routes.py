@@ -35,6 +35,7 @@ def analyze_case(request: CaseAnalyzeRequest) -> CaseAnalyzeResponse:
         legal_sources=reasoning.get("research_queries", []),
         precedent_candidates=[],
         drafting_package={},
+        analysis_context={"warnings": reasoning.get("warnings", [])},
     )
     return CaseAnalyzeResponse(
         legal_topic=analysis.legal_topic,
@@ -56,13 +57,28 @@ def build_case_state(request: CaseStateRequest) -> dict:
         legal_sources=request.legal_sources,
         precedent_candidates=request.precedent_candidates,
         drafting_package=request.drafting_package,
+        analysis_context=request.analysis_context,
     )
 
 
 @router.post("/reason")
 def run_dynamic_reasoner(request: DynamicReasonerRequest) -> dict:
-    return dynamic_legal_reasoner_service.analyze(
+    reasoning = dynamic_legal_reasoner_service.analyze(
         event_text=request.event_text,
         document_facts=request.document_facts,
         question_answers=request.question_answers,
     )
+    return {
+        **reasoning,
+        "case_state": case_state_service.build(
+            event_text=request.event_text,
+            area=str(request.analysis_context.get("area") or ""),
+            case_type=str(request.analysis_context.get("case_type") or ""),
+            document_facts=request.document_facts,
+            question_answers=request.question_answers,
+            legal_sources=reasoning.get("research_queries", []),
+            precedent_candidates=[],
+            drafting_package={},
+            analysis_context=request.analysis_context,
+        ),
+    }

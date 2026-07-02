@@ -32,12 +32,14 @@ class CaseStateRequest(BaseModel):
     legal_sources: list[str] = Field(default_factory=list)
     precedent_candidates: list[dict[str, Any]] = Field(default_factory=list)
     drafting_package: dict[str, Any] = Field(default_factory=dict)
+    analysis_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class DynamicReasonerRequest(BaseModel):
     event_text: str = Field(min_length=1)
     document_facts: list[str] = Field(default_factory=list)
     question_answers: dict[str, str] = Field(default_factory=dict)
+    analysis_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class SearchBuildRequest(BaseModel):

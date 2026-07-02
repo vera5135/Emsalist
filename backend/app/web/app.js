@@ -94,6 +94,7 @@ let lastPrecedentAudit = null;
 let lastYargitaySearch = null;
 let lastDocuments = [];
 let lastDocumentAnalysis = null;
+let lastCaseState = null;
 /** @type {File[]} Gerçek File objelerini saklar, plain object değil. */
 let selectedDocumentFiles = [];
 let uiBusy = false;
@@ -386,6 +387,11 @@ function setStatus(message, isError = false) {
   els.statusLine.classList.toggle("error", isError);
 }
 
+function setCaseState(state) {
+  lastCaseState = state && typeof state === "object" ? state : null;
+  window.lastCaseState = lastCaseState || {};
+}
+
 function applyTheme(theme) {
   const nextTheme = theme === "dark" ? "dark" : "light";
   document.documentElement.dataset.theme = nextTheme;
@@ -423,6 +429,57 @@ function renderListItems(values, fallback = "") {
     return `<ul class="compact-list">${items.join("")}</ul>`;
   }
   return fallback ? `<span>${escapeHtml(fallback)}</span>` : "";
+}
+
+function currentCaseState(source = null) {
+  const candidate = source?.case_state || source || lastCaseState;
+  return candidate && typeof candidate === "object" ? candidate : {};
+}
+
+function caseStatePlanItems(caseState, key) {
+  return Array.isArray(caseState?.[key]) ? caseState[key] : [];
+}
+
+function caseStateIssueTitles(caseState) {
+  return (Array.isArray(caseState?.legal_issues) ? caseState.legal_issues : [])
+    .map((item) => (typeof item === "string" ? item : item?.title || ""))
+    .filter(Boolean);
+}
+
+function documentTypesForCaseState() {
+  return (lastDocumentAnalysis?.documents || [])
+    .map((item) => item.document_type)
+    .filter(Boolean);
+}
+
+async function refreshCaseState() {
+  const caseText = getCaseText();
+  if (caseText.length < 10) {
+    setCaseState(null);
+    return null;
+  }
+  const analysisContext = {
+    area: getRequestType(),
+    case_type: lastCaseEnrichment?.detected_case_type || currentProfileKey(),
+    documents: documentTypesForCaseState().map((documentType) => ({ document_type: documentType })),
+    warnings: dedupeIssues([
+      ...(lastCaseEnrichment?.risk_flags || []),
+      ...(lastDocumentAnalysis?.warnings || []),
+    ]).slice(0, 50),
+  };
+  const data = await apiPost("/case/state", {
+    event_text: caseText,
+    area: getRequestType(),
+    case_type: lastCaseEnrichment?.detected_case_type || currentProfileKey(),
+    document_facts: documentFactPayload().map((fact) => `${fact.fact_key}: ${fact.fact_value}`),
+    question_answers: buildAnswers(),
+    legal_sources: lastStrategy?.legal_basis || [],
+    precedent_candidates: lastDecisions,
+    drafting_package: lastDraftData?.case_state?.drafting_package || {},
+    analysis_context: analysisContext,
+  });
+  setCaseState(data);
+  return data;
 }
 
 function getCaseText() {
@@ -556,18 +613,19 @@ function renderDocumentSelection() {
 
 function renderDocumentEvidence() {
   const documents = lastDocumentAnalysis?.documents || [];
+  const caseState = currentCaseState();
+  const evidencePlan = caseStatePlanItems(caseState, "evidence_plan");
   const evidenceFacts = documents.flatMap((documentItem) =>
     (documentItem.extracted_facts || []).filter((fact) => fact.verification_status === "fact_confirmed"),
   );
-  els.evidenceCount.textContent = String(evidenceFacts.length);
-  if (!documents.length) {
+  els.evidenceCount.textContent = String(evidenceFacts.length + evidencePlan.length);
+  if (!documents.length && !evidencePlan.length) {
     els.evidenceOutput.className = "empty-state";
     els.evidenceOutput.textContent = "Henüz analiz edilmiş belge delili yok.";
     return;
   }
   els.evidenceOutput.className = "result-list";
-  els.evidenceOutput.innerHTML = documents
-    .map((documentItem) => {
+  const documentCards = documents.map((documentItem) => {
       const facts = (documentItem.extracted_facts || []).filter((fact) => fact.verification_status === "fact_confirmed");
       return `
         <div class="result-item">
@@ -582,8 +640,24 @@ function renderDocumentEvidence() {
           `).join("")}</ol>` : "<p>Bu belgeden doğrulanmış metinsel delil çıkarılamadı.</p>"}
         </div>
       `;
-    })
-    .join("");
+    });
+  const evidencePlanCards = evidencePlan.length
+    ? [`
+        <div class="result-item">
+          <h3>Delil Plani</h3>
+          <ol class="compact-list">
+            ${evidencePlan.map((item) => `
+              <li>
+                <strong>${escapeHtml(item.title || "Delil")}</strong><br>
+                <small>Neyi ispatlar: ${escapeHtml((item.proves || []).join(", ") || "Belirtilmedi")}</small><br>
+                <small>Eksikse risk: ${escapeHtml(item.risk_if_missing || "Belirtilmedi")}</small>
+              </li>
+            `).join("")}
+          </ol>
+        </div>
+      `]
+    : [];
+  els.evidenceOutput.innerHTML = [...documentCards, ...evidencePlanCards].join("");
 }
 
 function renderDocuments() {
@@ -834,6 +908,7 @@ async function analyzeDocuments() {
     reviewWorkflowComplete = false;
     lastDocuments = data.documents || [];
     els.documentApproval.checked = false;
+    await refreshCaseState();
     renderDocuments();
     prefillQuestionsFromDocuments();
     renderRisks();
@@ -860,9 +935,13 @@ async function deleteDocument(documentId) {
 }
 
 function renderAnalysis(data) {
+  const caseState = currentCaseState(data);
   const facts = data.case_facts || [];
   const keywords = data.legal_keywords || [];
-  els.analysisCount.textContent = String(facts.length + keywords.length);
+  const issues = caseStateIssueTitles(caseState);
+  const risks = caseStatePlanItems(caseState, "risk_plan");
+  const queries = caseState.research_queries || [];
+  els.analysisCount.textContent = String(facts.length + keywords.length + issues.length + risks.length + queries.length);
   els.analysisOutput.className = "result-list";
   els.analysisOutput.innerHTML = `
     <div class="result-item">
@@ -873,6 +952,20 @@ function renderAnalysis(data) {
       <ol class="compact-list">
         ${facts.map((fact) => `<li>${escapeHtml(fact)}</li>`).join("")}
       </ol>
+    </div>
+    <div class="result-item">
+      <h3>Hukuki Meseleler</h3>
+      <ol class="compact-list">${issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Hukuki mesele Ã¼retilmedi.</li>"}</ol>
+    </div>
+    <div class="result-item">
+      <h3>Kritik Riskler</h3>
+      <ol class="compact-list">${risks
+        .map((item) => `<li><strong>${escapeHtml(item.title || "Risk")}:</strong> ${escapeHtml(item.reason || "Sebep belirtilmedi.")}</li>`)
+        .join("") || "<li>Kritik risk bulunmadÄ±.</li>"}</ol>
+    </div>
+    <div class="result-item">
+      <h3>Arastirma Sorgulari</h3>
+      <div class="meta-row">${queries.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") || "<span class=\"chip\">Sorgu Ã¼retilmedi</span>"}</div>
     </div>
   `;
 }
@@ -1509,6 +1602,8 @@ function dynamicRiskState() {
 
 function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, sourceAudit = null, precedentAudit = null, draftWarnings = [], draftGrounding = [] } = {}) {
   const cards = [];
+  const caseState = currentCaseState();
+  const reasonerRiskPlan = caseStatePlanItems(caseState, "risk_plan");
   const dynamic = dynamicRiskState();
   const missing = dedupeIssues([
     ...dynamic.missing,
@@ -1563,6 +1658,11 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
   pushCard("Vakıa / kaynak grounding", [...documentGrounding, ...groundingNotes], "info");
   pushCard("Dilekçe Notları", languageProblems, "info");
 
+  pushCard(
+    "Reasoner risk plani",
+    reasonerRiskPlan.map((item) => `[${String(item.level || "info").toUpperCase()}] ${item.title || "Risk"}: ${item.reason || "Sebep belirtilmedi."} Mitigasyon: ${item.mitigation || "Belirtilmedi."}`),
+    "danger",
+  );
   els.riskCount.textContent = String(cards.reduce((total, card) => total + card.items.length, 0));
   if (!cards.length) {
     els.riskOutput.className = "empty-state";
@@ -1644,6 +1744,8 @@ function defenseSimulationItems() {
 }
 
 function renderStrategyToolkit() {
+  const caseState = currentCaseState();
+  const questionPlan = caseStatePlanItems(caseState, "question_plan");
   const dynamic = dynamicRiskState();
   const answers = buildAnswers();
   const profile = currentProfileKey();
@@ -1698,6 +1800,12 @@ function renderStrategyToolkit() {
   els.clientQuestionsOutput.innerHTML = `<div class="result-item"><h3>Müvekkile gönderilecek kısa liste</h3><ol class="compact-list">${clientQuestions
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join("")}</ol></div>`;
+
+  if (questionPlan.length) {
+    els.clientQuestionsOutput.innerHTML = `<div class="result-item"><h3>Muvekkile gonderilecek kisa liste</h3><ol class="compact-list">${questionPlan
+      .map((item) => `<li><strong>${escapeHtml(item.question || "Soru")}</strong><br><small>Neden: ${escapeHtml(item.reason || "Belirtilmedi")}</small></li>`)
+      .join("")}</ol></div>`;
+  }
 
   const defenses = defenseSimulationItems();
   els.defenseCount.textContent = String(defenses.length);
@@ -1777,6 +1885,7 @@ async function runAnalysis() {
       case_text: caseText,
       enriched_case_text: lastCaseEnrichment?.enriched_case_text || null,
     });
+    setCaseState(data.case_state || null);
     renderAnalysis(data);
     setStatus("Analiz tamamlandı.");
     return data;
@@ -1820,6 +1929,7 @@ async function runAIQuestions() {
     renderStrategy(lastStrategy);
     renderQuestionFields(questions);
     prefillQuestionsFromDocuments();
+    await refreshCaseState();
     lastStrategyCase = caseText;
     lastStrategyRequest = getRequestType();
     setStatus(`${questions.length} yerel soru hazır.`);
@@ -2050,6 +2160,7 @@ async function prepareQuestions(force = false) {
     renderStrategy(data);
     renderQuestionFields([...(data.missing_information_questions || []), ...documentMissingQuestions()]);
     prefillQuestionsFromDocuments();
+    await refreshCaseState();
     lastStrategyCase = caseText;
     lastStrategyRequest = getRequestType();
     setStatus("Sorular hazır. Cevapları doldurup Dilekçe'ye tekrar bas.");
@@ -2101,7 +2212,7 @@ async function runDraft(options = {}) {
       ]).slice(0, 50),
     });
     lastDraftData = data;
-    window.lastCaseState = data.case_state || {};
+    setCaseState(data.case_state || null);
     renderDraft(data);
     let draftAudit = null;
     if (options.auditAndRefine) {
@@ -2211,6 +2322,7 @@ async function runFullReview() {
   try {
     setStatus("1/11 Olay analizi yapılıyor...");
     analysis = await apiPost("/case/analyze", { case_text: caseText });
+    setCaseState(analysis.case_state || null);
     renderAnalysis(analysis);
 
     setStatus("2/11 AI olay netleştirme çalışıyor...");

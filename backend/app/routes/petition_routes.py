@@ -131,15 +131,35 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
         (fact.fact_key, fact.fact_value.casefold(), fact.source_file_name.casefold()): fact
         for fact in grounded_document_facts
     }.values())
+    question_answers = {
+        str(key): str(value)
+        for key, value in request.answers.items()
+        if str(key).strip() and str(value).strip()
+    }
+    document_fact_lines = [f"{fact.fact_key}: {fact.fact_value}" for fact in grounded_document_facts]
     reasoning = dynamic_legal_reasoner_service.analyze(
         event_text=request.case_text,
-        document_facts=[f"{fact.fact_key}: {fact.fact_value}" for fact in grounded_document_facts],
-        question_answers=request.answers,
+        document_facts=document_fact_lines,
+        question_answers=question_answers,
+    )
+    case_state = case_state_service.build(
+        event_text=request.case_text,
+        area=request.request_type,
+        case_type=request.case_enrichment.get("detected_case_type", ""),
+        document_facts=document_fact_lines,
+        question_answers=question_answers,
+        legal_sources=[*request.legal_grounds, *reasoning.get("research_queries", [])],
+        precedent_candidates=request.precedent_candidates,
+        drafting_package={},
+        analysis_context={
+            "documents": [{"document_type": item} for item in document_types],
+            "warnings": [*request.drafting_warnings, *list(request.case_enrichment.get("risk_flags") or [])],
+        },
     )
     package = final_petition_writer_service.build_package(
         case_text=request.case_text,
         request_type=request.request_type,
-        answers=request.answers,
+        answers=question_answers,
         confirmed_facts=[
             *request.confirmed_facts,
             *list(request.case_enrichment.get("confirmed_facts") or []),
@@ -155,24 +175,16 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
         relief_requests=request.relief_requests,
         drafting_warnings=request.drafting_warnings,
         writer_mode=getattr(request, "writer_mode", "local"),
+        case_state=case_state,
     )
     package.precedent_for_petition = [
         " | ".join(part for part in [decision.court, decision.esas_no, decision.karar_no, decision.date, decision.petition_paragraph] if part)
         for decision in (request.audited_precedents or request.selected_decisions)
     ]
     package.precedents_for_petition = list(package.precedent_for_petition)
-    package.risks = list(dict.fromkeys([*package.risks, *request.drafting_warnings, *list(request.case_enrichment.get("risk_flags") or []), *reasoning.get("risk_plan", [])]))
-    package.legal_sources = list(dict.fromkeys([*package.legal_sources, *reasoning.get("research_queries", [])]))
-    case_state = case_state_service.build(
-        event_text=request.case_text,
-        area=request.request_type,
-        case_type=package.case_type,
-        document_facts=package.document_facts,
-        question_answers=request.answers,
-        legal_sources=package.legal_sources,
-        precedent_candidates=request.precedent_candidates,
-        drafting_package=package.model_dump(mode="json"),
-    )
+    package.risks = list(dict.fromkeys([*package.risks, *request.drafting_warnings, *list(request.case_enrichment.get("risk_flags") or []), *case_state.get("risk_items", [])]))
+    package.legal_sources = list(dict.fromkeys([*package.legal_sources, *case_state.get("research_queries", [])]))
+    case_state["drafting_package"] = package.model_dump(mode="json")
     response = final_petition_writer_service.write(package)
     response.case_state = case_state
     return response

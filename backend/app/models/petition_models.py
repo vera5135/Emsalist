@@ -199,6 +199,9 @@ class DraftingPackage(BaseModel):
     case_type: str = ""
     question_answers: dict[str, str] = Field(default_factory=dict)
     document_facts: list[str] = Field(default_factory=list)
+    legal_issues: list[str] = Field(default_factory=list)
+    evidence_plan: list[str] = Field(default_factory=list)
+    risk_plan: list[str] = Field(default_factory=list)
     petition_type: str
     court_heading: str
     court_safety_note: str = ""

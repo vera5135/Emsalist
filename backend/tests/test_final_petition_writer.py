@@ -254,5 +254,26 @@ class FinalPetitionRouteTests(unittest.TestCase):
                 self.assertEqual(len(client.get("/documents").json()), 1)
 
 
+def _patched_dynamic_reasoner_test(self) -> None:
+    reasoning = dynamic_legal_reasoner_service.analyze(
+        event_text=CASE_TEXT,
+        document_facts=["sale_date: 12.04.2024", "notary_info: Ä°zmir 12. NoterliÄŸi"],
+        question_answers={"SatÄ±cÄ± galeri/tacir/ÅŸirket mi?": "Bilmiyorum"},
+    )
+    self.assertTrue(reasoning["legal_issues"])
+    self.assertEqual(reasoning["legal_issues"][0]["issue_key"], "sale_relationship")
+    self.assertIn("hidden_defect", [item["issue_key"] for item in reasoning["legal_issues"]])
+    self.assertIn("seller_status", [item["issue_key"] for item in reasoning["legal_issues"]])
+    self.assertGreaterEqual(len(reasoning["research_queries"]), 5)
+    self.assertTrue(any("TBK 223" in item for item in reasoning["research_queries"]))
+    self.assertEqual(reasoning["risk_plan"][0]["level"], "high")
+    self.assertTrue(reasoning["question_plan"])
+    self.assertIn("seller_status", [item["related_issue_key"] for item in reasoning["question_plan"]])
+    self.assertIn("mevzuat.gov.tr", SAFE_SOURCE_DOMAINS)
+
+
+FinalPetitionWriterTests.test_dynamic_reasoner_builds_vehicle_issues_and_queries = _patched_dynamic_reasoner_test
+
+
 if __name__ == "__main__":
     unittest.main()

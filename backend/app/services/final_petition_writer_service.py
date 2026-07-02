@@ -61,9 +61,11 @@ class FinalPetitionWriterService:
         legal_grounds: list[str] | None = None,
         relief_requests: list[str] | None = None,
         drafting_warnings: list[str] | None = None,
+        case_state: dict[str, Any] | None = None,
         writer_mode: str = "local",
     ) -> DraftingPackage:
         answers = answers or {}
+        case_state = case_state or {}
         facts = self._dedupe_document_facts(document_facts or [])
         fact_map = {fact.fact_key: fact.fact_value for fact in facts}
         profile = get_petition_profile(case_text, request_type)
@@ -114,7 +116,7 @@ class FinalPetitionWriterService:
         clean_evidence = self._evidence_items(
             document_types=document_types or [],
             fact_map=fact_map,
-            requested=evidence_items or [],
+            requested=[*(evidence_items or []), *list(case_state.get("evidence_items") or []), *[item.get("title", "") for item in case_state.get("evidence_plan", []) if isinstance(item, dict)]],
             is_vehicle_case=is_vehicle_case,
         )
         clean_grounds = self._legal_grounds(
@@ -124,21 +126,24 @@ class FinalPetitionWriterService:
             consumer_confirmed=consumer_confirmed,
         )
         clean_relief = self._relief_requests(
-            requested=relief_requests or [],
+            requested=relief_requests or list(case_state.get("relief_requests") or []),
             request_type=request_type,
             is_vehicle_case=is_vehicle_case,
         )
         warnings = self._dedupe_clean(
-            [court_safety_note, *(drafting_warnings or []), *clean_missing],
+            [court_safety_note, *(drafting_warnings or []), *clean_missing, *list(case_state.get("risk_items") or [])],
             reject_technical=True,
         )
 
         package = DraftingPackage(
             event_text=self._clean_fact(case_text),
             area=request_type,
-            case_type=profile.key,
+            case_type=str(case_state.get("case_type") or profile.key),
             question_answers={str(key): str(value) for key, value in answers.items() if str(key).strip() and str(value).strip()},
-            document_facts=[f"{fact.fact_key}: {fact.fact_value}" for fact in facts],
+            document_facts=list(case_state.get("document_facts") or [f"{fact.fact_key}: {fact.fact_value}" for fact in facts]),
+            legal_issues=[item.get("title", "") for item in case_state.get("legal_issues", []) if isinstance(item, dict)],
+            evidence_plan=[item.get("title", "") for item in case_state.get("evidence_plan", []) if isinstance(item, dict)],
+            risk_plan=[item.get("title", "") for item in case_state.get("risk_plan", []) if isinstance(item, dict)],
             petition_type=petition_type,
             court_heading=court_heading,
             court_safety_note=court_safety_note,
