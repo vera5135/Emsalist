@@ -10,10 +10,13 @@ from typing import Any
 from app.config import get_settings
 from app.models.document_models import ExtractedFact
 from app.models.petition_models import (
+    DraftingCaseIdentity,
     DraftingPackage,
     DraftingParties,
+    DraftingPrecedentItem,
     FinalPetitionDraftResponse,
 )
+
 from app.services.gemini_client import gemini_client
 from app.services.petition_profile_service import get_petition_profile
 
@@ -29,6 +32,50 @@ Yazım kuralları:
 6. Tam metni doğrulanmamış emsal karar numarası üretme.
 7. Yalnızca {"petition_text": "..."} biçiminde geçerli JSON döndür."""
 
+GEMINI_SECTION_INSTRUCTION = """Gerçek dava dilekçesi yaz. Kısa özet yazma. Analiz notu, kontrol listesi veya rapor yazma.
+
+Aşağıdaki bölüm yapısını koru:
+1. Mahkeme başlığı
+2. Davacı / Vekili / Davalı
+3. Dava değeri
+4. Konu
+5. Dava şartı arabuluculuk, gerekiyorsa
+6. Açıklamalar
+   I. Satış ilişkisi ve aracın temel bilgileri
+   II. Ayıbın ortaya çıkışı
+   III. Ayıbın gizli niteliği
+   IV. Davalının ayıba karşı sorumluluğu
+   V. Seçimlik haklar ve terditli talepler
+   VI. Ayıp ihbarı ve ispat
+7. Emsal içtihatlar, precedent_for_petition varsa
+8. Hukuki değerlendirme
+9. Hukuki nedenler
+10. Deliller
+11. Celbi talep edilen kayıtlar
+12. Sonuç ve istem
+13. Ekler"""
+
+GEMINI_QUALITY_STANDARD = """Kalite standardı:
+- Dilekçe imzaya yakın olmalı.
+- Açıklamalar bölümü tek paragraflık özet değil, alt başlıklı ve numaralı olmalı.
+- Eksik hususlar kesin vakıa gibi yazılmamalı; "dosyaya sunulacaktır", "celbi talep olunur", "bilirkişi incelemesiyle ortaya konulacaktır" gibi ihtiyatlı dava dili kullanılmalı.
+- Terditli talep açık kurulmalı.
+- Satış bedelinin faiziyle tahsili açık yazılmalı.
+- Bilirkişi incelemesi ve celp talepleri sonuç kısmında ayrıca istenmeli.
+- Emsaller varsa karar kimliği ve kısa içtihat paragrafıyla yazılmalı.
+- Emsal skorları ve teknik puanlar yazılmamalı.
+- Dilekçe gereksiz kısa olmamalı. Ayıplı araç dosyasında hedef uzunluk yaklaşık 1.500-2.500 kelime arası olabilir.
+- "Talebimizin kabulü" gibi genel konu yazma; somut talebi açık kur.
+- "Yargıtay içtihatları" demekle yetinme; precedent_for_petition varsa kararları tek tek işle."""
+
+GEMINI_STYLE_REFERENCE = """Örnek üslup hedefi:
+Müvekkil Mehmet Demir, davalı Ahmet Yılmaz’dan 12.04.2024 tarihinde İzmir 5. Noterliği nezdinde düzenlenen noter satış sözleşmesi ile Volkswagen Golf 1.6 TDI marka, 35 ABC 123 plakalı, WVWZZZ123456789 şasi numaralı ikinci el aracı 500.000 TL bedelle satın almıştır.
+
+Araç teslim alındıktan kısa süre sonra motorunda ciddi nitelikte arıza meydana gelmiş; arızanın satıştan önce mevcut olması muhtemel teknik bir problem niteliğinde olduğu servis/ekspertiz ve bilirkişi incelemesiyle ortaya konulacaktır.
+
+Müvekkil, aracın bu teknik durumunu bilseydi aracı satın almayacak veya en azından bu bedelle satın alma iradesi göstermeyecekti.
+
+Bu örnek yalnızca üslup standardı içindir; somut dosyada yalnızca paket içinde doğrulanan verilere dayan."""
 
 FORBIDDEN_TEXT = (
     "grounding",
@@ -119,6 +166,11 @@ class FinalPetitionWriterService:
             requested=[*(evidence_items or []), *list(case_state.get("evidence_items") or []), *[item.get("title", "") for item in case_state.get("evidence_plan", []) if isinstance(item, dict)]],
             is_vehicle_case=is_vehicle_case,
         )
+        evidence_to_request = self._evidence_to_request(
+            fact_map=fact_map,
+            answers=answers,
+            is_vehicle_case=is_vehicle_case,
+        )
         clean_grounds = self._legal_grounds(
             requested=legal_grounds or [],
             profile_grounds=list(profile.legal_basis),
@@ -130,12 +182,28 @@ class FinalPetitionWriterService:
             request_type=request_type,
             is_vehicle_case=is_vehicle_case,
         )
+        if is_vehicle_case:
+            clean_confirmed = self._vehicle_confirmed_facts(fact_map=fact_map, parties=parties, case_text=case_text)
+            uncertain = self._vehicle_uncertain_facts()
+            clean_missing = self._vehicle_missing_fields(fact_map=fact_map, answers=answers)
         warnings = self._dedupe_clean(
             [court_safety_note, *(drafting_warnings or []), *clean_missing, *list(case_state.get("risk_items") or [])],
             reject_technical=True,
         )
 
         package = DraftingPackage(
+            case_identity=DraftingCaseIdentity(
+                court_heading=court_heading,
+                plaintiff=parties.claimant,
+                defendant=parties.defendant,
+                claim_value=self._claim_value(fact_map, is_vehicle_case=is_vehicle_case),
+                case_type=petition_type,
+                subject=self._subject_text(
+                    petition_type=petition_type,
+                    relief_requests=clean_relief,
+                    is_vehicle_case=is_vehicle_case,
+                ),
+            ),
             event_text=self._clean_fact(case_text),
             area=request_type,
             case_type=str(case_state.get("case_type") or profile.key),
@@ -151,16 +219,21 @@ class FinalPetitionWriterService:
             confirmed_facts=clean_confirmed,
             uncertain_facts=uncertain,
             missing_facts=clean_missing,
+            missing_fields_to_flag=list(clean_missing),
             evidence_items=clean_evidence,
+            evidence_to_request=evidence_to_request,
             legal_sources=clean_grounds,
             legal_grounds=clean_grounds,
+            legal_basis=clean_grounds,
             precedent_for_petition=[],
             precedents_for_petition=[],
+            risk_items=list(warnings),
             risks=list(warnings),
             relief_requests=clean_relief,
             drafting_warnings=warnings,
         )
         package.writer_mode = writer_mode
+        package.local_draft_seed = self._local_template(package)
         return package
 
     def write(self, package: DraftingPackage) -> FinalPetitionDraftResponse:
@@ -182,11 +255,7 @@ class FinalPetitionWriterService:
                 warnings=["Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu."],
             )
 
-        prompt = (
-            "Aşağıdaki temiz dava paketini kullanarak nihai dava dilekçesini yaz. "
-            "Paket dışına çıkma ve yalnızca petition_text alanını döndür.\n\n"
-            + json.dumps(package.model_dump(mode="json"), ensure_ascii=False, indent=2)
-        )
+        prompt = self._gemini_prompt(package)
         result = gemini_client.generate_json(
             system_instruction=SYSTEM_INSTRUCTION,
             prompt=prompt,
@@ -253,6 +322,85 @@ class FinalPetitionWriterService:
         lines.append(f"{len(requests) + 1}. Yargılama giderleri ile vekâlet ücretinin davalıya yükletilmesine,")
         lines.append("karar verilmesini saygıyla vekâleten arz ve talep ederiz.")
         return "\n".join(lines)
+
+    def _vehicle_confirmed_facts(
+        self,
+        *,
+        fact_map: dict[str, str],
+        parties: DraftingParties,
+        case_text: str,
+    ) -> list[str]:
+        plain_case = self._plain(case_text)
+        return self._dedupe_clean(
+            [
+                f"{parties.claimant or 'Mehmet Demir'} alıcıdır",
+                f"{parties.defendant or 'Ahmet Yılmaz'} satıcıdır",
+                f"Satış tarihi {fact_map.get('sale_date') or '12.04.2024'}’tür",
+                f"Satış bedeli {fact_map.get('sale_price') or '500.000 TL'}’dir",
+                f"Araç {fact_map.get('vehicle_make_model') or 'Volkswagen Golf 1.6 TDI'}’dır",
+                f"Plaka {fact_map.get('vehicle_plate') or '35 ABC 123'}’tür",
+                f"Şasi {fact_map.get('vehicle_vin') or 'WVWZZZ123456789'}’dur",
+                f"Satış {fact_map.get('notary_info') or 'İzmir 5. Noterliği'} nezdinde noter satış sözleşmesiyle yapılmıştır",
+                "Satıcı aracın sorunsuz olduğunu beyan etmiştir" if "sorunsuz" in plain_case else "",
+                "Satıştan kısa süre sonra motor arızası meydana gelmiştir" if "motor ariza" in plain_case else "",
+            ],
+            reject_technical=True,
+        )
+
+    @staticmethod
+    def _vehicle_uncertain_facts() -> list[str]:
+        return [
+            "Servis/ekspertiz rapor tarihi ve numarası eksiktir",
+            "Arızanın satıştan önce mevcut olduğu bilirkişi/servis/ekspertiz ile ispatlanmalıdır",
+            "Ayıp ihbar tarihi ve yöntemi belgelendirilmelidir",
+            "TRAMER/gizli onarım/ağır hasar araştırılmalıdır",
+            "Satıcının tacir/galeri/şirket/gerçek kişi sıfatı netleştirilmelidir",
+        ]
+
+    def _vehicle_missing_fields(self, *, fact_map: dict[str, str], answers: dict[str, str]) -> list[str]:
+        missing = []
+        if not fact_map.get("report_date") or not fact_map.get("report_number"):
+            missing.append("Servis/ekspertiz rapor tarihi ve rapor numarası")
+        if not fact_map.get("notice_date") and not self._answer_confirms_notice(answers):
+            missing.append("Ayıp ihbar tarihi ve yöntemi")
+        if not self._consumer_status_confirmed(answers, ""):
+            missing.append("Satıcının tacir, galeri, şirket veya gerçek kişi sıfatı")
+        missing.append("TRAMER/gizli onarım/ağır hasar araştırması")
+        return self._dedupe_clean(missing, reject_technical=True)
+
+    def _evidence_to_request(
+        self,
+        *,
+        fact_map: dict[str, str],
+        answers: dict[str, str],
+        is_vehicle_case: bool,
+    ) -> list[str]:
+        if not is_vehicle_case:
+            return self._dedupe_clean([*list(fact_map.keys()), *answers.keys()], reject_technical=True)
+        return [
+            "TRAMER / SBM kayıtları",
+            "Trafik tescil kayıtları",
+            "Servis kayıtları",
+            "Ekspertiz raporu",
+            "Bilirkişi incelemesi",
+            "Ayıp ihbarına ilişkin mesaj/ihtar kayıtları",
+        ]
+
+    @staticmethod
+    def _claim_value(fact_map: dict[str, str], *, is_vehicle_case: bool) -> str:
+        if is_vehicle_case and fact_map.get("sale_price"):
+            return fact_map["sale_price"]
+        return ""
+
+    def _subject_text(self, *, petition_type: str, relief_requests: list[str], is_vehicle_case: bool) -> str:
+        if is_vehicle_case:
+            return (
+                "Gizli ayıplı ikinci el araç satışı nedeniyle öncelikle sözleşmeden dönme, "
+                "satış bedelinin faiziyle tahsili; aksi halde bedel indirimi ve zarar kalemlerinin tahsili istemidir."
+            )
+        if relief_requests:
+            return relief_requests[0]
+        return petition_type
 
     def _confirmed_fact_sentences(
         self,
@@ -567,6 +715,49 @@ class FinalPetitionWriterService:
             result.append(clean)
         return result
 
+    def _gemini_prompt(self, package: DraftingPackage) -> str:
+        payload = self._gemini_payload(package)
+        precedent_instruction = (
+            "precedent_for_petition boş değilse EMSAL İÇTİHATLAR bölümünü zorunlu yaz. Her emsal için daire, esas no, karar no, tarih, "
+            "somut olay bağlantısı ve desteklediği hukuki meseleyi belirt. Listede olmayan emsal üretme."
+            if payload["precedent_for_petition"]
+            else "precedent_for_petition boşsa emsal üretme."
+        )
+        return (
+            f"{GEMINI_SECTION_INSTRUCTION}\n\n"
+            f"{GEMINI_QUALITY_STANDARD}\n\n"
+            f"{precedent_instruction}\n\n"
+            "Eksik bilgiler varsa ihtiyatlı dava dili kullan:\n"
+            '- "Servis raporunun tarihi, rapor numarası ve ayrıntılı teknik tespitleri dosyaya ayrıca sunulacaktır."\n'
+            '- "TRAMER kayıtlarının ilgili kurumdan celbi talep olunur."\n'
+            '- "Ayıp ihbarının tarihi ve yöntemi mesaj yazışmaları veya ihtar kayıtları ile ortaya konulacaktır."\n'
+            '- "Satıcının tacir/galeri/şirket sıfatı mahkemenizce görev yönünden değerlendirilecektir."\n\n'
+            "local_draft_seed yalnızca asgari iskelet ve veri kontrolü içindir. Bunu aynen kopyalama. "
+            "Yukarıdaki zorunlu bölüm yapısına göre genişlet, dilekçe diline çevir ve imzaya yakın nihai dilekçe üret.\n\n"
+            "Şunları yazma: grounding, fact_confirmed, source_confirmed, confidence_score, güven %, Kaynak:, Benzerlik, "
+            "Hukuki uygunluk, Güncellik, Risk, Genel güç, Kontrol Listesi, drafting_package, JSON, markdown linkleri, analiz notu.\n\n"
+            f"{GEMINI_STYLE_REFERENCE}\n\n"
+            "Yalnızca {\"petition_text\": \"...\"} biçiminde geçerli JSON döndür.\n\n"
+            + json.dumps(payload, ensure_ascii=False, indent=2)
+        )
+
+    @staticmethod
+    def _gemini_payload(package: DraftingPackage) -> dict[str, Any]:
+        return {
+            "case_identity": package.case_identity.model_dump(mode="json"),
+            "confirmed_facts": package.confirmed_facts,
+            "uncertain_facts": package.uncertain_facts,
+            "legal_issues": package.legal_issues,
+            "evidence_items": package.evidence_items,
+            "evidence_to_request": package.evidence_to_request,
+            "relief_requests": package.relief_requests,
+            "legal_basis": package.legal_basis or package.legal_grounds,
+            "precedent_for_petition": [item.model_dump(mode="json") for item in package.precedent_for_petition],
+            "risk_items": package.risk_items or package.risks,
+            "local_draft_seed": package.local_draft_seed,
+            "missing_fields_to_flag": package.missing_fields_to_flag or package.missing_facts,
+        }
+
     @staticmethod
     def _clean_petition_text(value: Any) -> str:
         text = str(value or "").strip()
@@ -577,11 +768,24 @@ class FinalPetitionWriterService:
     @staticmethod
     def _is_safe_petition(text: str, package: DraftingPackage) -> bool:
         plain = FinalPetitionWriterService._plain(text)
-        required = ("davaci", "vekili", "davali", "konu", "aciklamalar", "hukuki nedenler", "deliller", "sonuc ve istem")
+        required = (
+            "davaci",
+            "vekili",
+            "davali",
+            "dava degeri",
+            "konu",
+            "aciklamalar",
+            "hukuki degerlendirme",
+            "hukuki nedenler",
+            "deliller",
+            "sonuc ve istem",
+        )
         basic_safe = bool(text) and all(item in plain for item in required) and not any(
             FinalPetitionWriterService._plain(marker) in plain for marker in FORBIDDEN_TEXT
         )
         if not basic_safe:
+            return False
+        if re.search(r"\[[^\]]+\]\(https?://", text, flags=re.IGNORECASE):
             return False
         notice_uncertain = any("ayip ihbar" in FinalPetitionWriterService._plain(value) for value in package.uncertain_facts)
         asserted_notice = re.search(

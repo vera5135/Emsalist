@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.models.petition_models import (
+    DraftingPrecedentItem,
     FinalPetitionDraftRequest,
     FinalPetitionDraftResponse,
     GroundingNote,
@@ -178,10 +179,21 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
         case_state=case_state,
     )
     package.precedent_for_petition = [
-        " | ".join(part for part in [decision.court, decision.esas_no, decision.karar_no, decision.date, decision.petition_paragraph] if part)
+        DraftingPrecedentItem(
+            court=decision.court,
+            esas_no=decision.esas_no,
+            karar_no=decision.karar_no,
+            date=decision.date,
+            summary=decision.petition_paragraph,
+            relevance=decision.petition_paragraph,
+            supported_issue=decision.petition_paragraph,
+        )
         for decision in (request.audited_precedents or request.selected_decisions)
     ]
-    package.precedents_for_petition = list(package.precedent_for_petition)
+    package.precedents_for_petition = [
+        " | ".join(part for part in [item.court, item.esas_no, item.karar_no, item.date, item.summary] if part)
+        for item in package.precedent_for_petition
+    ]
     package.risks = list(dict.fromkeys([*package.risks, *request.drafting_warnings, *list(request.case_enrichment.get("risk_flags") or []), *case_state.get("risk_items", [])]))
     package.legal_sources = list(dict.fromkeys([*package.legal_sources, *case_state.get("research_queries", [])]))
     case_state["drafting_package"] = package.model_dump(mode="json")

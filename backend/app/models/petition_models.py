@@ -183,6 +183,25 @@ class DraftingParties(BaseModel):
     attorney: str = "Av. ..."
 
 
+class DraftingCaseIdentity(BaseModel):
+    court_heading: str = ""
+    plaintiff: str = ""
+    defendant: str = ""
+    claim_value: str = ""
+    case_type: str = ""
+    subject: str = ""
+
+
+class DraftingPrecedentItem(BaseModel):
+    court: str = ""
+    esas_no: str = ""
+    karar_no: str = ""
+    date: str = ""
+    summary: str = ""
+    relevance: str = ""
+    supported_issue: str = ""
+
+
 class FinalPetitionDraftRequest(PetitionDraftRequest):
     analysis_approved: bool = False
     review_completed: bool = False
@@ -194,6 +213,9 @@ class FinalPetitionDraftRequest(PetitionDraftRequest):
 
 
 class DraftingPackage(BaseModel):
+    case_identity: DraftingCaseIdentity = Field(default_factory=DraftingCaseIdentity)
+    local_draft_seed: str = ""
+    missing_fields_to_flag: list[str] = Field(default_factory=list)
     event_text: str = ""
     area: str = ""
     case_type: str = ""
@@ -210,10 +232,13 @@ class DraftingPackage(BaseModel):
     uncertain_facts: list[str] = Field(default_factory=list)
     missing_facts: list[str] = Field(default_factory=list)
     evidence_items: list[str] = Field(default_factory=list)
+    evidence_to_request: list[str] = Field(default_factory=list)
     legal_sources: list[str] = Field(default_factory=list)
     legal_grounds: list[str] = Field(default_factory=list)
-    precedent_for_petition: list[str] = Field(default_factory=list)
+    legal_basis: list[str] = Field(default_factory=list)
+    precedent_for_petition: list[DraftingPrecedentItem] = Field(default_factory=list)
     precedents_for_petition: list[str] = Field(default_factory=list)
+    risk_items: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
     relief_requests: list[str] = Field(default_factory=list)
     drafting_warnings: list[str] = Field(default_factory=list)
