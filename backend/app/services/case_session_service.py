@@ -42,6 +42,7 @@ def _default_case_payload(case_id: str) -> dict[str, Any]:
         "case_enrichment": {},
         "better_searches": {},
         "generated_questions": [],
+        "legal_issue_graph": {},
     }
 
 
@@ -141,6 +142,7 @@ class CaseSessionService:
             "case_enrichment": deepcopy(payload.get("case_enrichment", {})),
             "better_searches": deepcopy(payload.get("better_searches", {})),
             "generated_questions": deepcopy(payload.get("generated_questions", [])),
+            "legal_issue_graph": deepcopy(payload.get("legal_issue_graph", {})),
         }
 
     def _generate_case_id(self) -> str:

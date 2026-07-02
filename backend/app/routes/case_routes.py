@@ -14,6 +14,7 @@ from app.services.case_analyzer import case_analyzer
 from app.services.case_session_service import case_session_service
 from app.services.case_state_service import case_state_service
 from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_service
+from app.services.legal_issue_graph_service import legal_issue_graph_service
 from app.services.petition_profile_service import get_petition_profile
 
 router = APIRouter(prefix="/case", tags=["Case Analysis"])
@@ -142,3 +143,17 @@ def run_dynamic_reasoner(request: DynamicReasonerRequest) -> dict:
         dynamic_reasoning=reasoning,
     )
     return {**reasoning, "case_state": case_state}
+
+
+@router.get("/legal-issue-graph")
+def get_legal_issue_graph(case_id: Annotated[str | None, Query()] = None) -> dict:
+    """Build and return the Legal Issue Graph for the current case."""
+    resolved_case_id = case_session_service.resolve_case_id(case_id)
+    case_state = case_session_service.get_case_state(resolved_case_id)
+    graph = legal_issue_graph_service.build(case_state)
+    graph_dict = graph.model_dump(mode="json")
+    case_session_service.update_case(
+        resolved_case_id,
+        legal_issue_graph=graph_dict,
+    )
+    return graph_dict

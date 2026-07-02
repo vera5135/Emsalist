@@ -99,6 +99,20 @@ FORBIDDEN_TEXT = (
     "attempted_queries",
     "raw_live_result_count",
     "parsed_live_result_count",
+    "legal_issue_graph",
+    "graph_summary",
+    "drafting_plan",
+    "issue_id",
+    "required_facts",
+    "confirmed_facts",
+    "missing_facts",
+    "missing_evidence",
+    "risk_level",
+    "grounding",
+    "source_summary",
+    "attempted_queries",
+    "raw_live_result_count",
+    "parsed_live_result_count",
 )
 
 

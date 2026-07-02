@@ -260,6 +260,8 @@ class DraftingPackage(BaseModel):
     relief_requests: list[str] = Field(default_factory=list)
     drafting_warnings: list[str] = Field(default_factory=list)
     writer_mode: str = "local"
+    graph_summary: str = ""
+    drafting_plan: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class FinalPetitionDraftResponse(BaseModel):

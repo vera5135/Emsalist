@@ -19,6 +19,7 @@ from app.services.case_state_service import case_state_service
 from app.services.document_intake_service import document_intake_service
 from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_service
 from app.services.final_petition_writer_service import final_petition_writer_service
+from app.services.legal_issue_graph_service import legal_issue_graph_service
 from app.services.petition_draft_service import petition_draft_service
 from app.services.petition_strategy_service import petition_strategy_service
 
@@ -307,6 +308,20 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
     package.risks = list(dict.fromkeys([*package.risks, *request.drafting_warnings, *list(enriched_case.get("risk_flags") or []), *case_state.get("risk_items", [])]))
     package.legal_sources = list(dict.fromkeys([*package.legal_sources, *case_state.get("research_queries", [])]))
     case_state["drafting_package"] = package.model_dump(mode="json")
+
+    # ── Legal Issue Graph: attach clean drafting_plan & summary ─────
+    try:
+        graph = legal_issue_graph_service.build(case_state)
+        package.drafting_plan = [
+            item.model_dump(mode="json") for item in graph.drafting_plan
+        ]
+        package.graph_summary = " | ".join(
+            f"{i.title}: {i.risk_level.upper()}"
+            for i in graph.issues
+        )
+    except Exception:
+        pass
+
     response = final_petition_writer_service.write(package)
     response.case_state = case_state
     case_session_service.update_case(
