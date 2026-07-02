@@ -6,6 +6,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 backend/app/document_store/
+backend/app/case_store/
 
 .env
 backend/.env
