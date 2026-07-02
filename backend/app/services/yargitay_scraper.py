@@ -7,6 +7,7 @@ cookies. It intentionally stops when a CAPTCHA is displayed.
 """
 
 import asyncio
+import logging
 import random
 import sys
 from contextlib import suppress
@@ -57,6 +58,7 @@ DETAIL_TIMEOUT_MS = 20_000
 BETWEEN_QUERY_DELAY_RANGE_SECONDS = (2.0, 4.0)
 BETWEEN_DETAIL_DELAY_RANGE_SECONDS = (1.0, 2.0)
 RATE_LIMIT_MESSAGE = "Yargıtay hız sınırı uyguladı; mevcut sonuçlarla devam edildi."
+logger = logging.getLogger(__name__)
 
 
 class YargitayAccessBlocked(Exception):
@@ -107,12 +109,19 @@ class YargitayScraper:
     async def _search_with_browser(self, queries: list[str], max_results: int) -> YargitaySearchResponse:
         results: list[YargitayDecision] = []
         errors: list[str] = []
+        attempted_queries: list[str] = []
         seen_detail_urls: set[str] = set()
+        skipped_due_to_rate_limit = False
 
         if async_playwright is None:
             message = self._short_error(PLAYWRIGHT_IMPORT_ERROR or RuntimeError("Playwright kullanılamıyor."))
             errors.append(f"Playwright kullanılamıyor; Yargıtay araması çalıştırılamadı: {message}")
-            return YargitaySearchResponse(results=results, errors=errors)
+            return YargitaySearchResponse(
+                results=results,
+                errors=errors,
+                attempted_queries=attempted_queries,
+                skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+            )
 
         browser: Browser | None = None
         context: BrowserContext | None = None
@@ -134,15 +143,30 @@ class YargitayScraper:
                     if response is None or response.status >= 400:
                         status = response.status if response else "yanıt yok"
                         errors.append(f"Yargıtay sitesine erişilemedi (HTTP: {status}).")
-                        return YargitaySearchResponse(results=results, errors=errors)
+                        return YargitaySearchResponse(
+                            results=results,
+                            errors=errors,
+                            attempted_queries=attempted_queries,
+                            skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+                        )
 
                     if await self._captcha_is_active(page):
                         errors.append("Yargıtay sitesi CAPTCHA doğrulaması istiyor; otomatik arama durduruldu.")
-                        return YargitaySearchResponse(results=results, errors=errors)
+                        return YargitaySearchResponse(
+                            results=results,
+                            errors=errors,
+                            attempted_queries=attempted_queries,
+                            skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+                        )
 
                     if await self._access_is_blocked(page):
                         errors.append("Yargıtay sitesi otomatik erişimi engelledi; arama durduruldu.")
-                        return YargitaySearchResponse(results=results, errors=errors)
+                        return YargitaySearchResponse(
+                            results=results,
+                            errors=errors,
+                            attempted_queries=attempted_queries,
+                            skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+                        )
 
                     await page.locator(SEARCH_INPUT_SELECTOR).wait_for(state="visible")
 
@@ -150,6 +174,7 @@ class YargitayScraper:
                         if len(results) >= max_results:
                             break
 
+                        attempted_queries.append(query)
                         may_continue = await self._search_one_query(
                             page=page,
                             context=context,
@@ -161,6 +186,7 @@ class YargitayScraper:
                         )
 
                         if not may_continue:
+                            skipped_due_to_rate_limit = self._has_rate_limit_error(errors)
                             break
 
                         if await self._captcha_is_active(page):
@@ -195,7 +221,13 @@ class YargitayScraper:
         except Exception as exc:  # Dış sitenin beklenmeyen yanıtları API'yi düşürmemeli.
             errors.append(f"Yargıtay araması sırasında beklenmeyen hata: {self._short_error(exc)}")
 
-        return YargitaySearchResponse(results=results, errors=errors)
+        skipped_due_to_rate_limit = skipped_due_to_rate_limit or self._has_rate_limit_error(errors)
+        return YargitaySearchResponse(
+            results=results,
+            errors=errors,
+            attempted_queries=attempted_queries,
+            skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+        )
 
     async def _search_one_query(
         self,
@@ -209,6 +241,7 @@ class YargitayScraper:
         seen_detail_urls: set[str],
     ) -> bool:
         try:
+            logger.info("yargitay_query_raw=%s", query)
             search_input = page.locator(SEARCH_INPUT_SELECTOR)
             search_button = page.locator(SEARCH_BUTTON_SELECTOR)
             await search_input.fill(query)
@@ -485,6 +518,11 @@ class YargitayScraper:
     def _append_error(errors: list[str], message: str) -> None:
         if message and message not in errors:
             errors.append(message)
+
+    @staticmethod
+    def _has_rate_limit_error(errors: list[str]) -> bool:
+        markers = ("hız sınırı", "rate limit", "http 429")
+        return any(any(marker in error.casefold() for marker in markers) for error in errors)
 
 
 yargitay_scraper = YargitayScraper()

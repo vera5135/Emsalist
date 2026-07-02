@@ -53,9 +53,13 @@ class ResearchYargitayResponse(BaseModel):
     case_analysis: CaseAnalyzeResponse
     queries: list[str]
     generated_queries: list[str] = Field(default_factory=list)
+    attempted_queries: list[str] = Field(default_factory=list)
+    fallback_queries: list[str] = Field(default_factory=list)
     yargitay_search_started: bool = False
     yargitay_result_count: int = 0
     fallback_query_used: bool = False
+    skipped_due_to_rate_limit: bool = False
+    user_message: str = ""
     final_precedent_count: int = 0
     top_decisions: list[ResearchDecisionOutput]
     errors: list[str]

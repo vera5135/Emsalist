@@ -39,3 +39,5 @@ class YargitayDecision(BaseModel):
 class YargitaySearchResponse(BaseModel):
     results: list[YargitayDecision]
     errors: list[str]
+    attempted_queries: list[str] = Field(default_factory=list)
+    skipped_due_to_rate_limit: bool = False

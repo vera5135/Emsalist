@@ -72,6 +72,11 @@ class ResearchService:
     ) -> dict[str, Any]:
         effective_max_results = min(max(max_results, 1), RESEARCH_MAX_RESULTS_CAP)
         case_analysis = self.analyzer.analyze(case_text)
+        is_vehicle_case = self._is_vehicle_case(
+            case_text=case_text,
+            legal_topic=case_analysis.legal_topic,
+            legal_keywords=case_analysis.legal_keywords,
+        )
         query_response = self.query_builder.build(
             SearchBuildRequest(
                 case_text=case_text,
@@ -80,21 +85,39 @@ class ResearchService:
             )
         )
         logger.info("generated_queries=%s", query_response.queries)
+        generated_queries_filtered = self._filter_generated_queries(
+            generated_queries=query_response.queries,
+            is_vehicle_case=is_vehicle_case,
+        )
+        logger.info("generated_queries_filtered=%s", generated_queries_filtered)
         queries = self._research_queries(
             case_text=case_text,
             legal_topic=case_analysis.legal_topic,
             legal_keywords=case_analysis.legal_keywords,
-            generated_queries=query_response.queries,
+            generated_queries=generated_queries_filtered,
             preferred_queries=yargitay_query_templates or [],
         )
-        fallback_query_used = any(query in queries for query in VEHICLE_YARGITAY_QUERY_PLAN[3:])
-        logger.info("yargitay_search_started queries=%s fallback_query_used=%s", queries, fallback_query_used)
+        logger.info("yargitay_queries_final=%s", queries)
 
         scraper_response = await self.scraper.search(
             queries=queries,
             max_results=effective_max_results,
         )
         errors = list(scraper_response.errors)
+        attempted_queries = list(scraper_response.attempted_queries or queries)
+        fallback_queries = [
+            query for query in attempted_queries if query in VEHICLE_YARGITAY_QUERY_PLAN[3:]
+        ]
+        fallback_query_used = bool(is_vehicle_case and fallback_queries)
+        skipped_due_to_rate_limit = bool(
+            scraper_response.skipped_due_to_rate_limit or any(self._is_rate_limit_error(error) for error in errors)
+        )
+        logger.info(
+            "yargitay_search_started attempted_queries=%s fallback_query_used=%s skipped_due_to_rate_limit=%s",
+            attempted_queries,
+            fallback_query_used,
+            skipped_due_to_rate_limit,
+        )
         logger.info("yargitay_result_count=%s", len(scraper_response.results))
         if errors:
             logger.warning("yargitay_error=%s", errors)
@@ -197,14 +220,23 @@ class ResearchService:
             errors.append("Sıralama için yeterli karar metni bulunamadı.")
 
         final_precedent_count = len(top_decisions[:5])
+        user_message = self._build_user_message(
+            skipped_due_to_rate_limit=skipped_due_to_rate_limit,
+            has_errors=bool(errors),
+            final_precedent_count=final_precedent_count,
+        )
         logger.info("final_precedent_count=%s", final_precedent_count)
         return {
             "case_analysis": case_analysis.model_dump(),
             "queries": queries,
-            "generated_queries": query_response.queries,
+            "generated_queries": generated_queries_filtered,
+            "attempted_queries": attempted_queries,
+            "fallback_queries": fallback_queries,
             "yargitay_search_started": True,
             "yargitay_result_count": len(scraper_response.results),
             "fallback_query_used": fallback_query_used,
+            "skipped_due_to_rate_limit": skipped_due_to_rate_limit,
+            "user_message": user_message,
             "final_precedent_count": final_precedent_count,
             "top_decisions": top_decisions[:5],
             "errors": errors,
@@ -341,6 +373,19 @@ class ResearchService:
         normalized = self._plain(query)
         return "tmk 331" in normalized or "istirak nafakasi" in normalized or "istirak" in normalized
 
+    def _filter_generated_queries(
+        self,
+        *,
+        generated_queries: list[str],
+        is_vehicle_case: bool,
+    ) -> list[str]:
+        sanitized = [sanitize_yargitay_query(query) for query in generated_queries]
+        sanitized = [query for query in sanitized if query]
+        if not is_vehicle_case:
+            return self._dedupe_queries(sanitized)
+        filtered = [query for query in sanitized if self._is_vehicle_query(query)]
+        return self._dedupe_queries(filtered)
+
     def _is_vehicle_case(
         self,
         *,
@@ -364,6 +409,58 @@ class ResearchService:
                 "sozlesmeden donme",
             )
         )
+
+    def _is_vehicle_query(self, query: str) -> bool:
+        normalized = self._plain(query)
+        if any(
+            marker in normalized
+            for marker in (
+                "iscilik",
+                "isci",
+                "kidem",
+                "ihbar",
+                "fazla mesai",
+                "nafaka",
+                "kira",
+                "kiraci",
+                "icra",
+                "odeme emri",
+            )
+        ):
+            return False
+        return any(
+            marker in normalized
+            for marker in (
+                "arac",
+                "ayip",
+                "gizli ayip",
+                "ikinci el",
+                "tramer",
+                "ekspertiz",
+                "motor arizasi",
+                "servis raporu",
+                "bedel indirimi",
+                "noter satis",
+            )
+        )
+
+    @staticmethod
+    def _is_rate_limit_error(error: str) -> bool:
+        normalized = ResearchService._plain(error)
+        return "hiz siniri" in normalized or "rate limit" in normalized or "http 429" in normalized
+
+    @staticmethod
+    def _build_user_message(
+        *,
+        skipped_due_to_rate_limit: bool,
+        has_errors: bool,
+        final_precedent_count: int,
+    ) -> str:
+        if skipped_due_to_rate_limit:
+            return "Yargıtay geçici hız sınırı uyguladı; mevcut yerel analizle devam edildi."
+        if has_errors and final_precedent_count == 0:
+            return "Yargıtay canlı araması sonuç döndürmedi; yerel hukuki analizle devam edildi."
+        return ""
 
     @staticmethod
     def _dedupe_queries(queries: list[str]) -> list[str]:
