@@ -549,7 +549,7 @@ class DynamicLegalReasonerService:
             "question": question,
             "reason": reason,
             "related_issue_key": related_issue_key,
-            "answer_options": list(VEHICLE_SAFE_ANSWER_OPTIONS),
+            "answer_options": DynamicLegalReasonerService._clean_list(list(VEHICLE_SAFE_ANSWER_OPTIONS)),
         }
 
     def _known_vehicle_facts(

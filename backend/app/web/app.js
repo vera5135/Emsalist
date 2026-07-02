@@ -325,7 +325,15 @@ function vehicleContextActive() {
 }
 
 function sanitizeAnswerOptions(options) {
-  const incoming = [...new Set((options || []).filter(Boolean))];
+  const seen = new Set();
+  const incoming = (options || []).reduce((acc, option) => {
+    const value = cleanOutputText(option);
+    const key = plainText(value);
+    if (!value || seen.has(key)) return acc;
+    seen.add(key);
+    acc.push(value);
+    return acc;
+  }, []);
   if (!vehicleContextActive()) return incoming;
   const filtered = incoming.filter((option) => !laborOnlyOptions.has(option));
   return filtered.length ? filtered : defectiveVehicleSafeOptions.slice(0, 5);
@@ -1176,8 +1184,9 @@ function renderDecisions(data) {
     const infoMessage = (data.errors || []).length
       ? "Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."
       : "Bu dosya için uygun ve güvenli emsal bulunamadı. Konu dışı kararlar filtrelendi.";
+    const resolvedInfoMessage = (data.errors || []).length ? precedentSearchMessage(data.errors || []) : infoMessage;
     els.decisionOutput.className = "result-list";
-    els.decisionOutput.innerHTML = `<div class="result-item"><h3>Emsal sonucu</h3><p>${escapeHtml(infoMessage)}</p></div>`;
+    els.decisionOutput.innerHTML = `<div class="result-item"><h3>Emsal sonucu</h3><p>${escapeHtml(resolvedInfoMessage)}</p></div>`;
     return;
   }
   els.decisionOutput.className = "result-list";
@@ -1518,10 +1527,64 @@ function dedupeIssues(items) {
   });
 }
 
+function riskLevelWeight(level) {
+  const normalized = plainText(level);
+  if (normalized.includes("high") || normalized.includes("yuksek")) return 3;
+  if (normalized.includes("orta-yuksek")) return 2.5;
+  if (normalized.includes("medium") || normalized.includes("orta")) return 2;
+  return 1;
+}
+
+function riskLevelLabel(level) {
+  const normalized = plainText(level);
+  if (normalized.includes("high") || normalized.includes("yuksek")) return "Yüksek";
+  if (normalized.includes("orta-yuksek")) return "Orta-Yüksek";
+  if (normalized.includes("medium") || normalized.includes("orta")) return "Orta";
+  return "Düşük";
+}
+
+function deriveOverallRiskLevel(dynamicLevel, reasonerRiskPlan = []) {
+  const weights = [riskLevelWeight(dynamicLevel), ...reasonerRiskPlan.map((item) => riskLevelWeight(item.level || ""))];
+  const highest = Math.max(...weights, 1);
+  if (highest >= 3) return "Yüksek";
+  if (highest >= 2.5) return "Orta-Yüksek";
+  if (highest >= 2) return "Orta";
+  return "Düşük";
+}
+
+function userFriendlyGroundingItems() {
+  const labelMap = {
+    parties: "Taraflar doğrulandı.",
+    sale_date: "Satış tarihi doğrulandı.",
+    sale_price: "Satış bedeli doğrulandı.",
+    vehicle_make_model: "Araç marka/model doğrulandı.",
+    vehicle_plate: "Plaka bilgisi doğrulandı.",
+    vehicle_vin: "Şasi bilgisi doğrulandı.",
+    claim_result: "Talep sonucu doğrulandı.",
+  };
+  return dedupeIssues(
+    documentFactPayload()
+      .map((fact) => labelMap[fact.fact_key] || "")
+      .filter(Boolean),
+  );
+}
+
+function precedentSearchMessage(errors = []) {
+  const joined = plainText((errors || []).join(" "));
+  if (joined.includes("chromium") || joined.includes("playwright") || joined.includes("captcha") || joined.includes("erişim")) {
+    return "Emsal araması yapılamadı, yerel hukuki analiz devam etti.";
+  }
+  if (joined.includes("legal brain") || joined.includes("kaynak")) {
+    return "Kaynak araması yapılamadı; emsal denetimi yerel verilerle sürdürüldü.";
+  }
+  return "Emsal araması şu anda tamamlanamadı; yerel hukuki analiz devam etti.";
+}
+
 function dynamicRiskState() {
   const rawCombined = [getCaseText(), getRequestType(), Object.values(buildAnswers()).join(" "), documentContextText()].join(" ");
   const combined = plainText(rawCombined);
   const profile = currentProfileKey();
+  const caseState = currentCaseState();
   const completed = [];
   const partial = [];
   const missing = [];
@@ -1530,6 +1593,7 @@ function dynamicRiskState() {
     const hasDate = /\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b/.test(rawCombined) || /\b20\d{2}\b/.test(rawCombined);
     const hasAmount = /(?:₺|\btl\b|\blira\b|\b\d{4,}\b)/i.test(rawCombined);
     const hasSeller = ["galeri", "sirket", "gercek kisi", "tacir"].some((term) => combined.includes(term));
+    const hasPartyNames = ["müvekkil", "muvekkil", "davacı", "davaci", "davalı", "davali", "satıcı", "satici", "alıcı", "alici"].some((term) => rawCombined.toLocaleLowerCase("tr-TR").includes(term));
     const hasSaleDoc = ["noter satis", "dekont", "banka dekontu", "elden odeme"].some((term) => combined.includes(term));
     const hasVehicleMarker = ["plaka", "sasi", "marka", "model"].some((term) => combined.includes(term));
     const hasReport = ["servis raporu", "ekspertiz raporu", "rapor"].some((term) => combined.includes(term));
@@ -1600,18 +1664,111 @@ function dynamicRiskState() {
   return { completed, partial, missing: [...missing, ...skipped], riskLevel, riskNotes, answeredCount };
 }
 
+function enhancedDynamicRiskState() {
+  const base = dynamicRiskState();
+  const rawCombined = [getCaseText(), getRequestType(), Object.values(buildAnswers()).join(" "), documentContextText()].join(" ");
+  const combined = plainText(rawCombined);
+  const profile = currentProfileKey();
+  const caseState = currentCaseState();
+  const completed = [];
+  const partial = [];
+  const missing = [];
+
+  if (profile === "defectiveVehicle") {
+    const hasDate = /\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b/.test(rawCombined) || /\b20\d{2}\b/.test(rawCombined);
+    const hasAmount = /(?:â‚º|\btl\b|\blira\b|\b\d{4,}\b)/i.test(rawCombined);
+    const hasSeller = ["galeri", "sirket", "gercek kisi", "tacir"].some((term) => combined.includes(term));
+    const hasPartyNames = ["müvekkil", "muvekkil", "davacı", "davaci", "davalı", "davali", "satıcı", "satici", "alıcı", "alici"].some((term) => rawCombined.toLocaleLowerCase("tr-TR").includes(term));
+    const hasSaleDoc = ["noter satis", "dekont", "banka dekontu", "elden odeme"].some((term) => combined.includes(term));
+    const hasVehicleMarker = ["plaka", "sasi", "marka", "model"].some((term) => combined.includes(term));
+    const hasReport = ["servis raporu", "ekspertiz raporu", "rapor"].some((term) => combined.includes(term));
+    const hasReportDetail = hasReport && (hasDate || /rapor\s*(no|numara|numarası)/i.test(rawCombined));
+    const hasTramer = combined.includes("tramer");
+    const hasNotice = ["whatsapp", "sms", "noter ihtar", "bildirim", "ihbar"].some((term) => combined.includes(term));
+    const hasDemand = ["bedel iadesi", "sozlesmeden donme", "bedel indirimi", "onarim gideri", "masraf"].some((term) => combined.includes(term));
+
+    if (hasPartyNames) completed.push("Taraf isimleri");
+    else missing.push("Taraf isimleri açıkça yazılmalı");
+
+    if (hasSeller) completed.push("Satıcı sıfatı / görevli mahkeme");
+    else missing.push("Satıcının tacir/galeri/şirket/gerçek kişi sıfatı netleştirilmeli");
+
+    if (hasSaleDoc) completed.push("Satış belgesi / ödeme dayanağı");
+    else missing.push("Satış belgesi ve ödeme dayanağı eklenmeli");
+
+    if (hasAmount) completed.push("Satış bedeli");
+    else if (combined.includes("bedel")) partial.push("Satış bedeli var, miktar girilmeli");
+    else missing.push("Satış bedelinin miktarı girilmeli");
+
+    if (hasDate) completed.push("Satış tarihi");
+    else missing.push("Satış tarihi, ayıbın öğrenilme tarihi ve bildirim tarihi somutlaştırılmalı");
+
+    if (hasVehicleMarker && (combined.includes("plaka") || combined.includes("sasi")) && (combined.includes("marka") || combined.includes("model"))) {
+      completed.push("Araç marka/model");
+      completed.push("Plaka/şasi");
+    } else if (hasVehicleMarker) {
+      partial.push("Araç bilgisi kısmen tamamlandı; marka-model, plaka ve şasi bilgisi somutlaştırılmalı");
+    } else {
+      missing.push("Araç marka-model, plaka ve şasi bilgisi somutlaştırılmalı");
+    }
+
+    if (hasReportDetail) completed.push("Servis/ekspertiz raporu");
+    else if (hasReport) partial.push("Servis/ekspertiz raporu var; rapor tarihi ve numarası yazılmalı");
+    else missing.push("Servis/ekspertiz rapor tarihi ve rapor numarası eklenmeli");
+
+    if (hasTramer && hasDate) completed.push("TRAMER/hasar kaydı");
+    else if (hasTramer) partial.push("TRAMER kaydı var; tarih ve içerik dosyaya eklenmeli");
+    else missing.push("TRAMER/ağır hasar/gizli onarım kaydı araştırılmalı");
+
+    if (hasNotice && hasDate) completed.push("Ayıp ihbarı");
+    else if (hasNotice) partial.push("Ayıp ihbarı var; bildirim tarihi ve yöntemi netleştirilmeli");
+    else missing.push("Ayıp ihbar tarihi ve yöntemi netleştirilmeli");
+
+    if (hasDemand) completed.push("Talep sonucu");
+    else missing.push("Asli ve terditli talep stratejisi netleştirilmeli");
+  } else {
+    const checks = [
+      ["Taraf isimleri", ["davaci", "davali", "muvekkil"]],
+      ["Talep sonucu", ["talep", "dava", "kabul"]],
+      ["Deliller", ["belge", "tanik", "rapor", "kayit", "dekont"]],
+    ];
+    checks.forEach(([label, terms]) => {
+      if (terms.some((term) => combined.includes(term))) completed.push(label);
+      else missing.push(label);
+    });
+  }
+
+  const riskLevel = deriveOverallRiskLevel(base.riskLevel, caseStatePlanItems(caseState, "risk_plan"));
+  const riskNotes = [...base.riskNotes];
+  return {
+    ...base,
+    completed,
+    partial,
+    missing: [...missing, ...[...questionFlow.skipped].map((question) => `Atlandı: ${question}`)],
+    riskLevel,
+    riskNotes,
+  };
+}
+
 function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, sourceAudit = null, precedentAudit = null, draftWarnings = [], draftGrounding = [] } = {}) {
   const cards = [];
   const caseState = currentCaseState();
   const reasonerRiskPlan = caseStatePlanItems(caseState, "risk_plan");
-  const dynamic = dynamicRiskState();
+  const dynamic = enhancedDynamicRiskState();
   const missing = dedupeIssues([
     ...dynamic.missing,
     ...(caseEnrichment?.missing_facts || []),
     ...(draftAudit?.missing_facts || []),
     ...documentMissingFields(),
   ].filter((item) => !missingItemResolvedByDocuments(item)));
-  const riskFlags = [`Risk seviyesi: ${dynamic.riskLevel}`, ...dynamic.riskNotes, ...(caseEnrichment?.risk_flags || []), ...(draftAudit?.critical_issues || []), ...(draftAudit?.major_issues || [])];
+  const riskFlags = [
+    `Genel risk seviyesi: ${riskLevelLabel(dynamic.riskLevel)}`,
+    ...reasonerRiskPlan.map((item) => `${riskLevelLabel(item.level || "")}: ${item.title || "Risk"} - ${item.reason || "Sebep belirtilmedi."}`),
+    ...dynamic.riskNotes,
+    ...(caseEnrichment?.risk_flags || []),
+    ...(draftAudit?.critical_issues || []),
+    ...(draftAudit?.major_issues || []),
+  ];
   const rejectedSourceCount = (sourceAudit?.audited_sources || []).filter((item) => !item.use_in_petition).length;
   const sourceProblems = [
     ...(draftAudit?.source_problems || []),
@@ -1630,9 +1787,7 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
     riskyAuditItems.length && !safeDraftDecisionCount ? "Riskli/aleyhe kararlar talebi destekler gibi kullanılmadı." : "",
   ].filter(Boolean);
   const languageProblems = [...(draftAudit?.petition_language_problems || []), ...(draftWarnings || [])];
-  const groundingNotes = [...(draftGrounding || []), ...((lastDraftData?.grounding_notes || []) || [])]
-    .map((item) => (typeof item === "string" ? item : `[${item.status || "note"}] ${item.title || "Not"}: ${item.detail || ""}`))
-    .filter(Boolean);
+  const groundingNotes = userFriendlyGroundingItems();
   const documentGrounding = documentFactPayload().map((fact) => {
     const label = DOCUMENT_FACT_LABELS[fact.fact_key] || fact.fact_key;
     return `[fact_confirmed] ${label}: ${fact.fact_value} — Kaynak: ${fact.source_file_name}${fact.page_number ? `, s. ${fact.page_number}` : ""}`;
@@ -1663,14 +1818,21 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
     reasonerRiskPlan.map((item) => `[${String(item.level || "info").toUpperCase()}] ${item.title || "Risk"}: ${item.reason || "Sebep belirtilmedi."} Mitigasyon: ${item.mitigation || "Belirtilmedi."}`),
     "danger",
   );
-  els.riskCount.textContent = String(cards.reduce((total, card) => total + card.items.length, 0));
-  if (!cards.length) {
+  const visibleCards = cards.filter((card) => {
+    const title = plainText(card.title);
+    return !title.includes("grounding") && !title.includes("reasoner risk plani");
+  });
+  if (groundingNotes.length) {
+    visibleCards.push({ title: "Belgeyle doğrulanan bilgiler", items: groundingNotes, badgeClass: "info" });
+  }
+  els.riskCount.textContent = String(visibleCards.reduce((total, card) => total + card.items.length, 0));
+  if (!visibleCards.length) {
     els.riskOutput.className = "empty-state";
     els.riskOutput.textContent = "Belirgin eksik veya kritik risk bulunmadı.";
     return;
   }
   els.riskOutput.className = "risk-list";
-  els.riskOutput.innerHTML = cards
+  els.riskOutput.innerHTML = visibleCards
     .map(
       (card) => `
         <div class="risk-card">
@@ -1746,7 +1908,7 @@ function defenseSimulationItems() {
 function renderStrategyToolkit() {
   const caseState = currentCaseState();
   const questionPlan = caseStatePlanItems(caseState, "question_plan");
-  const dynamic = dynamicRiskState();
+  const dynamic = enhancedDynamicRiskState();
   const answers = buildAnswers();
   const profile = currentProfileKey();
   const hasDecisions = lastDecisions.length > 0;
@@ -1973,6 +2135,7 @@ async function runBrain() {
       results: [],
       warnings: ["Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."],
     };
+    fallback.warnings = ["Kaynak araması yapılamadı; emsal denetimi yerel verilerle sürdürüldü."];
     renderBrain(fallback);
     setStatus(fallback.warnings[0], true);
     return fallback;
@@ -2408,6 +2571,9 @@ async function runFullReview() {
       });
     } catch (error) {
       yargitay = { top_decisions: [], errors: ["Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."] };
+    }
+    if ((yargitay.errors || []).length) {
+      yargitay.errors = ["Emsal araması yapılamadı, yerel hukuki analiz devam etti."];
     }
     renderDecisions(yargitay);
 

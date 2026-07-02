@@ -25,6 +25,9 @@ class DynamicLegalReasonerServiceTests(unittest.TestCase):
         self.assertEqual(reasoning["risk_plan"][0]["risk_key"], "preexisting_defect_proof")
         self.assertTrue(reasoning["question_plan"])
         self.assertIn("seller_status", [item["related_issue_key"] for item in reasoning["question_plan"]])
+        first_options = reasoning["question_plan"][0]["answer_options"]
+        self.assertEqual(first_options, list(dict.fromkeys(first_options)))
+        self.assertTrue(all(option.strip() for option in first_options))
         self.assertTrue(reasoning["precedent_query_context"]["positive_terms"])
         self.assertTrue(reasoning["research_queries"])
 
