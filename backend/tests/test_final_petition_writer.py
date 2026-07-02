@@ -289,7 +289,81 @@ class FinalPetitionWriterTests(unittest.TestCase):
             response = final_petition_writer_service.write(package)
 
         self.assertEqual(response.generation_mode, "local_fallback")
-        self.assertIn("Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu.", response.warnings)
+        self.assertIn("Gemini API anahtarı tanımlı değil; güvenli yerel taslak oluşturuldu.", response.warnings)
+        self.assertEqual(response.gemini_failure_reason, "missing_api_key")
+        self.assertTrue(response.fallback_used)
+
+    def test_final_route_uses_verified_live_precedents_for_drafting_package(self) -> None:
+        request = FinalPetitionDraftRequest(
+            case_text=CASE_TEXT,
+            request_type="Satış bedelinin iadesi",
+            writer_mode="local",
+            precedent_for_petition=[
+                DraftingPrecedentItem(
+                    court="Yargıtay 19. Hukuk Dairesi",
+                    chamber="19. Hukuk Dairesi",
+                    esas_no="2013/17670",
+                    karar_no="2014/508",
+                    date="15.01.2014",
+                    title="Ayıplı araç",
+                    summary="Araç arızası, servis ve bilirkişi bağlantısı vardır.",
+                    relevance="Gizli ayıp ve seçimlik haklar bakımından somut olayla benzer.",
+                    supported_issue="Gizli ayıp",
+                    use_class="direct_support",
+                    source_type="yargitay_live",
+                    official_verification_status="verified_live",
+                    petition_use_summary="Kısa süre içinde araçta arıza ortaya çıkması, servise başvuru, ihtarname ve bilirkişi incelemesiyle aracın gizli ayıplı olduğunun değerlendirilmesi bakımından somut olayla benzer niteliktedir.",
+                ),
+                DraftingPrecedentItem(
+                    court="Yargıtay 3. Hukuk Dairesi",
+                    chamber="3. Hukuk Dairesi",
+                    esas_no="2020/226",
+                    karar_no="2020/196",
+                    date="09.01.2020",
+                    title="Görev",
+                    summary="Dosyanın görevli daireye gönderilmesine.",
+                    relevance="Usul",
+                    supported_issue="Görev",
+                    use_class="procedural_or_jurisdiction_only",
+                    source_type="yargitay_live",
+                    official_verification_status="verified_live",
+                    petition_use_summary="Usul hattı.",
+                ),
+            ],
+        )
+
+        response = build_final_petition_draft(request)
+        self.assertEqual(response.precedent_for_petition_count, 1)
+        self.assertEqual(response.final_draft_precedent_count, 1)
+        self.assertEqual(response.drafting_package.precedent_for_petition[0].esas_no, "2013/17670")
+        self.assertNotIn("2020/226", " ".join(response.drafting_package.precedents_for_petition))
+
+    def test_gemini_validation_failure_returns_reasoned_fallback_fields(self) -> None:
+        package = final_petition_writer_service.build_package(
+            case_text=CASE_TEXT,
+            request_type="Sözleşmeden dönme ve satış bedelinin iadesi",
+            document_facts=self.record.extracted_facts,
+            document_types=[self.record.document_type],
+            writer_mode="gemini",
+        )
+        unsafe_text = final_petition_writer_service._local_template(package) + "\n\nconfidence_score: 92"
+        with (
+            patch("app.services.final_petition_writer_service.get_settings") as settings,
+            patch("app.services.final_petition_writer_service.gemini_client.generate_json") as generate,
+        ):
+            settings.return_value.gemini_api_key = "test-key"
+            generate.return_value = GeminiJSONResult(
+                ai_used=True,
+                data={"petition_text": unsafe_text},
+                warnings=[],
+            )
+            response = final_petition_writer_service.write(package)
+
+        self.assertEqual(response.generation_mode, "local_fallback")
+        self.assertTrue(response.gemini_attempted)
+        self.assertFalse(response.gemini_success)
+        self.assertEqual(response.gemini_failure_reason, "technical_leakage_detected")
+        self.assertTrue(response.fallback_used)
 
     def test_final_route_allows_draft_without_review_approval(self) -> None:
         request = FinalPetitionDraftRequest(

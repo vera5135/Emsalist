@@ -220,6 +220,8 @@ class ResearchService:
                     "distinguishing_risks": analysis.distinguishing_risks,
                     "recommended_use": analysis.recommended_use,
                     "confidence_score": analysis.confidence_score,
+                    "use_class": analysis.precedent_use_class,
+                    "petition_use_summary": analysis.petition_use_summary,
                 }
             )
 
@@ -556,6 +558,8 @@ class ResearchService:
                     "distinguishing_risks": ["Canlı Yargıtay doğrulaması yapılamadı."],
                     "recommended_use": "Resmi doğrulama yapılmadan kesin emsal gibi kullanılmamalıdır.",
                     "confidence_score": 20,
+                    "use_class": "exclude_from_petition",
+                    "petition_use_summary": "Canlı Yargıtay doğrulaması yapılmadığından ana emsal listesine alınmamalıdır.",
                 }
             )
         return result[:5], "legal_brain"

@@ -101,6 +101,15 @@ class PrecedentAnalysis(BaseModel):
     case_type: str = ""
     matched_terms: list[str] = Field(default_factory=list)
     excluded_reason: str = ""
+    precedent_use_class: Literal[
+        "direct_support",
+        "supporting_with_caution",
+        "procedural_or_jurisdiction_only",
+        "distinguishable",
+        "insufficient_summary",
+        "exclude_from_petition",
+    ] = "supporting_with_caution"
+    petition_use_summary: str = ""
 
     @field_validator("precedent_id", "citation", "recommended_use")
     @classmethod
@@ -194,12 +203,18 @@ class DraftingCaseIdentity(BaseModel):
 
 class DraftingPrecedentItem(BaseModel):
     court: str = ""
+    chamber: str = ""
     esas_no: str = ""
     karar_no: str = ""
     date: str = ""
+    title: str = ""
     summary: str = ""
     relevance: str = ""
     supported_issue: str = ""
+    use_class: str = ""
+    source_type: str = ""
+    official_verification_status: str = ""
+    petition_use_summary: str = ""
 
 
 class FinalPetitionDraftRequest(PetitionDraftRequest):
@@ -210,6 +225,7 @@ class FinalPetitionDraftRequest(PetitionDraftRequest):
     relief_requests: list[str] = Field(default_factory=list, max_length=30)
     drafting_warnings: list[str] = Field(default_factory=list, max_length=50)
     writer_mode: str = "local"  # "local" | "gemini"
+    precedent_for_petition: list[DraftingPrecedentItem] = Field(default_factory=list, max_length=20)
 
 
 class DraftingPackage(BaseModel):
@@ -251,3 +267,11 @@ class FinalPetitionDraftResponse(BaseModel):
     drafting_package: DraftingPackage
     case_state: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
+    writer_mode: str = "local"
+    gemini_attempted: bool = False
+    gemini_success: bool = False
+    gemini_failure_reason: str = ""
+    fallback_used: bool = False
+    fallback_reason: str = ""
+    final_draft_precedent_count: int = 0
+    precedent_for_petition_count: int = 0

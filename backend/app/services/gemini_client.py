@@ -19,6 +19,7 @@ class GeminiJSONResult:
     ai_used: bool
     data: dict[str, Any]
     warnings: list[str]
+    failure_reason: str = ""
 
 
 class GeminiClient:
@@ -35,11 +36,26 @@ class GeminiClient:
     ) -> GeminiJSONResult:
         settings = get_settings()
         if not use_gemini:
-            return GeminiJSONResult(ai_used=False, data=fallback, warnings=["Gemini isteği kullanıcı tercihiyle kapalı."])
+            return GeminiJSONResult(
+                ai_used=False,
+                data=fallback,
+                warnings=["Gemini isteği kullanıcı tercihiyle kapalı."],
+                failure_reason="disabled",
+            )
         if respect_enabled_flag and not settings.gemini_enabled:
-            return GeminiJSONResult(ai_used=False, data=fallback, warnings=["Gemini kapalı; kural tabanlı fallback kullanıldı."])
+            return GeminiJSONResult(
+                ai_used=False,
+                data=fallback,
+                warnings=["Gemini kapalı; kural tabanlı fallback kullanıldı."],
+                failure_reason="disabled",
+            )
         if not settings.gemini_api_key:
-            return GeminiJSONResult(ai_used=False, data=fallback, warnings=["GEMINI_API_KEY tanımlı değil; fallback kullanıldı."])
+            return GeminiJSONResult(
+                ai_used=False,
+                data=fallback,
+                warnings=["GEMINI_API_KEY tanımlı değil; fallback kullanıldı."],
+                failure_reason="missing_api_key",
+            )
 
         try:
             raw_text = self._call_gemini(
@@ -49,15 +65,50 @@ class GeminiClient:
                 system_instruction=system_instruction,
                 prompt=prompt,
             )
+            if not str(raw_text or "").strip():
+                return GeminiJSONResult(
+                    ai_used=False,
+                    data=fallback,
+                    warnings=["Gemini boş yanıt döndürdü; fallback kullanıldı."],
+                    failure_reason="empty_response",
+                )
             parsed = self._parse_json(raw_text)
             if not isinstance(parsed, dict):
-                return GeminiJSONResult(ai_used=False, data=fallback, warnings=["Gemini JSON nesnesi döndürmedi; fallback kullanıldı."])
-            return GeminiJSONResult(ai_used=True, data=parsed, warnings=[])
+                return GeminiJSONResult(
+                    ai_used=False,
+                    data=fallback,
+                    warnings=["Gemini JSON nesnesi döndürmedi; fallback kullanıldı."],
+                    failure_reason="validation_failed",
+                )
+            return GeminiJSONResult(ai_used=True, data=parsed, warnings=[], failure_reason="")
         except TimeoutError:
-            return GeminiJSONResult(ai_used=False, data=fallback, warnings=["Gemini zaman aşımına uğradı; fallback kullanıldı."])
+            return GeminiJSONResult(
+                ai_used=False,
+                data=fallback,
+                warnings=["Gemini zaman aşımına uğradı; fallback kullanıldı."],
+                failure_reason="timeout",
+            )
+        except json.JSONDecodeError:
+            return GeminiJSONResult(
+                ai_used=False,
+                data=fallback,
+                warnings=["Gemini yanıtı doğrulanamadı; fallback kullanıldı."],
+                failure_reason="validation_failed",
+            )
         except Exception as exc:  # noqa: BLE001 - API integration must not break local flow.
             logger.warning("Gemini call failed without exposing credentials: %s", exc.__class__.__name__)
-            return GeminiJSONResult(ai_used=False, data=fallback, warnings=[f"Gemini hatası nedeniyle fallback kullanıldı: {exc.__class__.__name__}"])
+            message = str(exc or "")
+            reason = "api_error"
+            if re.search(r"blocked|safety|policy", message, flags=re.IGNORECASE):
+                reason = "blocked_response"
+            elif re.search(r"timeout|zaman aşımı", message, flags=re.IGNORECASE):
+                reason = "timeout"
+            return GeminiJSONResult(
+                ai_used=False,
+                data=fallback,
+                warnings=[f"Gemini hatası nedeniyle fallback kullanıldı: {exc.__class__.__name__}"],
+                failure_reason=reason,
+            )
 
     def _call_gemini(
         self,

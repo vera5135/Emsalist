@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import unicodedata
 from typing import Any
@@ -19,6 +20,8 @@ from app.models.petition_models import (
 
 from app.services.gemini_client import gemini_client
 from app.services.petition_profile_service import get_petition_profile
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_INSTRUCTION = """Sen bir Türk hukuk dilekçesi yazım asistanısın. Sana verilen dava paketindeki bilgiler dışında vakıa üretme. Belirsiz veya eksik hususları kesin vakıa gibi yazma. Grounding, confidence score, source_document_id, belge alıntısı, emsal puanı, risk puanı gibi iç teknik bilgileri dilekçeye yazma. Sadece gerçek dava dilekçesi formatında metin üret.
@@ -84,10 +87,18 @@ FORBIDDEN_TEXT = (
     "confidence_score",
     "güven %",
     "benzerlik puanı",
+    "hukuki uygunluk",
+    "güncellik",
+    "genel güç",
     "destek gücü",
     "kontrol listesi",
     "source_document_id",
     "belge alıntısı",
+    "source_summary",
+    "debug_source_summary",
+    "attempted_queries",
+    "raw_live_result_count",
+    "parsed_live_result_count",
 )
 
 
@@ -239,20 +250,41 @@ class FinalPetitionWriterService:
     def write(self, package: DraftingPackage) -> FinalPetitionDraftResponse:
         local_text = self._local_template(package)
         writer_mode = getattr(package, "writer_mode", "local")
+        precedent_count = len(package.precedent_for_petition)
         if writer_mode != "gemini":
             return FinalPetitionDraftResponse(
                 petition_text=local_text,
                 generation_mode="local_template_mode",
                 drafting_package=package,
+                writer_mode=writer_mode,
+                fallback_used=False,
+                final_draft_precedent_count=precedent_count,
+                precedent_for_petition_count=precedent_count,
             )
 
         settings = get_settings()
         if not settings.gemini_api_key:
+            logger.info(
+                "gemini_attempted=%s gemini_success=%s gemini_failure_reason=%s fallback_used=%s precedent_for_petition_count=%s",
+                False,
+                False,
+                "missing_api_key",
+                True,
+                precedent_count,
+            )
             return FinalPetitionDraftResponse(
                 petition_text=local_text,
                 generation_mode="local_fallback",
                 drafting_package=package,
-                warnings=["Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu."],
+                warnings=["Gemini API anahtarı tanımlı değil; güvenli yerel taslak oluşturuldu."],
+                writer_mode=writer_mode,
+                gemini_attempted=False,
+                gemini_success=False,
+                gemini_failure_reason="missing_api_key",
+                fallback_used=True,
+                fallback_reason="missing_api_key",
+                final_draft_precedent_count=precedent_count,
+                precedent_for_petition_count=precedent_count,
             )
 
         prompt = self._gemini_prompt(package)
@@ -265,21 +297,82 @@ class FinalPetitionWriterService:
         )
         candidate = self._clean_petition_text(result.data.get("petition_text", ""))
         if result.ai_used and self._is_safe_petition(candidate, package):
+            logger.info(
+                "gemini_attempted=%s gemini_success=%s gemini_failure_reason=%s fallback_used=%s precedent_for_petition_count=%s",
+                True,
+                True,
+                "",
+                False,
+                precedent_count,
+            )
             return FinalPetitionDraftResponse(
                 petition_text=candidate,
                 generation_mode="gemini_mode",
                 drafting_package=package,
+                writer_mode=writer_mode,
+                gemini_attempted=True,
+                gemini_success=True,
+                fallback_used=False,
+                final_draft_precedent_count=precedent_count,
+                precedent_for_petition_count=precedent_count,
             )
 
-        warnings = list(result.warnings)
-        if result.ai_used:
-            warnings.append("Gemini çıktısı dilekçe biçimi veya içerik güvenliği denetiminden geçmedi; yerel şablon kullanıldı.")
+        failure_reason = self._gemini_failure_reason(result=result, candidate=candidate, package=package)
+        warnings = [*list(result.warnings), self._gemini_user_warning(failure_reason)]
+        logger.info(
+            "gemini_attempted=%s gemini_success=%s gemini_failure_reason=%s fallback_used=%s precedent_for_petition_count=%s",
+            True,
+            False,
+            failure_reason,
+            True,
+            precedent_count,
+        )
         return FinalPetitionDraftResponse(
             petition_text=local_text,
             generation_mode="local_fallback" if writer_mode == "gemini" else "local_template_mode",
             drafting_package=package,
             warnings=warnings,
+            writer_mode=writer_mode,
+            gemini_attempted=True,
+            gemini_success=False,
+            gemini_failure_reason=failure_reason,
+            fallback_used=True,
+            fallback_reason=failure_reason,
+            final_draft_precedent_count=precedent_count,
+            precedent_for_petition_count=precedent_count,
         )
+
+    def _gemini_failure_reason(
+        self,
+        *,
+        result: Any,
+        candidate: str,
+        package: DraftingPackage,
+    ) -> str:
+        if not result.ai_used:
+            return str(getattr(result, "failure_reason", "") or "unknown")
+        if not candidate.strip():
+            return "empty_response"
+        plain = self._plain(candidate)
+        if any(self._plain(marker) in plain for marker in FORBIDDEN_TEXT):
+            return "technical_leakage_detected"
+        if not self._is_safe_petition(candidate, package):
+            return "validation_failed"
+        return "unknown"
+
+    @staticmethod
+    def _gemini_user_warning(failure_reason: str) -> str:
+        warnings = {
+            "missing_api_key": "Gemini API anahtarı tanımlı değil; güvenli yerel taslak oluşturuldu.",
+            "timeout": "Gemini yanıtı zamanında alınamadı; güvenli yerel taslak oluşturuldu.",
+            "blocked_response": "Gemini çıktısı güvenlik kontrolünü geçmedi; güvenli yerel taslak oluşturuldu.",
+            "validation_failed": "Gemini çıktısı güvenlik kontrolünü geçmedi; güvenli yerel taslak oluşturuldu.",
+            "technical_leakage_detected": "Gemini çıktısı güvenlik kontrolünü geçmedi; güvenli yerel taslak oluşturuldu.",
+            "empty_response": "Gemini boş yanıt döndürdü; güvenli yerel taslak oluşturuldu.",
+            "api_error": "Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu.",
+            "unknown": "Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu.",
+        }
+        return warnings.get(failure_reason, warnings["unknown"])
 
     def _local_template(self, package: DraftingPackage) -> str:
         sections = [
@@ -719,7 +812,11 @@ class FinalPetitionWriterService:
         payload = self._gemini_payload(package)
         precedent_instruction = (
             "precedent_for_petition boş değilse EMSAL İÇTİHATLAR bölümünü zorunlu yaz. Her emsal için daire, esas no, karar no, tarih, "
-            "somut olay bağlantısı ve desteklediği hukuki meseleyi belirt. Listede olmayan emsal üretme."
+            "somut olay bağlantısı ve desteklediği hukuki meseleyi belirt. Listede olmayan emsal üretme. "
+            "source_type = yargitay_live ve official_verification_status = verified_live olan emsalleri öncelikli kullan. "
+            "direct_support ve supporting_with_caution sınıflarını ana emsal olarak kullan. "
+            "insufficient_summary, distinguishable ve exclude_from_petition sınıflarını ana emsal yapma. "
+            "procedural_or_jurisdiction_only sınıfını sadece görev tartışması varsa kısa görev notu olarak kullan."
             if payload["precedent_for_petition"]
             else "precedent_for_petition boşsa emsal üretme."
         )
@@ -735,7 +832,8 @@ class FinalPetitionWriterService:
             "local_draft_seed yalnızca asgari iskelet ve veri kontrolü içindir. Bunu aynen kopyalama. "
             "Yukarıdaki zorunlu bölüm yapısına göre genişlet, dilekçe diline çevir ve imzaya yakın nihai dilekçe üret.\n\n"
             "Şunları yazma: grounding, fact_confirmed, source_confirmed, confidence_score, güven %, Kaynak:, Benzerlik, "
-            "Hukuki uygunluk, Güncellik, Risk, Genel güç, Kontrol Listesi, drafting_package, JSON, markdown linkleri, analiz notu.\n\n"
+            "Hukuki uygunluk, Güncellik, Risk, Genel güç, Kontrol Listesi, drafting_package, JSON, markdown linkleri, analiz notu, "
+            "source_summary, debug_source_summary, attempted_queries, raw_live_result_count, parsed_live_result_count.\n\n"
             f"{GEMINI_STYLE_REFERENCE}\n\n"
             "Yalnızca {\"petition_text\": \"...\"} biçiminde geçerli JSON döndür.\n\n"
             + json.dumps(payload, ensure_ascii=False, indent=2)

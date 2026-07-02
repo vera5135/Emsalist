@@ -71,6 +71,8 @@ class _FakePrecedentAnalyzer:
             distinguishing_risks=[],
             recommended_use="Kullanılabilir",
             confidence_score=80,
+            precedent_use_class="direct_support",
+            petition_use_summary="Karar, gizli ayıp ve teknik delil bağlantısı bakımından somut olayla benzerdir.",
         )
 
 

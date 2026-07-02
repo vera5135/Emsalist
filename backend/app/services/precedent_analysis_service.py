@@ -15,6 +15,49 @@ VerificationStatus = Literal[
     "adverse_or_distinguishable_precedent",
 ]
 
+PrecedentUseClass = Literal[
+    "direct_support",
+    "supporting_with_caution",
+    "procedural_or_jurisdiction_only",
+    "distinguishable",
+    "insufficient_summary",
+    "exclude_from_petition",
+]
+
+PROCEDURAL_ONLY_MARKERS: tuple[str, ...] = (
+    "inceleme görevi",
+    "gönderilmesine",
+    "görevli daire",
+    "temyiz şartı",
+    "kesinlik",
+    "ön inceleme",
+    "usul eksikliği",
+    "hukuk dairesine gönderilmesine",
+    "karar düzeltme",
+    "görev",
+    "daire dağılımı",
+)
+
+STRONG_DEFECTIVE_VEHICLE_MARKERS: tuple[str, ...] = (
+    "araç gizli ayıplı",
+    "aracın gizli ayıplı olduğu",
+    "servise başvuru",
+    "ihtarname",
+    "bilirkişi raporu",
+    "kısa süre sonra arıza",
+    "viteste ses",
+    "motor arızası",
+    "şanzıman",
+    "mekanik arıza",
+    "ayıp oranında bedel indirimi",
+    "sözleşmeden dönme",
+    "satış bedelinin iadesi",
+    "ekspertiz",
+    "tramer",
+    "pert",
+    "ağır hasar",
+)
+
 
 PROFILE_SIGNALS: dict[str, dict[str, list[tuple[tuple[str, ...], str]] | dict[str, str]]] = {
     "defective_vehicle": {
@@ -295,7 +338,20 @@ class PrecedentAnalysisService:
             shared_legal_issues=shared_legal_issues,
             decision_map=decision_map,
         )
+        precedent_use_class = self._precedent_use_class(
+            profile_key=profile.key,
+            verification_status=verification_status,
+            decision_map=decision_map,
+            decision_plain=decision_plain,
+            excluded_reason=excluded_reason,
+            shared_facts=shared_facts,
+            shared_legal_issues=shared_legal_issues,
+        )
         recommended_use = self._recommended_use(profile.key, verification_status)
+        petition_use_summary = self._petition_use_summary(
+            precedent_use_class=precedent_use_class,
+            decision_map=decision_map,
+        )
 
         return PrecedentAnalysis(
             precedent_id=self._precedent_id(decision_map),
@@ -313,6 +369,8 @@ class PrecedentAnalysisService:
             case_type=case_type,
             matched_terms=matched_terms,
             excluded_reason=excluded_reason,
+            precedent_use_class=precedent_use_class,
+            petition_use_summary=petition_use_summary,
         )
 
     def analyze_many(self, *, case_text: str, decisions: list[dict[str, Any]]) -> list[PrecedentAnalysis]:
@@ -442,6 +500,76 @@ class PrecedentAnalysisService:
         if verification_status == "weak_or_partial_precedent":
             return "Karar yalnızca yardımcı atıf olarak kullanılmalıdır."
         return "Karar aleyhe veya ayırt edilebilir olduğundan yalnızca karşı argümana cevap için kullanılmalıdır."
+
+    def _precedent_use_class(
+        self,
+        *,
+        profile_key: str,
+        verification_status: VerificationStatus,
+        decision_map: dict[str, Any],
+        decision_plain: str,
+        excluded_reason: str,
+        shared_facts: list[str],
+        shared_legal_issues: list[str],
+    ) -> PrecedentUseClass:
+        if verification_status == "adverse_or_distinguishable_precedent" or excluded_reason:
+            return "distinguishable"
+
+        summary_plain = self._plain(str(decision_map.get("short_summary") or ""))
+        procedural_hits = sum(1 for marker in PROCEDURAL_ONLY_MARKERS if self._plain(marker) in decision_plain)
+        substantive_hits = sum(1 for marker in STRONG_DEFECTIVE_VEHICLE_MARKERS if self._plain(marker) in decision_plain)
+        shared_total = len(shared_facts) + len(shared_legal_issues)
+        short_or_cut = self._insufficient_summary(summary_plain)
+
+        if profile_key == "defective_vehicle":
+            if procedural_hits and not substantive_hits:
+                return "procedural_or_jurisdiction_only"
+            if short_or_cut and substantive_hits < 2:
+                return "insufficient_summary"
+            if verification_status == "verified_supportive_precedent" and substantive_hits >= 3 and shared_total >= 2:
+                return "direct_support"
+            if substantive_hits >= 1 or shared_total >= 2:
+                return "supporting_with_caution"
+            if short_or_cut:
+                return "insufficient_summary"
+            if verification_status == "weak_or_partial_precedent":
+                return "exclude_from_petition"
+            return "supporting_with_caution"
+
+        if verification_status == "verified_supportive_precedent":
+            return "direct_support"
+        if verification_status == "verification_required_precedent_candidate":
+            return "supporting_with_caution"
+        if verification_status == "weak_or_partial_precedent":
+            return "insufficient_summary"
+        return "exclude_from_petition"
+
+    def _petition_use_summary(
+        self,
+        *,
+        precedent_use_class: PrecedentUseClass,
+        decision_map: dict[str, Any],
+    ) -> str:
+        paragraph = str(decision_map.get("petition_paragraph") or "").strip()
+        summary = str(decision_map.get("short_summary") or "").strip()
+        if precedent_use_class == "direct_support":
+            return paragraph or summary or "Karar, somut olaydaki gizli ayıp, teknik arıza ve seçimlik haklar bakımından doğrudan destek sağlar."
+        if precedent_use_class == "supporting_with_caution":
+            return paragraph or summary or "Karar, somut olayla bağlantılı olmakla birlikte dikkatli kullanılmalıdır."
+        if precedent_use_class == "procedural_or_jurisdiction_only":
+            return "Karar esas uyuşmazlık yönünden değil, görev/usul hattı yönünden sınırlı değerlendirme için kullanılabilir."
+        if precedent_use_class == "insufficient_summary":
+            return "Özet yetersiz olduğundan kararın tam metni görülmeden güçlü ana emsal olarak kullanılmaması gerekir."
+        if precedent_use_class == "distinguishable":
+            return "Karar somut olaydan ayrılan yönler içerdiğinden ancak ayırt etme açıklamasıyla sınırlı kullanılabilir."
+        return "Karar ana emsal listesine alınmamalıdır."
+
+    @staticmethod
+    def _insufficient_summary(summary_plain: str) -> bool:
+        word_count = len([part for part in summary_plain.split(" ") if part])
+        if word_count and word_count < 12:
+            return True
+        return summary_plain.endswith(("olduğu", "oldugu", "ithalatçısı olduğu", "ithalatcisi oldugu", "..."))
 
     def _confidence_score(
         self,

@@ -1172,11 +1172,38 @@ function legalBrainFallbackCandidates() {
 
 function decisionSourceLabel(item) {
   const sourceType = item.source_type || "unknown";
-  if (sourceType === "yargitay_live") return "Canl? Yarg?tay sonucu";
-  if (sourceType === "legal_brain") return "Legal Brain yerel kaynak aday? ? canl? Yarg?tay do?rulamas? yap?lmad?";
-  if (sourceType === "local_seed") return "Yerel emsal aday? ? canl? Yarg?tay do?rulamas? yap?lmad?";
-  if (sourceType === "manual_uploaded") return "Elle y?klenen karar aday?";
-  return "Kayna?? s?n?rl? emsal aday?";
+  if (sourceType === "yargitay_live") return "Canlı Yargıtay sonucu";
+  if (sourceType === "legal_brain") return "Legal Brain yerel kaynak adayı — canlı Yargıtay doğrulaması yapılmadı";
+  if (sourceType === "local_seed") return "Yerel emsal adayı — canlı Yargıtay doğrulaması yapılmadı";
+  if (sourceType === "manual_uploaded") return "Elle yüklenen karar adayı";
+  return "Kaynağı sınırlı emsal adayı";
+}
+
+function decisionUseClass(item) {
+  const existing = plainText(item.use_class || "");
+  if (existing) return item.use_class;
+  const text = plainText(`${item.short_summary || ""} ${item.legal_principle || ""} ${item.petition_paragraph || ""} ${item.why_relevant || ""}`);
+  const proceduralSignals = ["inceleme gorevi", "gonderilmesine", "gorevli daire", "temyiz sarti", "kesinlik", "on inceleme", "usul eksikligi", "hukuk dairesine gonderilmesine"];
+  const substantiveSignals = ["gizli ayip", "servise basvuru", "ihtarname", "bilirkisi", "motor arizasi", "sanziman", "ekspertiz", "tramer", "pert", "agir hasar", "bedel indirimi", "sozlesmeden donme"];
+  const proceduralHits = proceduralSignals.filter((term) => text.includes(term)).length;
+  const substantiveHits = substantiveSignals.filter((term) => text.includes(term)).length;
+  const summaryWords = plainText(item.short_summary || "").split(" ").filter(Boolean).length;
+  if (proceduralHits && !substantiveHits) return "procedural_or_jurisdiction_only";
+  if (summaryWords > 0 && summaryWords < 12) return substantiveHits ? "supporting_with_caution" : "insufficient_summary";
+  if (item.source_type !== "yargitay_live" || item.official_verification_status !== "verified_live") return "exclude_from_petition";
+  if (substantiveHits >= 3) return "direct_support";
+  if (substantiveHits >= 1) return "supporting_with_caution";
+  return "supporting_with_caution";
+}
+
+function decisionUseClassLabel(item) {
+  const value = decisionUseClass(item);
+  if (value === "direct_support") return "Doğrudan kullanılabilir";
+  if (value === "supporting_with_caution") return "Dikkatli kullanılmalı";
+  if (value === "procedural_or_jurisdiction_only") return "Sadece görev/usul yönünden";
+  if (value === "distinguishable") return "Ayırt edilebilir";
+  if (value === "insufficient_summary") return "Özet yetersiz — tam metin kontrol edilmeli";
+  return "Dilekçeye alınmaz";
 }
 
 function renderDecisionCard(item, groupTitle) {
@@ -1193,21 +1220,23 @@ function renderDecisionCard(item, groupTitle) {
       <div class="meta-row">
         <span class="chip blue">${escapeHtml(groupTitle)}</span>
         <span class="chip">${escapeHtml(sourceLabel)}</span>
-        <span class="chip">${escapeHtml(verification)}</span>
+        <span class="chip">${escapeHtml(decisionUseClassLabel(item))}</span>
+        <span class="chip">${escapeHtml(verification === "verified_live" ? "Resmî doğrulama: canlı" : "Resmî doğrulama yapılmadı")}</span>
         ${detailLink ? `<span class="chip">${detailLink}</span>` : ""}
       </div>
       <ol class="compact-list">
-        <li><strong>?zet:</strong> ${escapeHtml(cleanOutputText(item.short_summary || paragraph, DEFAULT_PRECEDENT_PARAGRAPH))}</li>
+        <li><strong>Özet:</strong> ${escapeHtml(cleanOutputText(item.short_summary || paragraph, DEFAULT_PRECEDENT_PARAGRAPH))}</li>
         <li><strong>Kaynak durumu:</strong> ${escapeHtml(sourceLabel)}</li>
-        <li><strong>Resm? do?rulama:</strong> ${escapeHtml(verification)}</li>
-        <li><strong>Somut olaya ba?lant?:</strong> ${escapeHtml(item.why_relevant || paragraph)}</li>
+        <li><strong>Resmî doğrulama:</strong> ${escapeHtml(verification)}</li>
+        <li><strong>Kullanım sınıfı:</strong> ${escapeHtml(decisionUseClassLabel(item))}</li>
+        <li><strong>Somut olaya bağlantı:</strong> ${escapeHtml(item.why_relevant || item.petition_use_summary || paragraph)}</li>
       </ol>
       ${showScores && scores ? `<div class="score-grid">
         <span>Benzerlik: ${scores.similarity}</span>
         <span>Hukuki uygunluk: ${scores.legalFit}</span>
-        <span>G?ncellik: ${scores.recency}</span>
+        <span>Güncellik: ${scores.recency}</span>
         <span>Risk: ${scores.riskLevel}</span>
-        <span>Genel g??: ${scores.strength}</span>
+        <span>Genel güç: ${scores.strength}</span>
       </div>` : ""}
     </div>
   `;
@@ -1243,20 +1272,20 @@ function renderDecisions(data) {
   lastDecisions = decisions;
   els.decisionCount.textContent = String(decisions.length);
   const infoMessage = summary.live_yargitay_count > 0
-    ? "Canl? Yarg?tay aramas?ndan gelen kararlar listeleniyor."
+    ? "Canlı Yargıtay aramasından gelen kararlar listeleniyor."
     : fallbackResults.length
-      ? "Canl? Yarg?tay aramas? sonu? d?nd?rmedi. A?a??daki kararlar Legal Brain/yerel kaynak adaylar?d?r; resmi do?rulama yap?lmal?d?r."
+      ? "Canlı Yargıtay araması sonuç döndürmedi. Aşağıdaki kararlar Legal Brain/yerel kaynak adaylarıdır; resmî doğrulama yapılmalıdır."
       : (data.errors || []).length
         ? precedentSearchMessage(data.errors || [])
-        : "Bu denemede canl? Yarg?tay sonucu bulunamad?.";
+        : "Bu denemede canlı Yargıtay sonucu bulunamadı.";
   if (!liveResults.length && !fallbackResults.length) {
     els.decisionOutput.className = "result-list";
     els.decisionOutput.innerHTML = `<div class="result-item"><h3>Emsal sonucu</h3><p>${escapeHtml(infoMessage)}</p></div>`;
     return;
   }
   const liveGroup = liveResults.length
-    ? liveResults.map((item) => renderDecisionCard(item, "Canl? Yarg?tay Sonu?lar?")).join("")
-    : `<div class="result-item"><h3>Canl? Yarg?tay Sonu?lar?</h3><p>Canl? Yarg?tay aramas? bu denemede sonu? d?nd?rmedi.</p></div>`;
+    ? liveResults.map((item) => renderDecisionCard(item, "Canlı Yargıtay Sonuçları")).join("")
+    : `<div class="result-item"><h3>Canlı Yargıtay Sonuçları</h3><p>Canlı Yargıtay araması bu denemede sonuç döndürmedi.</p></div>`;
   const fallbackGroup = fallbackResults.length
     ? fallbackResults.map((item) => renderDecisionCard(item, "Legal Brain / Yerel Kaynak Adaylar?")).join("")
     : "";
@@ -2299,6 +2328,31 @@ function mapSelectedDecisions() {
   }));
 }
 
+function mapPrecedentForPetition(limit = 5) {
+  const livePreferred = (lastDecisions || []).filter((item) =>
+    item.use_in_petition !== false
+    && 
+    (item.source_type || "") === "yargitay_live"
+    && (item.official_verification_status || "") === "verified_live"
+    && ["direct_support", "supporting_with_caution"].includes(decisionUseClass(item)),
+  );
+  return livePreferred.slice(0, limit).map((item) => ({
+    court: item.court || "Yargıtay",
+    chamber: item.court || "Yargıtay",
+    esas_no: item.esas_no || "-",
+    karar_no: item.karar_no || "-",
+    date: item.date || "-",
+    title: item.title || "",
+    summary: cleanOutputText(item.short_summary || item.petition_use_summary || item.petition_paragraph || "", DEFAULT_PRECEDENT_PARAGRAPH),
+    relevance: item.why_relevant || item.petition_use_summary || cleanDecisionParagraph(item),
+    supported_issue: item.legal_principle || item.petition_use_summary || cleanDecisionParagraph(item),
+    use_class: decisionUseClass(item),
+    source_type: item.source_type || "unknown",
+    official_verification_status: item.official_verification_status || "not_verified",
+    petition_use_summary: item.petition_use_summary || cleanDecisionParagraph(item),
+  }));
+}
+
 function draftableDecisions(limit = 3) {
   const preferred = lastDecisions.filter(decisionUsableForDraft);
   const fallback = lastDecisions.filter(decisionSafeForDraft);
@@ -2307,6 +2361,8 @@ function draftableDecisions(limit = 3) {
 
 function decisionUsableForDraft(item) {
   if (item.use_in_petition === false) return false;
+  const useClass = decisionUseClass(item);
+  if (!["direct_support", "supporting_with_caution"].includes(useClass)) return false;
   const verification = plainText(`${item.verification_status || ""}`);
   const alignment = plainText(`${item.lehe_aleyhe || ""} ${item.petition_paragraph || ""}`);
   if (verification.includes("adverse_or_distinguishable_precedent") || alignment.includes("riskli") || alignment.includes("aleyhe")) {
@@ -2319,6 +2375,7 @@ function decisionUsableForDraft(item) {
 
 function decisionSafeForDraft(item) {
   if (item.use_in_petition === false) return false;
+  if (["procedural_or_jurisdiction_only", "insufficient_summary", "distinguishable", "exclude_from_petition"].includes(decisionUseClass(item))) return false;
   const verification = plainText(`${item.verification_status || ""}`);
   const alignment = plainText(`${item.lehe_aleyhe || ""} ${item.usefulness_score || ""} ${item.petition_paragraph || ""}`);
   if (verification.includes("adverse_or_distinguishable_precedent") || alignment.includes("riskli") || alignment.includes("aleyhe") || alignment.includes("dusuk")) return false;
@@ -2385,7 +2442,11 @@ async function runDraft(options = {}) {
   try {
     const data = await apiPost("/petition/final-draft", {
       case_text: caseText,
-      case_enrichment: lastCaseEnrichment || {},
+      case_enrichment: {
+        ...(lastCaseEnrichment || {}),
+        final_precedents: (lastYargitaySearch?.final_precedents || lastDecisions || []).slice(0, 10),
+        live_yargitay_results: (lastYargitaySearch?.live_yargitay_results || []).slice(0, 10),
+      },
       confirmed_facts: [...new Set(lastCaseEnrichment?.confirmed_facts || [])].slice(0, 30),
       missing_facts: unresolvedMissingFacts,
       document_ids: (lastDocumentAnalysis?.documents || []).map((documentItem) => documentItem.document_id),
@@ -2393,6 +2454,7 @@ async function runDraft(options = {}) {
       petition_strategy_hint: lastCaseEnrichment?.petition_strategy_hint || "",
       answers: buildAnswers(),
       selected_decisions: mapSelectedDecisions(),
+      precedent_for_petition: mapPrecedentForPetition(),
       precedent_candidates: lastDecisions,
       request_type: getRequestType(),
       use_legal_brain: true,
@@ -2449,9 +2511,18 @@ async function runDraft(options = {}) {
     });
     switchTab("petition");
     const modeLabel = data.generation_mode === "gemini_mode" ? "Gemini" : "yerel güvenli şablon";
-    const fallbackWarning = (data.warnings || []).some((warning) => plainText(warning).includes("gemini"));
-    if (options.writer_mode === "gemini" && data.generation_mode !== "gemini_mode" && fallbackWarning) {
-      setStatus("Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu.");
+    if (options.writer_mode === "gemini" && data.generation_mode !== "gemini_mode" && data.fallback_used) {
+      const reason = data.gemini_failure_reason || data.fallback_reason || "";
+      const message = reason === "missing_api_key"
+        ? "Gemini API anahtarı tanımlı değil; güvenli yerel taslak oluşturuldu."
+        : reason === "timeout"
+          ? "Gemini yanıtı zamanında alınamadı; güvenli yerel taslak oluşturuldu."
+          : reason === "validation_failed" || reason === "technical_leakage_detected" || reason === "blocked_response"
+            ? "Gemini çıktısı güvenlik kontrolünü geçmedi; güvenli yerel taslak oluşturuldu."
+            : reason === "empty_response"
+              ? "Gemini boş yanıt döndürdü; güvenli yerel taslak oluşturuldu."
+              : "Gemini yanıtı alınamadı; güvenli yerel taslak oluşturuldu.";
+      setStatus(message);
     } else {
       setStatus(`Nihai dilekçe taslağı ${modeLabel} ile hazırlandı.`);
     }

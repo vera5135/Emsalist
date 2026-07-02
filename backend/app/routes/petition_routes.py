@@ -1,5 +1,7 @@
 """Petition strategy and draft endpoints."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.models.petition_models import (
@@ -21,6 +23,83 @@ from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_s
 
 
 router = APIRouter(prefix="/petition", tags=["Dilekçe"])
+
+ALLOWED_PETITION_USE_CLASSES = {"direct_support", "supporting_with_caution"}
+
+
+def _decision_value(item: Any, field: str, default: str = "") -> str:
+    value = getattr(item, field, None)
+    if value is None and isinstance(item, dict):
+        value = item.get(field)
+    return str(value or default).strip()
+
+
+def _decision_plain(value: str) -> str:
+    return " ".join(
+        str(value or "")
+        .casefold()
+        .replace("ç", "c")
+        .replace("ğ", "g")
+        .replace("ı", "i")
+        .replace("ö", "o")
+        .replace("ş", "s")
+        .replace("ü", "u")
+        .split()
+    )
+
+
+def _sanitized_precedent_item(item: Any) -> DraftingPrecedentItem | None:
+    use_class = _decision_value(item, "use_class")
+    source_type = _decision_value(item, "source_type")
+    verification = _decision_value(item, "official_verification_status")
+    if use_class and use_class not in ALLOWED_PETITION_USE_CLASSES:
+        return None
+    if source_type and source_type != "yargitay_live" and verification != "verified_live":
+        return None
+    court = _decision_value(item, "court", "Yargıtay")
+    chamber = _decision_value(item, "chamber") or court
+    paragraph = _decision_value(item, "petition_use_summary") or _decision_value(item, "petition_paragraph") or _decision_value(item, "summary")
+    if not paragraph:
+        return None
+    return DraftingPrecedentItem(
+        court=court,
+        chamber=chamber,
+        esas_no=_decision_value(item, "esas_no"),
+        karar_no=_decision_value(item, "karar_no"),
+        date=_decision_value(item, "date"),
+        title=_decision_value(item, "title"),
+        summary=_decision_value(item, "summary") or paragraph,
+        relevance=_decision_value(item, "why_relevant") or paragraph,
+        supported_issue=_decision_value(item, "supported_issue") or _decision_value(item, "legal_principle") or paragraph,
+        use_class=use_class,
+        source_type=source_type,
+        official_verification_status=verification,
+        petition_use_summary=paragraph,
+    )
+
+
+def _collect_precedent_for_petition(request: FinalPetitionDraftRequest) -> list[DraftingPrecedentItem]:
+    sources: list[Any] = [
+        *(request.precedent_for_petition or []),
+        *(request.audited_precedents or []),
+        *(request.selected_decisions or []),
+        *(request.precedent_candidates or []),
+        *list(request.case_enrichment.get("final_precedents") or []),
+        *list(request.case_enrichment.get("live_yargitay_results") or []),
+        *list(request.case_enrichment.get("top_decisions") or []),
+    ]
+    result: list[DraftingPrecedentItem] = []
+    seen: set[str] = set()
+    for item in sources:
+        sanitized = _sanitized_precedent_item(item)
+        if not sanitized:
+            continue
+        key = _decision_plain(" | ".join([sanitized.court, sanitized.esas_no, sanitized.karar_no, sanitized.date]))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(sanitized)
+    return result[:10]
 
 
 @router.post("/strategy", response_model=PetitionStrategyResponse)
@@ -178,22 +257,13 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
         writer_mode=getattr(request, "writer_mode", "local"),
         case_state=case_state,
     )
-    package.precedent_for_petition = [
-        DraftingPrecedentItem(
-            court=decision.court,
-            esas_no=decision.esas_no,
-            karar_no=decision.karar_no,
-            date=decision.date,
-            summary=decision.petition_paragraph,
-            relevance=decision.petition_paragraph,
-            supported_issue=decision.petition_paragraph,
-        )
-        for decision in (request.audited_precedents or request.selected_decisions)
-    ]
+    package.precedent_for_petition = _collect_precedent_for_petition(request)
     package.precedents_for_petition = [
         " | ".join(part for part in [item.court, item.esas_no, item.karar_no, item.date, item.summary] if part)
         for item in package.precedent_for_petition
     ]
+    if package.precedent_for_petition:
+        case_state["precedent_for_petition"] = [item.model_dump(mode="json") for item in package.precedent_for_petition]
     package.risks = list(dict.fromkeys([*package.risks, *request.drafting_warnings, *list(request.case_enrichment.get("risk_flags") or []), *case_state.get("risk_items", [])]))
     package.legal_sources = list(dict.fromkeys([*package.legal_sources, *case_state.get("research_queries", [])]))
     case_state["drafting_package"] = package.model_dump(mode="json")
