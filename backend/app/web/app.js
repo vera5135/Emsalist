@@ -2737,199 +2737,156 @@ async function runRefineDraft() {
   }
 }
 
+function generateRequestId() {
+  return "req-" + crypto.randomUUID();
+}
+
 async function runFullReview() {
   const caseText = assertCaseText();
   reviewWorkflowComplete = false;
-  setBusy(true, "1/11 Olay analizi yapılıyor...");
+  lastBetterSearches = null;
+  lastSourceAudit = null;
+  lastPrecedentAudit = null;
+
+  setBusy(true, "İnceleme başlatılıyor...");
   switchTab("summary");
-  let analysis = null;
-  let enrichment = null;
-  let sourceAudit = null;
-  let precedentAudit = null;
-  let draftAudit = null;
-  let draft = null;
 
   try {
-    setStatus("1/11 Olay analizi yapılıyor...");
-    analysis = await apiPost("/case/analyze", { case_text: caseText });
+    const requestId = generateRequestId();
+    setStatus("1/3 Olay ve hukuki meseleler analiz ediliyor...");
+
+    const workflow = await apiPost("/workflow/review", {
+      case_id: activeCaseId,
+      request_id: requestId,
+      case_text: caseText,
+      practice_area: getPracticeArea() || "auto",
+      max_yargitay_results: getMaxResults(),
+      use_ai: true,
+      use_legal_brain: true,
+    }, { timeoutMs: 120_000 });
+
+    if (workflow.cached) {
+      setStatus("Önceki inceleme sonucu kullanıldı.");
+    }
+
+    if (workflow.status === "failed") {
+      const stepErrors = workflow.steps
+        .filter((s) => s.status === "failed")
+        .map((s) => s.safe_error_message || s.name)
+        .join(", ");
+      throw new Error("İnceleme tamamlanamadı: " + (stepErrors || "kritik adım başarısız"));
+    }
+
+    if (workflow.status === "partial_success") {
+      setStatus("Bazı adımlar tamamlanamadı. Mevcut sonuçlarla devam ediliyor.");
+    }
+
+    // ── Map workflow response to frontend state ──
+
+    const analysis = {
+      legal_topic: workflow.analysis.legal_topic || "",
+      legal_keywords: workflow.analysis.legal_keywords || [],
+      case_facts: workflow.analysis.case_facts || [],
+      case_state: workflow.enrichment || {},
+    };
     setCaseState(analysis.case_state || null);
     renderAnalysis(analysis);
 
-    setStatus("2/11 AI olay netleştirme çalışıyor...");
-    enrichment = await apiPost("/ai/enrich-case", {
-      case_text: caseText,
-      practice_area: getPracticeArea() || "auto",
-      use_gemini: false,
-    });
-    lastCaseEnrichment = enrichment;
-    renderAIEnrichment(enrichment);
-    renderRisks({ caseEnrichment: enrichment });
+    lastCaseEnrichment = workflow.enrichment || {};
+    renderAIEnrichment(lastCaseEnrichment);
+    renderRisks({ caseEnrichment: lastCaseEnrichment });
 
-    setStatus("3/11 Hukuki sorular hazırlanıyor...");
-    const questionData = await apiPost("/ai/generate-legal-questions", {
-      case_text: caseText,
-      case_enrichment: enrichment,
-      use_gemini: false,
-    });
-    const questions = [...(questionData.questions || []).map((item) => item.question), ...documentMissingQuestions()];
+    const questions = (workflow.questions.questions || []).map((item) => item.question || item);
+    const allQuestions = [...questions, ...documentMissingQuestions()];
     lastStrategy = {
-      petition_type: enrichment.detected_case_type || "Dilekçe",
-      legal_basis: enrichment.relevant_articles || [],
-      missing_information_questions: questions,
+      petition_type: lastCaseEnrichment.detected_case_type || "Dilekçe",
+      legal_basis: lastCaseEnrichment.relevant_articles || [],
+      missing_information_questions: allQuestions,
     };
     applyProfileRequestDefault(lastStrategy);
     renderStrategy(lastStrategy);
-    renderQuestionFields(questions);
+    renderQuestionFields(allQuestions);
     prefillQuestionsFromDocuments();
     lastStrategyCase = caseText;
     lastStrategyRequest = getRequestType();
 
-    setStatus("4/11 Arama sorguları üretiliyor...");
-    lastBetterSearches = await apiPost("/ai/build-better-searches", {
-      case_text: caseText,
-      case_enrichment: enrichment,
-      use_gemini: false,
-    });
-    renderAISearch(lastBetterSearches);
+    lastBetterSearches = workflow.better_searches || {};
 
-    setStatus("5/11 Legal Brain kaynak taraması yapılıyor...");
-    const brain = await apiPost("/legal-brain/search", {
-      query: lastBetterSearches.legal_brain_query || enrichment.legal_brain_query || `${caseText} ${getRequestType()}`,
-      practice_area: getPracticeArea(),
-      max_results: getMaxResults(),
-    });
-    renderBrain(brain);
-
-    setStatus("6/11 Kaynaklar denetleniyor...");
-    sourceAudit = await apiPost("/ai/audit-sources", {
-      case_enrichment: enrichment,
-      sources: lastBrainResults,
-      use_gemini: false,
-    });
-    lastSourceAudit = sourceAudit;
-    const sourceAuditMap = new Map((sourceAudit.audited_sources || []).map((item) => [item.source_id, item]));
-    const auditedSources = lastBrainResults
-      .map((source, index) => {
-        const sourceId = source.source_id || source.citation_label || source.title || `source_${index + 1}`;
-        const item = sourceAuditMap.get(sourceId);
+    // Legal Brain results
+    lastBrainResults = workflow.legal_brain_results || [];
+    const sourceAudit = workflow.source_audit || {};
+    if (sourceAudit.audited_sources) {
+      lastSourceAudit = sourceAudit;
+      const auditMap = new Map((sourceAudit.audited_sources || []).map((item) => [item.source_id, item]));
+      const auditedSources = lastBrainResults.map((source, index) => {
+        const sourceId = source.source_id || source.citation_label || source.title || "source_" + (index + 1);
+        const item = auditMap.get(sourceId);
         return item
-          ? {
-              ...source,
-              is_directly_relevant: item.is_directly_relevant,
-              relevance_score: item.relevance_score,
+          ? { ...source, is_directly_relevant: item.is_directly_relevant, relevance_score: item.relevance_score,
               relevance_reason: item.reason || item.source_rejected_reason,
               usable_argument: item.use_in_petition ? source.usable_argument : UNRELATED_ARGUMENT,
-              use_in_petition: item.use_in_petition,
-            }
+              use_in_petition: item.use_in_petition }
           : source;
-      })
-      .sort((a, b) => Number(Boolean(b.is_directly_relevant)) - Number(Boolean(a.is_directly_relevant)));
-    renderBrain({ results: auditedSources, warnings: sourceAudit.warnings || [] });
-    renderRisks({ caseEnrichment: enrichment, sourceAudit });
+      }).sort((a, b) => Number(Boolean(b.is_directly_relevant)) - Number(Boolean(a.is_directly_relevant)));
+      renderBrain({ results: auditedSources, warnings: sourceAudit.warnings || [] });
+    } else {
+      renderBrain({ results: lastBrainResults });
+    }
+    renderRisks({ caseEnrichment: lastCaseEnrichment, sourceAudit });
 
-    setStatus("7/11 Yargıtay emsalleri aranıyor...");
-    let yargitay;
-    try {
-      yargitay = await apiPost("/research/yargitay", {
-        case_text: `${caseText} ${getRequestType()}`,
-        max_results: getMaxResults(),
-        yargitay_query_templates: lastBetterSearches.yargitay_queries || enrichment.yargitay_query_templates || [],
-        case_enrichment: { ...(enrichment || {}), fallback_precedent_candidates: legalBrainFallbackCandidates() },
-      });
-    } catch (error) {
-      const fallbackPrecedents = legalBrainFallbackCandidates().map((item) => ({
-        ...item,
-        source: "Legal Brain",
-        source_type: "legal_brain",
-        official_verification_status: "not_verified",
-        similarity_score: 20,
-        usefulness_score: "Düşük",
-        court: "Legal Brain yerel kaynak",
-        esas_no: "-",
-        karar_no: "-",
-        date: "-",
-        short_summary: item.usable_argument || item.title,
-        legal_principle: item.usable_argument || item.title,
-        why_relevant: item.relevance_reason || "Canlı Yargıtay doğrulaması yapılamadı.",
-        lehe_aleyhe: "Nötr",
-        petition_paragraph: item.usable_argument || item.title,
-        clean_text_preview: item.usable_argument || item.title,
-        precedent_id: item.source_id || item.title,
-        citation: item.citation_label || item.title,
-        verification_status: "verification_required_precedent_candidate",
-        similarity_reasons: [],
-        shared_facts: [],
-        shared_legal_issues: [],
-        supported_arguments: [],
-        evidence_connection: [],
-        distinguishing_risks: ["Canlı Yargıtay doğrulaması yapılamadı."],
-        recommended_use: "Resmi doğrulama yapılmadan kesin emsal gibi kullanılmamalıdır.",
-        confidence_score: 20,
-      }));
-      yargitay = {
-        top_decisions: fallbackPrecedents,
-        final_precedents: fallbackPrecedents,
-        fallback_precedents: fallbackPrecedents,
-        live_yargitay_results: [],
-        source_summary: {
-          live_yargitay_count: 0,
-          legal_brain_fallback_count: fallbackPrecedents.length,
-          local_seed_count: 0,
-          official_yargitay_reached: false,
-          official_yargitay_returned_results: false,
-          used_fallback: Boolean(fallbackPrecedents.length),
-        },
-        user_message: "Canlı Yargıtay araması sonuç döndürmedi. Legal Brain yerel kaynak adaylarıyla devam edildi.",
-        errors: ["Emsal/kaynak araması sırasında hata oluştu. Sistem yerel analizle devam etti."],
-      };
-    }
-    if ((yargitay.errors || []).length) {
-      yargitay.errors = ["Emsal araması yapılamadı, yerel hukuki analiz devam etti."];
-    }
+    // Yargıtay / Precedents
+    const yargitay = workflow.yargitay_results || {};
+    lastYargitaySearch = yargitay;
+    lastDecisions = yargitay.final_precedents || [];
     renderDecisions(yargitay);
 
-    setStatus("8/11 Emsaller denetleniyor...");
-    precedentAudit = await apiPost("/ai/audit-precedents", {
-      case_text: caseText,
-      case_enrichment: enrichment,
-      precedents: lastDecisions,
-      use_gemini: false,
-    });
-    lastPrecedentAudit = precedentAudit;
-    const precedentAuditMap = new Map((precedentAudit.audited_precedents || []).map((item) => [plainText(item.decision_id), item]));
-    lastDecisions = lastDecisions
-      .map((decision) => {
-        const item = auditItemForDecision(precedentAuditMap, decision);
+    // Precedent audit
+    const precedentAudit = workflow.precedent_audit || {};
+    if (precedentAudit.audited_precedents) {
+      lastPrecedentAudit = precedentAudit;
+      const auditMap = new Map((precedentAudit.audited_precedents || []).map((item) => [plainText(item.decision_id), item]));
+      lastDecisions = lastDecisions.map((decision) => {
+        const item = auditItemForDecision(auditMap, decision);
         return item
-          ? {
-              ...decision,
-              lehe_aleyhe: item.alignment,
+          ? { ...decision, lehe_aleyhe: item.alignment,
               usefulness_score: item.use_in_petition ? decision.usefulness_score || "Orta" : "Düşük",
               use_in_petition: item.use_in_petition,
-              petition_paragraph: cleanOutputText(
-                item.petition_usage_paragraph || decision.petition_paragraph,
-                item.alignment === "riskli" || item.alignment === "aleyhe" ? RISK_PRECEDENT_PARAGRAPH : DEFAULT_PRECEDENT_PARAGRAPH,
-              ),
-              _is_duplicate: item.is_duplicate,
-            }
+              petition_paragraph: cleanOutputText(item.petition_usage_paragraph || decision.petition_paragraph,
+                item.alignment === "riskli" || item.alignment === "aleyhe" ? RISK_PRECEDENT_PARAGRAPH : DEFAULT_PRECEDENT_PARAGRAPH),
+              _is_duplicate: item.is_duplicate }
           : decision;
-      })
-      .filter((decision) => !decision._is_duplicate);
-    renderDecisions({ ...yargitay, top_decisions: lastDecisions });
-    renderRisks({ caseEnrichment: enrichment, sourceAudit, precedentAudit });
+      }).filter((d) => !d._is_duplicate);
+      renderDecisions({ ...yargitay, top_decisions: lastDecisions });
+      renderRisks({ caseEnrichment: lastCaseEnrichment, sourceAudit, precedentAudit });
+    }
+
     renderStrategyToolkit();
     renderReviewSummary({
       analysis,
-      enrichment,
+      enrichment: lastCaseEnrichment,
       sourceCount: lastBrainResults.length,
       precedentCount: lastDecisions.length,
       qualityScore: null,
     });
+
+    // Legal Issue Graph
+    if (workflow.issue_graph && workflow.issue_graph.issues) {
+      lastLegalIssueGraph = workflow.issue_graph;
+      renderLegalIssueGraph();
+      renderRisks({ caseEnrichment: lastCaseEnrichment, sourceAudit, precedentAudit });
+    } else {
+      fetchLegalIssueGraph();
+    }
+
     reviewWorkflowComplete = true;
-    fetchLegalIssueGraph();
     updateFinalPetitionReadiness();
     switchTab("summary");
-    setStatus("Kaynak ve emsal incelemesi hazır. Soru kartlarını cevaplayıp son kartta Dilekçeyi Hazırla'ya bas.");
+
+    const warnings = workflow.warnings || [];
+    const warningText = warnings.length ? " (" + warnings.length + " uyarı)" : "";
+    setStatus("Kaynak ve emsal incelemesi hazır" + warningText + ". Soru kartlarını cevaplayıp Dilekçeyi Hazırla'ya bas.");
+  } catch (error) {
+    setStatus(error.message || "İnceleme sırasında hata oluştu.", true);
   } finally {
     setBusy(false);
   }
