@@ -1939,6 +1939,32 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
     cards.push({ title, items: cleanItems, badgeClass });
   };
 
+  const graph = lastLegalIssueGraph;
+  if (graph && Array.isArray(graph.issues)) {
+    for (const issue of graph.issues) {
+      const riskLabel = riskLevelLabel(issue.risk_level || "low");
+      const items = [];
+      if (issue.missing_facts?.length) {
+        items.push(...issue.missing_facts.map((f) => `Eksik vakıa: ${f}`));
+      }
+      if (issue.missing_evidence?.length) {
+        items.push(...issue.missing_evidence.map((e) => `Eksik delil: ${e}`));
+      }
+      if (issue.risk_reason) {
+        items.push(`Risk sebebi: ${issue.risk_reason}`);
+      }
+      if (issue.client_questions?.length) {
+        items.push(`Müvekkil sorusu: ${issue.client_questions[0]}`);
+      }
+      if (!items.length) continue;
+      const riskClass = riskLabel.includes("Yüksek") ? "danger" : riskLabel.includes("Orta") ? "warning" : "info";
+      cards.push({ title: issue.title, items, badgeClass: riskClass, riskBadge: riskLabel });
+    }
+  }
+  if (graph?.global_risks?.length) {
+    pushCard("Graph Genel Riskler", graph.global_risks, "danger");
+  }
+
   pushCard("Eksik Bilgiler", missing, "warning");
   pushCard("Kısmen Tamamlananlar", dynamic.partial, "warning");
   pushCard("Tamamlananlar", dynamic.completed, "info");
@@ -1972,7 +1998,7 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
     .map(
       (card) => `
         <div class="risk-card">
-          <h3>${escapeHtml(card.title)} <span class="risk-badge ${card.badgeClass}">${card.items.length}</span></h3>
+           <h3>${escapeHtml(card.title)} <span class="risk-badge ${card.badgeClass}">${card.riskBadge || card.items.length}</span></h3>
           <ol class="compact-list">${card.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
         </div>
       `,
@@ -2088,15 +2114,18 @@ async function fetchLegalIssueGraph() {
     if (!data.ok) {
       lastLegalIssueGraph = null;
       renderLegalIssueGraph();
+      renderRisks();
       return null;
     }
     const graph = await data.json();
     lastLegalIssueGraph = graph && typeof graph === "object" ? graph : null;
     renderLegalIssueGraph();
+    renderRisks();
     return lastLegalIssueGraph;
   } catch {
     lastLegalIssueGraph = null;
     renderLegalIssueGraph();
+    renderRisks();
     return null;
   }
 }
