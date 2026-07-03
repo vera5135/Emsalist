@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from fastapi import HTTPException, status
+
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
@@ -75,11 +77,13 @@ class CaseSessionService:
                 return None
         return self.new_case()
 
-    def resolve_case_id(self, case_id: str | None = None, *, create_if_missing: bool = True) -> str:
+    def resolve_case_id(self, case_id: str | None = None, *, create_if_missing: bool = True, require_existing: bool = False) -> str:
         clean_case_id = str(case_id or "").strip()
         with self._lock:
             if clean_case_id:
                 if clean_case_id not in self._state["cases"]:
+                    if require_existing:
+                        raise KeyError(clean_case_id)
                     payload = _default_case_payload(clean_case_id)
                     self._state["cases"][clean_case_id] = payload
                 self._state["active_case_id"] = clean_case_id
@@ -175,6 +179,16 @@ class CaseSessionService:
             encoding="utf-8",
         )
         temporary.replace(self.index_path)
+
+
+    def require_existing_case(self, case_id: str) -> str:
+        try:
+            return self.resolve_case_id(case_id, require_existing=True, create_if_missing=False)
+        except KeyError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Dosya bulunamadı: {case_id}",
+            )
 
 
 case_session_service = CaseSessionService()

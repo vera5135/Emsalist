@@ -9,7 +9,7 @@ from app.services.research_service import research_service
 
 
 class ResearchYargitayRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(min_length=10)
     max_results: int = Field(default=5, ge=1, le=100)
     yargitay_query_templates: list[str] = Field(default_factory=list, max_length=20)
@@ -102,7 +102,7 @@ router = APIRouter(prefix="/research", tags=["Araştırma"])
 async def research_yargitay(request: ResearchYargitayRequest) -> dict:
     from app.services.case_session_service import case_session_service
 
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     response = await research_service.research_yargitay(
         case_text=request.case_text,
         max_results=request.max_results,

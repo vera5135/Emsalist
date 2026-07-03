@@ -81,14 +81,19 @@ def _sanitized_precedent_item(item: Any) -> DraftingPrecedentItem | None:
 
 
 def _collect_precedent_for_petition(request: FinalPetitionDraftRequest) -> list[DraftingPrecedentItem]:
+    enrichment = request.case_enrichment or {}
+    final_precedents = enrichment.get("final_precedents") or []
+    live_results = enrichment.get("live_yargitay_results") or []
+    top_decisions = enrichment.get("top_decisions") or []
+
     sources: list[Any] = [
         *(request.precedent_for_petition or []),
         *(request.audited_precedents or []),
         *(request.selected_decisions or []),
         *(request.precedent_candidates or []),
-        *list(request.case_enrichment.get("final_precedents") or []),
-        *list(request.case_enrichment.get("live_yargitay_results") or []),
-        *list(request.case_enrichment.get("top_decisions") or []),
+        *(final_precedents if isinstance(final_precedents, list) else []),
+        *(live_results if isinstance(live_results, list) else []),
+        *(top_decisions if isinstance(top_decisions, list) else []),
     ]
     result: list[DraftingPrecedentItem] = []
     seen: set[str] = set()
@@ -106,6 +111,7 @@ def _collect_precedent_for_petition(request: FinalPetitionDraftRequest) -> list[
 
 @router.post("/strategy", response_model=PetitionStrategyResponse)
 def build_petition_strategy(request: PetitionStrategyRequest) -> PetitionStrategyResponse:
+    case_session_service.require_existing_case(request.case_id)
     return petition_strategy_service.build_strategy(
         case_text=request.case_text,
         top_decisions=request.top_decisions,
@@ -114,7 +120,7 @@ def build_petition_strategy(request: PetitionStrategyRequest) -> PetitionStrateg
 
 @router.post("/draft", response_model=PetitionDraftResponse)
 def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse:
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     selected_decisions = request.audited_precedents or request.selected_decisions
     case_text = request.case_text
     grounded_document_facts = []
@@ -182,7 +188,7 @@ def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse
 
 @router.post("/final-draft", response_model=FinalPetitionDraftResponse)
 def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetitionDraftResponse:
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     has_explicit_case_id = bool(str(request.case_id or "").strip())
     stored_case = case_session_service.get_case_state(resolved_case_id) if has_explicit_case_id else {
         "documents": [],

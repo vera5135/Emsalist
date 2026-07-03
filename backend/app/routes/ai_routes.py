@@ -39,7 +39,7 @@ def enrich_case(request: CaseEnrichmentRequest) -> CaseEnrichmentResponse:
         practice_area=request.practice_area,
         use_gemini=request.use_gemini,
     )
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
         resolved_case_id,
         event_text=request.case_text,
@@ -55,7 +55,7 @@ def generate_legal_questions(request: LegalQuestionRequest) -> LegalQuestionResp
         case_enrichment=request.case_enrichment,
         use_gemini=request.use_gemini,
     )
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
         resolved_case_id,
         generated_questions=[item.model_dump(mode="json") for item in response.questions],
@@ -70,7 +70,7 @@ def build_better_searches(request: SearchQualityRequest) -> SearchQualityRespons
         case_enrichment=request.case_enrichment,
         use_gemini=request.use_gemini,
     )
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
         resolved_case_id,
         better_searches=response.model_dump(mode="json"),
@@ -85,7 +85,7 @@ def audit_sources(request: SourceAuditRequest) -> SourceAuditResponse:
         sources=request.sources,
         use_gemini=request.use_gemini,
     )
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
         resolved_case_id,
         source_audit=response.model_dump(mode="json"),
@@ -101,7 +101,7 @@ def audit_precedents(request: PrecedentAuditRequest) -> PrecedentAuditResponse:
         precedents=request.precedents,
         use_gemini=request.use_gemini,
     )
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
         resolved_case_id,
         precedent_audit=response.model_dump(mode="json"),
@@ -118,7 +118,7 @@ def audit_draft(request: DraftAuditRequest) -> DraftAuditResponse:
         selected_decisions=request.selected_decisions,
         use_gemini=request.use_gemini,
     )
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
         resolved_case_id,
         draft_audit=response.model_dump(mode="json"),
@@ -135,5 +135,9 @@ def refine_draft(request: DraftRefineRequest) -> DraftRefineResponse:
         selected_decisions=request.selected_decisions,
         use_gemini=request.use_gemini,
     )
-    case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
+    case_session_service.update_case(
+        resolved_case_id,
+        refined_draft=response.model_dump(mode="json"),
+    )
     return response

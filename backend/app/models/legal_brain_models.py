@@ -49,7 +49,7 @@ class DoctrineCardResponse(BaseModel):
 
 
 class LegalBrainSearchRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     query: str = Field(min_length=3)
     practice_area: str | None = None
     max_results: int = Field(default=10, ge=1, le=50)
@@ -130,7 +130,7 @@ class LegalBrainStatuteArticleResponse(BaseModel):
 
 
 class LegalBrainRetrieveForCaseRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(min_length=10)
     practice_area: str | None = None
     max_sources: int = Field(default=10, ge=1, le=50)

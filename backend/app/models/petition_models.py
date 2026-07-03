@@ -48,6 +48,7 @@ class PetitionStrategyDecision(BaseModel):
 
 
 class PetitionStrategyRequest(BaseModel):
+    case_id: str = Field(min_length=1)
     case_text: str = Field(min_length=10)
     top_decisions: list[PetitionStrategyDecision] = Field(default_factory=list, max_length=20)
 
@@ -137,7 +138,7 @@ class PrecedentAnalysis(BaseModel):
 
 
 class PetitionDraftRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(min_length=10)
     enriched_case_text: str | None = None
     case_enrichment: dict[str, object] = Field(default_factory=dict)

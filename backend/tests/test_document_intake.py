@@ -16,6 +16,7 @@ from app.models.petition_models import PetitionDraftRequest, PetitionDraftRespon
 from app.routes.petition_routes import build_petition_draft
 from app.services.petition_draft_service import PetitionDraftService
 from app.services.petition_profile_service import get_petition_profile
+from app.services.case_session_service import case_session_service
 from app.services.document_intake_service import (
     IMAGE_OCR_WARNING,
     PDF_OCR_WARNING,
@@ -228,6 +229,7 @@ class DocumentRoutesTests(unittest.TestCase):
             verification_status="fact_confirmed",
         )
         request = PetitionDraftRequest(
+            case_id=case_session_service.new_case()["case_id"],
             case_text="Ayıplı araç satışından doğan bedel iadesi talebidir.",
             request_type="Satış bedelinin iadesi",
             document_facts=[document_fact],

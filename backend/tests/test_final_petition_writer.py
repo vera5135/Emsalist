@@ -14,6 +14,7 @@ from app.services.document_intake_service import DocumentDuplicateError, Documen
 from app.services.dynamic_legal_reasoner_service import SAFE_SOURCE_DOMAINS, dynamic_legal_reasoner_service
 from app.services.final_petition_writer_service import FORBIDDEN_TEXT, final_petition_writer_service
 from app.services.gemini_client import GeminiJSONResult
+from app.services.case_session_service import case_session_service
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "NOTER._TEST.txt"
@@ -27,6 +28,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.service = DocumentIntakeService(Path(self.temporary.name))
+        self.case_id = case_session_service.new_case()["case_id"]
         self.record = self.service.create_document(
             file_name=FIXTURE.name,
             content=FIXTURE.read_bytes(),
@@ -295,6 +297,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
 
     def test_final_route_uses_verified_live_precedents_for_drafting_package(self) -> None:
         request = FinalPetitionDraftRequest(
+            case_id=self.case_id,
             case_text=CASE_TEXT,
             request_type="Satış bedelinin iadesi",
             writer_mode="local",
@@ -367,6 +370,7 @@ class FinalPetitionWriterTests(unittest.TestCase):
 
     def test_final_route_allows_draft_without_review_approval(self) -> None:
         request = FinalPetitionDraftRequest(
+            case_id=self.case_id,
             case_text=CASE_TEXT,
             request_type="Satış bedelinin iadesi",
         )

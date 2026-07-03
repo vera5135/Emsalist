@@ -100,7 +100,7 @@ def search_legal_brain(request: LegalBrainSearchRequest) -> LegalBrainSearchResp
         practice_area=request.practice_area,
         max_results=request.max_results,
     )
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
         resolved_case_id,
         legal_brain_results=[item.model_dump(mode="json") for item in response.results],
@@ -117,7 +117,7 @@ def retrieve_for_case(request: LegalBrainRetrieveForCaseRequest) -> LegalBrainRe
         legal_brain_query=request.legal_brain_query,
         blocked_topics=request.blocked_topics,
     )
-    resolved_case_id = case_session_service.resolve_case_id(request.case_id)
+    resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
         resolved_case_id,
         legal_brain_results=[item.model_dump(mode="json") for item in response.book_sources],

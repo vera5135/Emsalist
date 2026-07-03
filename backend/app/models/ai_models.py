@@ -13,7 +13,7 @@ class AIModelMixin(BaseModel):
 
 
 class CaseEnrichmentRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(min_length=10)
     practice_area: str | None = "auto"
     use_gemini: bool = True
@@ -46,7 +46,7 @@ class CaseEnrichmentResponse(AIModelMixin):
 
 
 class LegalQuestionRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(min_length=10)
     case_enrichment: dict[str, Any] = Field(default_factory=dict)
     use_gemini: bool = True
@@ -69,7 +69,7 @@ class LegalQuestionResponse(AIModelMixin):
 
 
 class SearchQualityRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(min_length=10)
     case_enrichment: dict[str, Any] = Field(default_factory=dict)
     use_gemini: bool = True
@@ -90,7 +90,7 @@ class SearchQualityResponse(AIModelMixin):
 
 
 class SourceAuditRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_enrichment: dict[str, Any] = Field(default_factory=dict)
     sources: list[dict[str, Any]] = Field(default_factory=list)
     use_gemini: bool = True
@@ -110,7 +110,7 @@ class SourceAuditResponse(AIModelMixin):
 
 
 class PrecedentAuditRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(default="", max_length=20000)
     case_enrichment: dict[str, Any] = Field(default_factory=dict)
     precedents: list[dict[str, Any]] = Field(default_factory=list)
@@ -132,7 +132,7 @@ class PrecedentAuditResponse(AIModelMixin):
 
 
 class DraftAuditRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(default="", max_length=20000)
     draft_text: str = Field(min_length=10)
     case_enrichment: dict[str, Any] = Field(default_factory=dict)
@@ -155,7 +155,7 @@ class DraftAuditResponse(AIModelMixin):
 
 
 class DraftRefineRequest(BaseModel):
-    case_id: str | None = None
+    case_id: str = Field(min_length=1)
     case_text: str = Field(default="", max_length=20000)
     draft_text: str = Field(min_length=10)
     case_enrichment: dict[str, Any] = Field(default_factory=dict)
