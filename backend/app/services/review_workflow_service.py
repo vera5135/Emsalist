@@ -155,11 +155,11 @@ class ReviewWorkflowService:
         questions: dict[str, Any] = {}
         try:
             enrichment_for_questions = {k: v for k, v in enrichment.items() if k != "warnings"}
-            q_response = legal_question_agent.generate(
+            q_response = self._track_ai(case_id, "legal_questions", request, lambda: legal_question_agent.generate(
                 case_text=request.case_text,
                 case_enrichment=enrichment_for_questions,
                 use_gemini=request.use_ai,
-            )
+            ))
             questions = q_response.model_dump(mode="json")
             questions["canonical_questions"] = list(issue_graph.get("next_best_questions") or [])
             case_session_service.update_case(case_id, generated_questions=questions)
@@ -178,11 +178,11 @@ class ReviewWorkflowService:
         better_searches: dict[str, Any] = {}
         try:
             enrichment_for_search = {k: v for k, v in enrichment.items() if k != "warnings"}
-            s_response = search_quality_agent.build(
+            s_response = self._track_ai(case_id, "better_searches", request, lambda: search_quality_agent.build(
                 case_text=request.case_text,
                 case_enrichment=enrichment_for_search,
                 use_gemini=request.use_ai,
-            )
+            ))
             better_searches = s_response.model_dump(mode="json")
             canonical_queries = list(issue_graph.get("research_plan") or [])
             better_searches["canonical_research_plan"] = canonical_queries
@@ -315,7 +315,16 @@ class ReviewWorkflowService:
         self._cache_result(case_id, request.request_id, fingerprint, response, now)
         return response
 
-    # ── Step runners ──
+    def _track_ai(self, case_id: str, operation: str, request: WorkflowReviewRequest, fn):
+        from app.services.ai_run_service import ai_run_service
+        run_id = ai_run_service.start_run(case_id=case_id, operation=operation, model="deepseek-chat", request_id=request.request_id)
+        try:
+            result = fn()
+            ai_run_service.complete_run(run_id)
+            return result
+        except Exception:
+            ai_run_service.fail_run(run_id, error_code="AI_PROVIDER_ERROR")
+            raise
 
     def _run_step(self, name: str, steps: list[WorkflowStepResult], fn):
         started = self._now()
@@ -384,29 +393,18 @@ class ReviewWorkflowService:
         return analysis_dict, reasoning_dict
 
     def _run_enrich(self, case_id: str, request: WorkflowReviewRequest):
-        from app.services.ai_run_service import ai_run_service
-        run_id = ai_run_service.start_run(
-            case_id=case_id, operation="case_enrichment",
-            model="deepseek-chat", request_id=request.request_id,
-            prompt_preview=request.case_text[:100],
+        response = self._track_ai(case_id, "case_enrichment", request, lambda: case_enrichment_agent.enrich(
+            case_text=request.case_text,
+            practice_area=request.practice_area,
+            use_gemini=request.use_ai,
+        ))
+        enrichment_dict = response.model_dump(mode="json")
+        case_session_service.update_case(
+            case_id,
+            event_text=request.case_text,
+            case_enrichment=enrichment_dict,
         )
-        try:
-            response = case_enrichment_agent.enrich(
-                case_text=request.case_text,
-                practice_area=request.practice_area,
-                use_gemini=request.use_ai,
-            )
-            enrichment_dict = response.model_dump(mode="json")
-            ai_run_service.complete_run(run_id)
-            case_session_service.update_case(
-                case_id,
-                event_text=request.case_text,
-                case_enrichment=enrichment_dict,
-            )
-            return enrichment_dict
-        except Exception:
-            ai_run_service.fail_run(run_id, error_code="AI_PROVIDER_ERROR")
-            raise
+        return enrichment_dict
 
     def _run_brain(self, case_id: str, request: WorkflowReviewRequest, better_searches: dict, enrichment: dict):
         brain_query = (
@@ -428,11 +426,11 @@ class ReviewWorkflowService:
         if brain_results:
             try:
                 enrichment_for_audit = {k: v for k, v in enrichment.items() if k != "warnings"}
-                audit_response = source_relevance_agent.audit(
+                audit_response = self._track_ai(case_id, "source_audit", request, lambda: source_relevance_agent.audit(
                     case_enrichment=enrichment_for_audit,
                     sources=brain_results,
                     use_gemini=request.use_ai,
-                )
+                ))
                 source_audit_dict = audit_response.model_dump(mode="json")
                 case_session_service.update_case(case_id, source_audit=source_audit_dict)
             except Exception:
@@ -466,12 +464,12 @@ class ReviewWorkflowService:
 
     def _run_audit_precedents(self, case_id: str, request: WorkflowReviewRequest, enrichment: dict, final_precedents: list):
         enrichment_for_audit = {k: v for k, v in enrichment.items() if k != "warnings"}
-        audit_response = precedent_quality_agent.audit(
+        audit_response = self._track_ai(case_id, "precedent_audit", request, lambda: precedent_quality_agent.audit(
             case_text=request.case_text,
             case_enrichment=enrichment_for_audit,
             precedents=final_precedents,
             use_gemini=request.use_ai,
-        )
+        ))
         audit_dict = audit_response.model_dump(mode="json")
         case_session_service.update_case(case_id, precedent_audit=audit_dict)
         return audit_dict
