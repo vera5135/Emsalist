@@ -159,6 +159,7 @@ class FinalPetitionWriterService:
         drafting_warnings: list[str] | None = None,
         case_state: dict[str, Any] | None = None,
         writer_mode: str = "local",
+        legal_ground_validation: dict[str, Any] | None = None,
     ) -> DraftingPackage:
         answers = answers or {}
         case_state = case_state or {}
@@ -287,6 +288,7 @@ class FinalPetitionWriterService:
             legal_sources=clean_grounds,
             legal_grounds=clean_grounds,
             legal_basis=clean_grounds,
+            legal_ground_validation=legal_ground_validation or {},
             precedent_for_petition=[],
             precedents_for_petition=[],
             risk_items=list(warnings),
@@ -426,6 +428,8 @@ class FinalPetitionWriterService:
         return warnings.get(failure_reason, warnings["unknown"])
 
     def _local_template(self, package: DraftingPackage) -> str:
+        legal_grounds_text = self._filter_legal_grounds(package)
+
         sections = [
             package.court_heading,
             (
@@ -438,11 +442,29 @@ class FinalPetitionWriterService:
                 "AÇIKLAMALAR",
                 [*package.confirmed_facts, *package.uncertain_facts],
             ),
-            "HUKUKİ NEDENLER\n" + ", ".join(package.legal_grounds) + " ve ilgili sair mevzuat.",
+            f"HUKUKİ NEDENLER\n{legal_grounds_text}",
             self._numbered_section("DELİLLER", package.evidence_items),
             self._result_section(package.relief_requests),
         ]
         return "\n\n".join(section.strip() for section in sections if section.strip())
+
+    def _filter_legal_grounds(self, package: DraftingPackage) -> str:
+        validation = package.legal_ground_validation if hasattr(package, "legal_ground_validation") else {}
+        verified_grounds = validation.get("verified_grounds", []) if validation else []
+
+        if verified_grounds:
+            citations = [
+                g.get("normalized_citation", "") for g in verified_grounds
+                if g.get("normalized_citation")
+            ]
+            if citations:
+                return ", ".join(citations) + "."
+
+        raw_grounds = list(package.legal_grounds or []) or list(package.legal_basis or [])
+        if raw_grounds:
+            return ", ".join(raw_grounds) + "."
+
+        return ""
 
     @staticmethod
     def _subject(package: DraftingPackage) -> str:

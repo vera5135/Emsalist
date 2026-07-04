@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import uuid
 from copy import deepcopy
@@ -45,12 +46,14 @@ def _default_case_payload(case_id: str) -> dict[str, Any]:
         "better_searches": {},
         "generated_questions": [],
         "legal_issue_graph": {},
+        "legal_ground_validation": {},
     }
 
 
 class CaseSessionService:
     def __init__(self, storage_dir: Path | None = None) -> None:
-        root = storage_dir or Path(__file__).resolve().parents[1] / "case_store"
+        configured_root = os.getenv("EMSALIST_CASE_STORE_DIR", "").strip()
+        root = storage_dir or (Path(configured_root) if configured_root else Path(__file__).resolve().parents[1] / "case_store")
         self.storage_dir = Path(root)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.index_path = self.storage_dir / "sessions.json"
@@ -161,6 +164,7 @@ class CaseSessionService:
             "better_searches": deepcopy(payload.get("better_searches", {})),
             "generated_questions": deepcopy(payload.get("generated_questions", [])),
             "legal_issue_graph": deepcopy(payload.get("legal_issue_graph", {})),
+            "legal_ground_validation": deepcopy(payload.get("legal_ground_validation", {})),
         }
 
     def _generate_case_id(self) -> str:
@@ -187,12 +191,17 @@ class CaseSessionService:
         return {"active_case_id": active_case_id, "cases": cases}
 
     def _persist(self) -> None:
-        temporary = self.index_path.with_suffix(".tmp")
-        temporary.write_text(
-            json.dumps(self._state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        temporary.replace(self.index_path)
+        with self._lock:
+            temporary = self.index_path.with_name(f".{self.index_path.name}.{uuid.uuid4().hex}.tmp")
+            try:
+                temporary.write_text(
+                    json.dumps(self._state, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                temporary.replace(self.index_path)
+            finally:
+                if temporary.exists():
+                    temporary.unlink()
 
 
     def require_existing_case(self, case_id: str) -> str:

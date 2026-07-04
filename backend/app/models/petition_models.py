@@ -264,6 +264,7 @@ class DraftingPackage(BaseModel):
     risks: list[str] = Field(default_factory=list)
     relief_requests: list[str] = Field(default_factory=list)
     drafting_warnings: list[str] = Field(default_factory=list)
+    legal_ground_validation: dict[str, Any] = Field(default_factory=dict)
     writer_mode: str = "local"
     graph_summary: str = ""
     drafting_plan: list[dict[str, Any]] = Field(default_factory=list)

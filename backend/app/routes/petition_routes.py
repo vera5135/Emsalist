@@ -292,6 +292,7 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
         drafting_warnings=request.drafting_warnings,
         writer_mode=getattr(request, "writer_mode", "local"),
         case_state=case_state,
+        legal_ground_validation=stored_case.get("legal_ground_validation"),
     )
     precedent_request = request.model_copy(deep=True)
     precedent_request.case_enrichment = enriched_case

@@ -58,6 +58,31 @@ def make_pdf(text: str | None = None) -> bytes:
     return content
 
 
+def test_conflict_marks_fact_and_blocks_grounding_ready() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        service = DocumentIntakeService(Path(directory), max_file_size=2 * 1024 * 1024)
+        text = "Noter satış sözleşmesi\nSatış bedeli: 350.000 TL\nSatış tarihi: 12.06.2026"
+        record = service.create_document(file_name="noter_satis.txt", content=text.encode())
+        sale_fact = next(fact for fact in record.extracted_facts if fact.fact_key == "sale_price")
+        assert sale_fact.fact_value == "350.000 TL"
+
+        analysis = service.analyze_documents(
+            document_ids=[record.document_id],
+            user_claims={"satış bedeli": "500.000 TL"},
+            document_types={record.document_id: "noter satış sözleşmesi"},
+        )
+
+        assert len(analysis.conflicts) == 1
+        assert analysis.conflicts[0].fact_key == "sale_price"
+        assert "çelişki" in analysis.conflicts[0].warning
+        analyzed_sale_fact = next(
+            fact for fact in analysis.documents[0].extracted_facts
+            if fact.fact_key == "sale_price"
+        )
+        assert analyzed_sale_fact.verification_status == "conflict_detected"
+        assert analysis.grounding_ready is False
+
+
 class DocumentIntakeServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -168,21 +193,6 @@ DELİLLER: Noter satış sözleşmesi, servis raporu, banka dekontu.
             self.assertTrue(facts[key].excerpt)
             self.assertEqual(facts[key].verification_status, "fact_confirmed")
         self.assertEqual(record.missing_fields, [])
-
-    def test_conflict_marks_fact_and_blocks_grounding_ready(self) -> None:
-        text = "Noter satış sözleşmesi\nSatış bedeli: 350.000 TL\nSatış tarihi: 12.06.2026"
-        record = self.service.create_document(file_name="noter_satis.txt", content=text.encode())
-        analysis = self.service.analyze_documents(
-            document_ids=[record.document_id],
-            user_claims={"satış bedeli": "500.000 TL"},
-            document_types={record.document_id: "noter satış sözleşmesi"},
-        )
-        self.assertEqual(len(analysis.conflicts), 1)
-        self.assertEqual(analysis.conflicts[0].fact_key, "sale_price")
-        self.assertIn("çelişki", analysis.conflicts[0].warning)
-        sale_fact = next(fact for fact in analysis.documents[0].extracted_facts if fact.fact_key == "sale_price")
-        self.assertEqual(sale_fact.verification_status, "conflict_detected")
-        self.assertFalse(analysis.grounding_ready)
 
     def test_closed_txt_file_extracts_sale_price_and_detects_conflict(self) -> None:
         source = Path(self.temporary.name) / "noter_satis_kaynagi.txt"

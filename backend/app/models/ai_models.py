@@ -204,6 +204,7 @@ class WorkflowReviewResponse(BaseModel):
     analysis: dict[str, Any] = Field(default_factory=dict)
     enrichment: dict[str, Any] = Field(default_factory=dict)
     issue_graph: dict[str, Any] = Field(default_factory=dict)
+    legal_ground_validation: dict[str, Any] = Field(default_factory=dict)
     questions: dict[str, Any] = Field(default_factory=dict)
     better_searches: dict[str, Any] = Field(default_factory=dict)
     legal_brain_results: list[dict[str, Any]] = Field(default_factory=list)
@@ -216,6 +217,7 @@ class WorkflowReviewRequest(BaseModel):
     case_id: str = Field(min_length=1)
     request_id: str = Field(min_length=1)
     case_text: str = Field(min_length=10)
+    event_date: str = ""
     practice_area: str = "auto"
     max_yargitay_results: int = Field(default=5, ge=1, le=20)
     use_ai: bool = True

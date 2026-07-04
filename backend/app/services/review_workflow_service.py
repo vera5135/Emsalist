@@ -22,6 +22,8 @@ from app.services.case_session_service import case_session_service
 from app.services.case_state_service import case_state_service
 from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_service
 from app.services.legal_brain_service import legal_brain_service
+from app.services import legal_ground_validator_service
+from app.services.legal_issue_graph_service import legal_issue_graph_service
 from app.services.legal_question_agent import legal_question_agent
 from app.services.precedent_quality_agent import precedent_quality_agent
 from app.services.research_service import research_service
@@ -29,14 +31,15 @@ from app.services.search_quality_agent import search_quality_agent
 from app.services.source_relevance_agent import source_relevance_agent
 from app.services.petition_profile_service import get_petition_profile
 
-WORKFLOW_VERSION = "p0.3"
+WORKFLOW_VERSION = "p0.4.1"
 
 
 class ReviewWorkflowService:
 
     async def execute(self, request: WorkflowReviewRequest) -> WorkflowReviewResponse:
         case_id = request.case_id
-        fingerprint = self._fingerprint(request)
+        profile = get_petition_profile(request.case_text)
+        fingerprint = self._fingerprint(request, profile_id=profile.key)
         now = self._now()
         workflow_id = f"wf_{case_id}_{request.request_id}"
 
@@ -76,7 +79,6 @@ class ReviewWorkflowService:
         try:
             stored = case_session_service.get_case_state(case_id)
             previous = dict(stored.get("case_state") or {})
-            profile = get_petition_profile(request.case_text)
             canonical_state = case_state_service.build(
                 case_id=case_id,
                 event_text=request.case_text,
@@ -109,6 +111,45 @@ class ReviewWorkflowService:
                 safe_error_message="graph_build_failed",
             ))
         step_results["issue_graph"] = issue_graph
+
+        # ── C2. Legal ground validation ──
+        legal_ground_validation: dict[str, Any] = {}
+        validation_context = self._validation_context(
+            request,
+            issue_graph=issue_graph,
+            enrichment=enrichment,
+            profile_id=profile.key,
+        )
+        all_raw_grounds = validation_context["raw_citations"]
+        fingerprint = self._fingerprint(
+            request,
+            graph_source_fingerprint=validation_context["graph_source_fingerprint"],
+            normalized_citations=validation_context["normalized_citations"],
+            profile_id=profile.key,
+        )
+        if all_raw_grounds:
+            try:
+                validation_response = legal_ground_validator_service.legal_ground_validator.validate_response(
+                    case_id=case_id,
+                    raw_grounds=all_raw_grounds,
+                    case_type=profile.key,
+                    event_date=request.event_date,
+                )
+                legal_ground_validation = validation_response.model_dump(mode="json")
+                case_session_service.update_case(case_id, legal_ground_validation=legal_ground_validation)
+                steps.append(WorkflowStepResult(name="legal_grounds", status="completed", started_at=now, completed_at=now))
+                warnings.extend(legal_ground_validation.get("warnings", []))
+            except Exception:
+                steps.append(WorkflowStepResult(
+                    name="legal_grounds", status="fallback", started_at=now, completed_at=now, fallback_used=True,
+                    safe_error_message="legal_ground_validation_failed",
+                ))
+        else:
+            steps.append(WorkflowStepResult(
+                name="legal_grounds", status="skipped", started_at=now, completed_at=now,
+                safe_error_message="no_grounds_to_validate",
+            ))
+        step_results["legal_ground_validation"] = legal_ground_validation
 
         # ── D. Questions + Searches ──
         questions: dict[str, Any] = {}
@@ -239,6 +280,7 @@ class ReviewWorkflowService:
             analysis=analysis,
             enrichment=enrichment,
             issue_graph=issue_graph,
+            legal_ground_validation=legal_ground_validation,
             questions=questions,
             better_searches=better_searches,
             legal_brain_results=brain_results,
@@ -414,12 +456,29 @@ class ReviewWorkflowService:
 
     # ── Cache / Idempotency ──
 
-    @staticmethod
-    def _fingerprint(request: WorkflowReviewRequest) -> str:
+    @classmethod
+    def _fingerprint(
+        cls,
+        request: WorkflowReviewRequest,
+        *,
+        graph_source_fingerprint: str = "",
+        normalized_citations: list[str] | None = None,
+        profile_id: str = "",
+    ) -> str:
+        if not graph_source_fingerprint or normalized_citations is None or not profile_id:
+            context = cls._validation_context(request, profile_id=profile_id)
+            graph_source_fingerprint = graph_source_fingerprint or context["graph_source_fingerprint"]
+            normalized_citations = normalized_citations if normalized_citations is not None else context["normalized_citations"]
+            profile_id = profile_id or context["profile_id"]
         components = [
             WORKFLOW_VERSION,
+            legal_ground_validator_service.REGISTRY_VERSION,
             request.case_id,
             request.case_text,
+            request.event_date,
+            profile_id,
+            graph_source_fingerprint,
+            "|".join(normalized_citations or []),
             request.practice_area,
             str(request.max_yargitay_results),
             str(request.use_ai),
@@ -427,6 +486,57 @@ class ReviewWorkflowService:
         ]
         joined = "|".join(components)
         return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+
+    @staticmethod
+    def _validation_context(
+        request: WorkflowReviewRequest,
+        *,
+        issue_graph: dict[str, Any] | None = None,
+        enrichment: dict[str, Any] | None = None,
+        profile_id: str = "",
+    ) -> dict[str, Any]:
+        profile = get_petition_profile(request.case_text)
+        resolved_profile_id = profile_id or profile.key
+        try:
+            stored = case_session_service.get_case_state(request.case_id)
+        except KeyError:
+            stored = {}
+        same_event = str(stored.get("event_text") or "").strip() == request.case_text.strip()
+        stored_graph = dict(stored.get("legal_issue_graph") or {}) if same_event else {}
+        graph = dict(issue_graph or stored_graph)
+        if not graph:
+            preview = legal_issue_graph_service.build({
+                "case_id": request.case_id,
+                "event_text": request.case_text,
+                "area": request.practice_area,
+                "case_type": resolved_profile_id,
+                "document_facts": list(stored.get("document_facts") or []),
+                "question_answers": dict(stored.get("question_answers") or {}),
+            })
+            graph = preview.model_dump(mode="json")
+
+        stored_enrichment = dict(stored.get("case_enrichment") or {}) if same_event else {}
+        effective_enrichment = dict(enrichment or stored_enrichment)
+        analysis = case_analyzer.analyze(request.case_text)
+        graph_citations = [
+            str(citation)
+            for issue in graph.get("issues", [])
+            if isinstance(issue, dict)
+            for citation in issue.get("legal_basis", [])
+        ]
+        raw_citations = ReviewWorkflowService._dedupe_strings([
+            *list(profile.legal_basis),
+            *list(analysis.legal_keywords),
+            *list(effective_enrichment.get("relevant_articles") or []),
+            *graph_citations,
+        ])
+        normalized = legal_ground_validator_service.legal_ground_validator.normalized_citations(raw_citations)
+        return {
+            "profile_id": resolved_profile_id,
+            "graph_source_fingerprint": str(graph.get("source_fingerprint") or ""),
+            "raw_citations": raw_citations,
+            "normalized_citations": normalized,
+        }
 
     def _check_cache(self, case_id: str, request_id: str, fingerprint: str) -> WorkflowReviewResponse | None:
         runs = case_session_service._state.get("cases", {}).get(case_id, {}).get("workflow_runs", {})
