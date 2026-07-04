@@ -20,6 +20,8 @@ class Settings(BaseModel):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     gemini_timeout_seconds: int = 30
+    database_url: str = ""
+    storage_backend: str = "json"  # json | database | dual
 
 
 def _load_env_file() -> None:
