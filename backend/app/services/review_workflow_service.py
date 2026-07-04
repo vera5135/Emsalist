@@ -236,7 +236,29 @@ class ReviewWorkflowService:
             yargitay_used_fallback = yargitay_results.get("source_summary", {}).get("used_fallback", False)
             warnings.extend(yargitay_results.get("errors", []))
 
-        # ── H. Precedent audit (IMPORTANT) ──
+        # ── H. Canonical precedent ingestion (P0.5) ──
+        live_decisions = step_results.get("yargitay_results", {}).get("live_yargitay_results", [])
+        brain_decisions = brain_results or []
+        try:
+            from app.services.precedent_authority_service import precedent_authority_service
+            stored_authority = case_session_service.get_case_state(case_id).get("precedent_authority")
+            authority = precedent_authority_service.build_authority(
+                case_id=case_id,
+                live_results=live_decisions,
+                brain_results=brain_decisions,
+                existing=stored_authority,
+            )
+            case_session_service.update_case(case_id, precedent_authority=authority.model_dump(mode="json"))
+            step_results["precedent_authority"] = authority.model_dump(mode="json")
+            steps.append(WorkflowStepResult(name="precedent_authority", status="completed", started_at=now, completed_at=now))
+        except Exception:
+            steps.append(WorkflowStepResult(
+                name="precedent_authority", status="fallback", started_at=now, completed_at=now, fallback_used=True,
+                safe_error_message="precedent_authority_failed",
+            ))
+            step_results["precedent_authority"] = {}
+
+        # ── I. Precedent audit (IMPORTANT) ──
         final_precedents = step_results.get("yargitay_results", {}).get("final_precedents", [])
         if final_precedents:
             result = self._run_step("precedent_audit", steps, lambda: self._run_audit_precedents(case_id, request, enrichment, final_precedents))
@@ -287,6 +309,7 @@ class ReviewWorkflowService:
             source_audit=step_results.get("source_audit", {}),
             yargitay_results=step_results.get("yargitay_results", {}),
             precedent_audit=step_results.get("precedent_audit", {}),
+            precedent_authority=step_results.get("precedent_authority", {}),
         )
 
         self._cache_result(case_id, request.request_id, fingerprint, response, now)

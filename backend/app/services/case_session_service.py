@@ -165,6 +165,7 @@ class CaseSessionService:
             "generated_questions": deepcopy(payload.get("generated_questions", [])),
             "legal_issue_graph": deepcopy(payload.get("legal_issue_graph", {})),
             "legal_ground_validation": deepcopy(payload.get("legal_ground_validation", {})),
+            "precedent_authority": deepcopy(payload.get("precedent_authority", {})),
         }
 
     def _generate_case_id(self) -> str:

@@ -211,6 +211,7 @@ class WorkflowReviewResponse(BaseModel):
     source_audit: dict[str, Any] = Field(default_factory=dict)
     yargitay_results: dict[str, Any] = Field(default_factory=dict)
     precedent_audit: dict[str, Any] = Field(default_factory=dict)
+    precedent_authority: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowReviewRequest(BaseModel):
