@@ -197,3 +197,36 @@ class AuditEvent(Base):
     safe_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     __table_args__ = (Index("ix_audit_tenant_time", "tenant_id", "created_at"),)
+
+
+# -- Legal Grounds (P0.4 normalize edilmiş hukuki dayanaklar) --
+class LegalGroundOrm(Base):
+    __tablename__ = "legal_grounds"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    graph_id: Mapped[str] = mapped_column(String(32), default="")
+    normalized_citation: Mapped[str] = mapped_column(String(200), default="")
+    legislation_code: Mapped[str] = mapped_column(String(20), default="")
+    legislation_name: Mapped[str] = mapped_column(String(200), default="")
+    article: Mapped[str] = mapped_column(String(20), default="")
+    verification_status: Mapped[str] = mapped_column(String(20), default="unverified")
+    applicability_status: Mapped[str] = mapped_column(String(30), default="potentially_applicable")
+    temporal_status: Mapped[str] = mapped_column(String(20), default="uncertain")
+    source_refs: Mapped[dict] = mapped_column(JSON, default=dict)
+    data_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (UniqueConstraint("case_id", "normalized_citation", name="uq_grounds_case_citation"),)
+
+
+# -- Claim Grounding Snapshots --
+class ClaimGroundingOrm(Base):
+    __tablename__ = "claim_grounding_snapshots"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    petition_hash: Mapped[str] = mapped_column(String(64), default="")
+    source_fingerprint: Mapped[str] = mapped_column(String(64), default="")
+    grounding_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    result_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (Index("ix_grounding_case_hash", "case_id", "petition_hash", "source_fingerprint"),)
