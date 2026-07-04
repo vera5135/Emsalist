@@ -26,6 +26,7 @@ from app.routes.precedent_routes import router as precedent_router
 from app.routes.grounding_routes import router as grounding_router
 from app.routes.security_routes import router as security_router
 from app.routes.ai_run_routes import router as ai_run_router
+from app.routes.yargitay_health_routes import router as yargitay_health_router
 
 settings = get_settings()
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -97,6 +98,7 @@ app.include_router(precedent_router)
 app.include_router(grounding_router)
 app.include_router(security_router)
 app.include_router(ai_run_router)
+app.include_router(yargitay_health_router)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
