@@ -206,3 +206,44 @@ def yargitay_health() -> dict:
         "last_success_at": _last_success_at,
         "last_failure_code": _last_failure_code,
     }
+
+
+# ── Retry / Backoff ──
+
+import random as _random
+
+RETRY_MAX = 3
+RETRY_BASE_DELAY = 1.0
+RETRY_MAX_DELAY = 30.0
+RETRYABLE_ERRORS = ("timeout", "429", "502", "503", "504", "connection", "browser_crash")
+PERMANENT_ERRORS = ("captcha", "blocked", "403", "invalid", "parse_error", "selector_error")
+
+_sleep_fn = time.sleep  # injectable for tests
+
+
+def set_sleep_fn(fn) -> None:
+    global _sleep_fn
+    _sleep_fn = fn
+
+
+def reset_sleep_fn() -> None:
+    global _sleep_fn
+    _sleep_fn = time.sleep
+
+
+def exponential_backoff(attempt: int, base: float = RETRY_BASE_DELAY, max_delay: float = RETRY_MAX_DELAY) -> float:
+    delay = min(base * (2 ** (attempt - 1)), max_delay)
+    jitter = _random.uniform(0, delay * 0.5)
+    return round(delay + jitter, 3)
+
+
+def should_retry(error_code: str, attempt: int) -> bool:
+    if error_code in PERMANENT_ERRORS:
+        return False
+    if error_code in RETRYABLE_ERRORS:
+        return attempt < RETRY_MAX
+    return False
+
+
+def sleep_for(delay: float) -> None:
+    _sleep_fn(delay)
