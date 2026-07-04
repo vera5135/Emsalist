@@ -163,28 +163,56 @@ class PrecedentAuthorityService:
         full_text = str(item.get("clean_text_preview") or item.get("full_text") or "")
         detail_url = str(item.get("detail_url") or item.get("source_url") or "")
 
+        item_source = str(item.get("source_type") or source_type)
+
         canonical_key = build_canonical_key(
             court=court, chamber=chamber, docket_number=docket,
             decision_number=dec_num, decision_date=dec_date,
             source_text=full_text[:2000],
         )
 
+        if item_source in ("ai_suggested", "deterministic_fallback"):
+            fb = hashlib.sha256(f"{court}{docket}{dec_num}{dec_date}{item_source}".encode()).hexdigest()[:10]
+            canonical_key = f"PRECEDENT:FALLBACK:{fb}"
+
+        norm_date = _normalize_date(dec_date)
+        if norm_date == dec_date and len(dec_date) > 2 and norm_date and not re.match(r"^\d{4}-\d{2}-\d{2}$", norm_date):
+            fb = hashlib.sha256(f"{court}{docket}{dec_num}{dec_date}{item_source}".encode()).hexdigest()[:10]
+            canonical_key = f"PRECEDENT:FALLBACK:{fb}"
+
         if canonical_key in seen_keys:
             return
         seen_keys.add(canonical_key)
 
-        verdict = "verified" if source_type == "official_yargitay" and docket and dec_num else "unverified"
-        authority = "authoritative" if source_type == "official_yargitay" and docket and dec_num else "persuasive"
-        if source_type == "legal_brain" and not detail_url:
+        verdict = "verified" if item_source == "official_yargitay" and docket and dec_num else "unverified"
+        authority = "authoritative" if item_source == "official_yargitay" and docket and dec_num else "persuasive"
+        if item_source == "legal_brain" and not detail_url:
+            authority = "fallback_only"
+        if item_source in ("ai_suggested", "deterministic_fallback"):
             authority = "fallback_only"
 
         existing_use = str(item.get("use_class") or item.get("use_in_petition") or "")
         relevance = "directly_relevant" if existing_use in ("direct_support", "supporting_with_caution") else "partially_relevant"
 
+        # Domain mismatch detection
+        case_hint = str(item.get("case_summary", "")).casefold()
+        title_lower = title.casefold()
+        if "Iscilik" in title or court.startswith("9.") or "9. " in court:
+            if not any(t in case_hint for t in ("iscilik", "isci", "kidem", "labor")):
+                relevance = "irrelevant"
+        elif "Kira" in title or "kira" in title_lower or court.startswith("3.") or "3. " in court:
+            if not any(t in case_hint for t in ("kira", "rent")):
+                if any(t in case_hint for t in ("arac", "car", "iscilik", "isci", "bosanma", "nafaka", "icra")):
+                    relevance = "irrelevant"
+        elif "Tasinmaz" in title or "tasinmaz" in title_lower or "daire" in title_lower or "konut" in title_lower:
+            if not any(t in case_hint for t in ("tasinmaz", "konut", "daire", "kira", "rent")):
+                if any(t in case_hint for t in ("arac", "car")):
+                    relevance = "irrelevant"
+
         precedent_id = f"prec_{canonical_key.replace(':', '_').replace('/', '_')[:48]}"
         if precedent_id in existing_rejected:
             selection = "rejected"
-        elif source_type == "official_yargitay" and docket and dec_num:
+        elif item_source == "official_yargitay" and docket and dec_num:
             selection = "accepted"
         else:
             selection = "candidate"
@@ -193,7 +221,7 @@ class PrecedentAuthorityService:
             precedent_id=precedent_id,
             case_id=case_id,
             canonical_key=canonical_key,
-            source_type=source_type,
+            source_type=item_source,
             source_ref=detail_url,
             official_source_url=detail_url,
             court=court,
