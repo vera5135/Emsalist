@@ -1,0 +1,3924 @@
+{
+  "dataset_id": "precedent_v1",
+  "version": "1.0.0",
+  "item_count": 100,
+  "profiles": [
+    "admin",
+    "car",
+    "enf",
+    "family",
+    "labor",
+    "rent",
+    "tort"
+  ],
+  "label_policy_version": "v1",
+  "items": [
+    {
+      "item_id": "car-01",
+      "scenario_id": "s1",
+      "profile_id": "car",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "car-02",
+      "scenario_id": "s2",
+      "profile_id": "car",
+      "difficulty": "easy",
+      "tags": [
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "2024-03-15",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "g1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "car-03",
+      "scenario_id": "s3",
+      "profile_id": "car",
+      "difficulty": "easy",
+      "tags": [
+        "fallback"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "source_type": "deterministic_fallback",
+        "title": "Fallback Arac"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "car-04",
+      "scenario_id": "s4",
+      "profile_id": "car",
+      "difficulty": "medium",
+      "tags": [
+        "irrelevant"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2022/500",
+        "karar_no": "2023/600",
+        "date": "01.06.2023",
+        "source_type": "official_yargitay",
+        "title": "Tasinmaz"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2022/500:2023/600:2023-06-01",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "irrelevant",
+      "expected_selection_status": "rejected",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 30
+    },
+    {
+      "item_id": "car-05",
+      "scenario_id": "s5",
+      "profile_id": "car",
+      "difficulty": "easy",
+      "tags": [
+        "ai"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "AI",
+        "source_type": "ai_suggested",
+        "title": "AI Onerisi"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "car-06",
+      "scenario_id": "s6",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "invalid"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "esas_no": "999",
+        "karar_no": "888",
+        "date": "32.13.2099",
+        "source_type": "ai_suggested",
+        "title": "Invalid"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 50
+    },
+    {
+      "item_id": "car-07",
+      "scenario_id": "s7",
+      "profile_id": "car",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 13. HD",
+        "chamber": "13. HD",
+        "esas_no": "2023/1500",
+        "karar_no": "2024/2500",
+        "date": "12.04.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 13. HD E.2023/1500 K.2024/2500"
+      },
+      "expected_canonical_key": "YARGITAY:13HD:2023/1500:2024/2500:2024-04-12",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "car-08",
+      "scenario_id": "s8",
+      "profile_id": "car",
+      "difficulty": "medium",
+      "tags": [
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 13. Hukuk Dairesi",
+        "chamber": "13. HD",
+        "esas_no": "2023/1500",
+        "karar_no": "2024/2500",
+        "date": "2024-04-12",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 13. Hukuk Dairesi E.2023/1500 K.2024/2500"
+      },
+      "expected_canonical_key": "YARGITAY:13HD:2023/1500:2024/2500:2024-04-12",
+      "expected_duplicate_group": "g2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 30
+    },
+    {
+      "item_id": "car-09",
+      "scenario_id": "s9",
+      "profile_id": "car",
+      "difficulty": "hard",
+      "tags": [
+        "irrelevant"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay HGK",
+        "chamber": "HGK",
+        "esas_no": "2018/436",
+        "karar_no": "2021/1717",
+        "date": "21.12.2021",
+        "source_type": "official_yargitay",
+        "title": "Yargitay HGK E.2018/436 K.2021/1717"
+      },
+      "expected_canonical_key": "YARGITAY:HGK:2018/436:2021/1717:2021-12-21",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 40
+    },
+    {
+      "item_id": "car-10",
+      "scenario_id": "s10",
+      "profile_id": "car",
+      "difficulty": "easy",
+      "tags": [
+        "ai"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "AI",
+        "source_type": "ai_suggested",
+        "title": "AI Arac 2"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "car-11",
+      "scenario_id": "s11",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "format"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3.HD",
+        "chamber": "3HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3.HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "g1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 50
+    },
+    {
+      "item_id": "car-12",
+      "scenario_id": "s12",
+      "profile_id": "car",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 19. HD",
+        "chamber": "19. HD",
+        "esas_no": "2009/7784",
+        "karar_no": "2010/5092",
+        "date": "27.04.2010",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 19. HD E.2009/7784 K.2010/5092"
+      },
+      "expected_canonical_key": "YARGITAY:19HD:2009/7784:2010/5092:2010-04-27",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "car-13",
+      "scenario_id": "s13",
+      "profile_id": "car",
+      "difficulty": "medium",
+      "tags": [
+        "fallback"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "source_type": "legal_brain",
+        "title": "LR Arac",
+        "detail_url": ""
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 30
+    },
+    {
+      "item_id": "car-14",
+      "scenario_id": "s14",
+      "profile_id": "car",
+      "difficulty": "hard",
+      "tags": [
+        "invalid"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay",
+        "esas_no": "abc/def",
+        "karar_no": "",
+        "date": "",
+        "source_type": "ai_suggested",
+        "title": "Invalid EK"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 40
+    },
+    {
+      "item_id": "car-15",
+      "scenario_id": "s15",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "ai"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "AI",
+        "esas_no": "2023/5000",
+        "karar_no": "2024/6000",
+        "date": "01.01.2024",
+        "source_type": "ai_suggested",
+        "title": "AI uydurma EK"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 50
+    },
+    {
+      "item_id": "rent-01",
+      "scenario_id": "r1",
+      "profile_id": "rent",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/4108",
+        "karar_no": "2024/2037",
+        "date": "20.05.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/4108 K.2024/2037"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/4108:2024/2037:2024-05-20",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "rent-02",
+      "scenario_id": "r2",
+      "profile_id": "rent",
+      "difficulty": "easy",
+      "tags": [
+        "fallback"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "source_type": "deterministic_fallback",
+        "title": "Fallback Kira"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "rent-03",
+      "scenario_id": "r3",
+      "profile_id": "rent",
+      "difficulty": "adversarial",
+      "tags": [
+        "format"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. Hukuk Dairesi",
+        "chamber": "3. HD",
+        "esas_no": "2023/4108",
+        "karar_no": "2024/2037",
+        "date": "2024-05-20",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. Hukuk Dairesi E.2023/4108 K.2024/2037"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/4108:2024/2037:2024-05-20",
+      "expected_duplicate_group": "g_rent",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 50
+    },
+    {
+      "item_id": "rent-04",
+      "scenario_id": "r4",
+      "profile_id": "rent",
+      "difficulty": "medium",
+      "tags": [
+        "irrelevant"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 9. HD",
+        "chamber": "9. HD",
+        "esas_no": "2022/111",
+        "karar_no": "2023/222",
+        "date": "15.01.2023",
+        "source_type": "official_yargitay",
+        "title": "Iscilik"
+      },
+      "expected_canonical_key": "YARGITAY:9HD:2022/111:2023/222:2023-01-15",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "irrelevant",
+      "expected_selection_status": "rejected",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 30
+    },
+    {
+      "item_id": "rent-05",
+      "scenario_id": "r5",
+      "profile_id": "rent",
+      "difficulty": "easy",
+      "tags": [
+        "ai"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "AI",
+        "source_type": "ai_suggested",
+        "title": "AI Kira"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "rent-06",
+      "scenario_id": "r6",
+      "profile_id": "rent",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2025/893",
+        "karar_no": "2025/3205",
+        "date": "10.03.2025",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2025/893 K.2025/3205"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2025/893:2025/3205:2025-03-10",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "rent-07",
+      "scenario_id": "r7",
+      "profile_id": "rent",
+      "difficulty": "medium",
+      "tags": [
+        "duplicate"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3.HD",
+        "esas_no": "2023/4108",
+        "karar_no": "2024/2037",
+        "date": "20.05.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/4108 K.2024/2037"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/4108:2024/2037:2024-05-20",
+      "expected_duplicate_group": "g_rent",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 30
+    },
+    {
+      "item_id": "rent-08",
+      "scenario_id": "r8",
+      "profile_id": "rent",
+      "difficulty": "hard",
+      "tags": [
+        "invalid"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "esas_no": "",
+        "karar_no": "",
+        "date": "",
+        "source_type": "ai_suggested",
+        "title": "Bos Kira"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 40
+    },
+    {
+      "item_id": "rent-09",
+      "scenario_id": "r9",
+      "profile_id": "rent",
+      "difficulty": "adversarial",
+      "tags": [
+        "cross_profile"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 9. HD",
+        "chamber": "9. HD",
+        "esas_no": "2022/333",
+        "karar_no": "2023/444",
+        "date": "01.06.2023",
+        "source_type": "official_yargitay",
+        "title": "Iscilik"
+      },
+      "expected_canonical_key": "YARGITAY:9HD:2022/333:2023/444:2023-06-01",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "irrelevant",
+      "expected_selection_status": "rejected",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 50
+    },
+    {
+      "item_id": "rent-10",
+      "scenario_id": "r10",
+      "profile_id": "rent",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "rent davasi",
+      "legal_issues": [
+        "rent"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2022/6789",
+        "karar_no": "2023/7890",
+        "date": "15.09.2023",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2022/6789 K.2023/7890"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2022/6789:2023/7890:2023-09-15",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "labor-01",
+      "scenario_id": "l1",
+      "profile_id": "labor",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "labor davasi",
+      "legal_issues": [
+        "labor"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 9. HD",
+        "chamber": "9. HD",
+        "esas_no": "2023/5000",
+        "karar_no": "2024/6000",
+        "date": "10.02.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 9. HD E.2023/5000 K.2024/6000"
+      },
+      "expected_canonical_key": "YARGITAY:9HD:2023/5000:2024/6000:2024-02-10",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "labor-02",
+      "scenario_id": "l2",
+      "profile_id": "labor",
+      "difficulty": "easy",
+      "tags": [
+        "fallback"
+      ],
+      "case_summary": "labor davasi",
+      "legal_issues": [
+        "labor"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "source_type": "deterministic_fallback",
+        "title": "Fallback Isci"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "labor-03",
+      "scenario_id": "l3",
+      "profile_id": "labor",
+      "difficulty": "adversarial",
+      "tags": [
+        "invalid"
+      ],
+      "case_summary": "labor davasi",
+      "legal_issues": [
+        "labor"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay",
+        "esas_no": "2023/9999",
+        "karar_no": "2024/8888",
+        "date": "00.00.2024",
+        "source_type": "ai_suggested",
+        "title": "Invalid Date"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 50
+    },
+    {
+      "item_id": "labor-04",
+      "scenario_id": "l4",
+      "profile_id": "labor",
+      "difficulty": "medium",
+      "tags": [
+        "irrelevant"
+      ],
+      "case_summary": "labor davasi",
+      "legal_issues": [
+        "labor"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/777",
+        "karar_no": "2024/888",
+        "date": "01.04.2024",
+        "source_type": "official_yargitay",
+        "title": "Kira"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/777:2024/888:2024-04-01",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "irrelevant",
+      "expected_selection_status": "rejected",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 30
+    },
+    {
+      "item_id": "labor-05",
+      "scenario_id": "l5",
+      "profile_id": "labor",
+      "difficulty": "easy",
+      "tags": [
+        "ai"
+      ],
+      "case_summary": "labor davasi",
+      "legal_issues": [
+        "labor"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "AI",
+        "source_type": "ai_suggested",
+        "title": "AI Isci 2"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "fam-01",
+      "scenario_id": "f1",
+      "profile_id": "family",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "family davasi",
+      "legal_issues": [
+        "family"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 2. HD",
+        "chamber": "2. HD",
+        "esas_no": "2023/3000",
+        "karar_no": "2024/4000",
+        "date": "15.06.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 2. HD E.2023/3000 K.2024/4000"
+      },
+      "expected_canonical_key": "YARGITAY:2HD:2023/3000:2024/4000:2024-06-15",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "fam-02",
+      "scenario_id": "f2",
+      "profile_id": "family",
+      "difficulty": "easy",
+      "tags": [
+        "fallback"
+      ],
+      "case_summary": "family davasi",
+      "legal_issues": [
+        "family"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "source_type": "deterministic_fallback",
+        "title": "Fallback Aile"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "fam-03",
+      "scenario_id": "f3",
+      "profile_id": "family",
+      "difficulty": "medium",
+      "tags": [
+        "irrelevant"
+      ],
+      "case_summary": "family davasi",
+      "legal_issues": [
+        "family"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 9. HD",
+        "chamber": "9. HD",
+        "esas_no": "2023/1111",
+        "karar_no": "2024/2222",
+        "date": "01.01.2024",
+        "source_type": "official_yargitay",
+        "title": "Iscilik"
+      },
+      "expected_canonical_key": "YARGITAY:9HD:2023/1111:2024/2222:2024-01-01",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "irrelevant",
+      "expected_selection_status": "rejected",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 30
+    },
+    {
+      "item_id": "fam-04",
+      "scenario_id": "f4",
+      "profile_id": "family",
+      "difficulty": "adversarial",
+      "tags": [
+        "format"
+      ],
+      "case_summary": "family davasi",
+      "legal_issues": [
+        "family"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 2. Hukuk Dairesi",
+        "chamber": "2. HD",
+        "esas_no": "2023/3000",
+        "karar_no": "2024/4000",
+        "date": "2024-06-15",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 2. Hukuk Dairesi E.2023/3000 K.2024/4000"
+      },
+      "expected_canonical_key": "YARGITAY:2HD:2023/3000:2024/4000:2024-06-15",
+      "expected_duplicate_group": "g_fam",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 50
+    },
+    {
+      "item_id": "enf-01",
+      "scenario_id": "e1",
+      "profile_id": "enf",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "enf davasi",
+      "legal_issues": [
+        "enf"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 12. HD",
+        "chamber": "12. HD",
+        "esas_no": "2023/8000",
+        "karar_no": "2024/9000",
+        "date": "01.07.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 12. HD E.2023/8000 K.2024/9000"
+      },
+      "expected_canonical_key": "YARGITAY:12HD:2023/8000:2024/9000:2024-07-01",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "enf-02",
+      "scenario_id": "e2",
+      "profile_id": "enf",
+      "difficulty": "easy",
+      "tags": [
+        "fallback"
+      ],
+      "case_summary": "enf davasi",
+      "legal_issues": [
+        "enf"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "source_type": "deterministic_fallback",
+        "title": "Fallback Icra"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "enf-03",
+      "scenario_id": "e3",
+      "profile_id": "enf",
+      "difficulty": "medium",
+      "tags": [
+        "irrelevant"
+      ],
+      "case_summary": "enf davasi",
+      "legal_issues": [
+        "enf"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/555",
+        "karar_no": "2024/666",
+        "date": "20.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Kira"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/555:2024/666:2024-03-20",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "irrelevant",
+      "expected_selection_status": "rejected",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 30
+    },
+    {
+      "item_id": "tort-01",
+      "scenario_id": "t1",
+      "profile_id": "tort",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "tort davasi",
+      "legal_issues": [
+        "tort"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 4. HD",
+        "chamber": "4. HD",
+        "esas_no": "2023/7000",
+        "karar_no": "2024/8000",
+        "date": "10.08.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 4. HD E.2023/7000 K.2024/8000"
+      },
+      "expected_canonical_key": "YARGITAY:4HD:2023/7000:2024/8000:2024-08-10",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "tort-02",
+      "scenario_id": "t2",
+      "profile_id": "tort",
+      "difficulty": "easy",
+      "tags": [
+        "fallback"
+      ],
+      "case_summary": "tort davasi",
+      "legal_issues": [
+        "tort"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "source_type": "deterministic_fallback",
+        "title": "Fallback Tazminat"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "tort-03",
+      "scenario_id": "t3",
+      "profile_id": "tort",
+      "difficulty": "adversarial",
+      "tags": [
+        "format"
+      ],
+      "case_summary": "tort davasi",
+      "legal_issues": [
+        "tort"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 4. Hukuk Dairesi",
+        "chamber": "4. HD",
+        "esas_no": "2023/7000",
+        "karar_no": "2024/8000",
+        "date": "2024-08-10",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 4. Hukuk Dairesi E.2023/7000 K.2024/8000"
+      },
+      "expected_canonical_key": "YARGITAY:4HD:2023/7000:2024/8000:2024-08-10",
+      "expected_duplicate_group": "g_tort",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 50
+    },
+    {
+      "item_id": "adm-01",
+      "scenario_id": "a1",
+      "profile_id": "admin",
+      "difficulty": "easy",
+      "tags": [
+        "direct"
+      ],
+      "case_summary": "admin davasi",
+      "legal_issues": [
+        "admin"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Danistay",
+        "chamber": "IDD",
+        "esas_no": "2023/6000",
+        "karar_no": "2024/7000",
+        "date": "01.09.2024",
+        "source_type": "official_yargitay",
+        "title": "Danistay E.2023/6000 K.2024/7000"
+      },
+      "expected_canonical_key": "YARGITAY:IDD:2023/6000:2024/7000:2024-09-01",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "adm-02",
+      "scenario_id": "a2",
+      "profile_id": "admin",
+      "difficulty": "easy",
+      "tags": [
+        "fallback"
+      ],
+      "case_summary": "admin davasi",
+      "legal_issues": [
+        "admin"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "",
+        "source_type": "deterministic_fallback",
+        "title": "Fallback Idare"
+      },
+      "expected_canonical_key": "PRECEDENT:FALLBACK:",
+      "expected_duplicate_group": "",
+      "expected_verification_status": "unverified",
+      "expected_authority_status": "fallback_only",
+      "expected_relevance_status": "partially_relevant",
+      "expected_selection_status": "candidate",
+      "expected_usable": false,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 10
+    },
+    {
+      "item_id": "dup-042",
+      "scenario_id": "d42",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-043",
+      "scenario_id": "d43",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-044",
+      "scenario_id": "d44",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-045",
+      "scenario_id": "d45",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-046",
+      "scenario_id": "d46",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-047",
+      "scenario_id": "d47",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-048",
+      "scenario_id": "d48",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-049",
+      "scenario_id": "d49",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-050",
+      "scenario_id": "d50",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-051",
+      "scenario_id": "d51",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-052",
+      "scenario_id": "d52",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-053",
+      "scenario_id": "d53",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-054",
+      "scenario_id": "d54",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-055",
+      "scenario_id": "d55",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-056",
+      "scenario_id": "d56",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-057",
+      "scenario_id": "d57",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-058",
+      "scenario_id": "d58",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-059",
+      "scenario_id": "d59",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-060",
+      "scenario_id": "d60",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-061",
+      "scenario_id": "d61",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-062",
+      "scenario_id": "d62",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-063",
+      "scenario_id": "d63",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-064",
+      "scenario_id": "d64",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-065",
+      "scenario_id": "d65",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-066",
+      "scenario_id": "d66",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-067",
+      "scenario_id": "d67",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-068",
+      "scenario_id": "d68",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-069",
+      "scenario_id": "d69",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-070",
+      "scenario_id": "d70",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-071",
+      "scenario_id": "d71",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-072",
+      "scenario_id": "d72",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-073",
+      "scenario_id": "d73",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-074",
+      "scenario_id": "d74",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-075",
+      "scenario_id": "d75",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-076",
+      "scenario_id": "d76",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-077",
+      "scenario_id": "d77",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-078",
+      "scenario_id": "d78",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-079",
+      "scenario_id": "d79",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-080",
+      "scenario_id": "d80",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-081",
+      "scenario_id": "d81",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-082",
+      "scenario_id": "d82",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-083",
+      "scenario_id": "d83",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-084",
+      "scenario_id": "d84",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-085",
+      "scenario_id": "d85",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-086",
+      "scenario_id": "d86",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-087",
+      "scenario_id": "d87",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-088",
+      "scenario_id": "d88",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-089",
+      "scenario_id": "d89",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-090",
+      "scenario_id": "d90",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-091",
+      "scenario_id": "d91",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-092",
+      "scenario_id": "d92",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-093",
+      "scenario_id": "d93",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-094",
+      "scenario_id": "d94",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-095",
+      "scenario_id": "d95",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_0",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-096",
+      "scenario_id": "d96",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_1",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-097",
+      "scenario_id": "d97",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_2",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-098",
+      "scenario_id": "d98",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_3",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    },
+    {
+      "item_id": "dup-099",
+      "scenario_id": "d99",
+      "profile_id": "car",
+      "difficulty": "adversarial",
+      "tags": [
+        "direct",
+        "duplicate"
+      ],
+      "case_summary": "car davasi",
+      "legal_issues": [
+        "car"
+      ],
+      "requested_reliefs": [
+        "talep"
+      ],
+      "required_facts": [],
+      "precedent_input": {
+        "court": "Yargitay 3. HD",
+        "chamber": "3. HD",
+        "esas_no": "2023/1000",
+        "karar_no": "2024/2000",
+        "date": "15.03.2024",
+        "source_type": "official_yargitay",
+        "title": "Yargitay 3. HD E.2023/1000 K.2024/2000"
+      },
+      "expected_canonical_key": "YARGITAY:3HD:2023/1000:2024/2000:2024-03-15",
+      "expected_duplicate_group": "fill_4",
+      "expected_verification_status": "verified",
+      "expected_authority_status": "authoritative",
+      "expected_relevance_status": "directly_relevant",
+      "expected_selection_status": "accepted",
+      "expected_usable": true,
+      "expected_supports_claims": [],
+      "expected_contradicts_claims": [],
+      "expected_warnings": [],
+      "label_source": "synthetic_rule",
+      "reviewer_notes": "",
+      "difficulty_score": 60
+    }
+  ],
+  "checksum": "6fa8a8f7186981e4"
+}
