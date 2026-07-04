@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import logging
 import re
+import time
+import urllib.parse
 from datetime import UTC, datetime
 from typing import Any
 
@@ -107,3 +110,70 @@ def validate_file_upload(file_name: str, content: bytes) -> tuple[bool, str]:
 
 def security_fingerprint() -> str:
     return f"p0.7_{datetime.now(UTC).strftime('%Y%m%d')}"
+
+
+# ── P0.7.1: Rate Limiter ──
+
+_RATE_LIMITS: dict[str, list[float]] = {}
+RATE_LIMIT_MAX = 60
+RATE_LIMIT_WINDOW = 60.0
+
+
+def check_rate_limit(key: str, max_requests: int = RATE_LIMIT_MAX, window: float = RATE_LIMIT_WINDOW) -> tuple[bool, int]:
+    now = time.time()
+    window_start = now - window
+    _RATE_LIMITS.setdefault(key, [])
+    _RATE_LIMITS[key] = [t for t in _RATE_LIMITS[key] if t > window_start]
+    current = len(_RATE_LIMITS[key])
+    if current >= max_requests:
+        retry_after = int(_RATE_LIMITS[key][0] + window - now) + 1
+        return True, max(retry_after, 1)
+    _RATE_LIMITS[key].append(now)
+    if len(_RATE_LIMITS) > 10000:
+        _RATE_LIMITS.pop(next(iter(_RATE_LIMITS)), None)
+    return False, 0
+
+
+# ── P0.7.1: SSRF Protection ──
+
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("0.0.0.0/8"),
+]
+
+
+def is_safe_url(url: str) -> tuple[bool, str]:
+    if not url:
+        return False, "empty_url"
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("https", "http"):
+        return False, f"unsafe_scheme:{parsed.scheme}"
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "no_hostname"
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "metadata.google.internal"):
+        return False, "blocked_host"
+    try:
+        addr = ipaddress.ip_address(hostname)
+        for net in _PRIVATE_NETWORKS:
+            if addr in net:
+                return False, "private_ip_blocked"
+    except ValueError:
+        pass
+    return True, ""
+
+
+# ── P0.7.1: Security Headers ──
+
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cache-Control": "no-store, max-age=0",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
