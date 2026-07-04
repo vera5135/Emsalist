@@ -296,15 +296,51 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
     )
     precedent_request = request.model_copy(deep=True)
     precedent_request.case_enrichment = enriched_case
-    if not precedent_request.precedent_candidates:
-        precedent_request.precedent_candidates = list(stored_case.get("final_precedents") or [])
-    if not precedent_request.precedent_for_petition:
-        precedent_request.precedent_for_petition = [
-            DraftingPrecedentItem.model_validate(item)
-            for item in stored_case.get("precedent_for_petition", [])
-            if isinstance(item, dict)
+
+    # ── P0.5.1: Canonical precedent authority ──
+    authority_data = stored_case.get("precedent_authority") or {}
+    if authority_data.get("records"):
+        from app.models.precedent_models import CanonicalPrecedent
+        accepted_records = [
+            r for r in authority_data.get("records", [])
+            if isinstance(r, dict)
+            and r.get("selection_status") in ("accepted", "used_in_petition")
+            and r.get("duplicate_status") == "unique"
+            and r.get("authority_status") not in ("fallback_only", "prohibited")
+            and r.get("relevance_status") in ("directly_relevant", "partially_relevant")
+            and r.get("verification_status") in ("verified", "partially_verified")
         ]
-    package.precedent_for_petition = _collect_precedent_for_petition(precedent_request)
+        package.precedent_for_petition = [
+            DraftingPrecedentItem(
+                court=rec.get("court", ""),
+                chamber=rec.get("chamber", ""),
+                esas_no=rec.get("normalized_docket_number", rec.get("docket_number", "")),
+                karar_no=rec.get("normalized_decision_number", rec.get("decision_number", "")),
+                date=rec.get("normalized_decision_date", rec.get("decision_date", "")),
+                title=rec.get("title", ""),
+                summary=rec.get("summary", rec.get("holding", "")),
+                relevance=rec.get("summary", ""),
+                supported_issue=", ".join(rec.get("related_issue_node_ids", [])),
+                use_class="direct_support",
+                source_type=rec.get("source_type", ""),
+                official_verification_status=rec.get("verification_status", ""),
+                petition_use_summary=rec.get("summary", ""),
+            ) for rec in accepted_records
+        ]
+        for rec in authority_data.get("records", []):
+            if rec.get("selection_status") == "used_in_petition" or rec.get("precedent_id") in [r.get("precedent_id") for r in accepted_records]:
+                pass
+    else:
+        if not precedent_request.precedent_candidates:
+            precedent_request.precedent_candidates = list(stored_case.get("final_precedents") or [])
+        if not precedent_request.precedent_for_petition:
+            precedent_request.precedent_for_petition = [
+                DraftingPrecedentItem.model_validate(item)
+                for item in stored_case.get("precedent_for_petition", [])
+                if isinstance(item, dict)
+            ]
+        package.precedent_for_petition = _collect_precedent_for_petition(precedent_request)
+
     package.precedents_for_petition = [
         " | ".join(part for part in [item.court, item.esas_no, item.karar_no, item.date, item.summary] if part)
         for item in package.precedent_for_petition

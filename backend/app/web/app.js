@@ -2881,6 +2881,36 @@ async function runFullReview() {
     const yargitay = workflow.yargitay_results || {};
     lastYargitaySearch = yargitay;
     lastDecisions = yargitay.final_precedents || [];
+
+    // ── P0.5.1: Map canonical authority to decisions ──
+    const authority = workflow.precedent_authority || {};
+    const authorityRecords = authority.records || [];
+    if (authorityRecords.length) {
+      const authorityMap = {};
+      authorityRecords.forEach((rec) => {
+        const key = plainText([rec.court, rec.docket_number, rec.decision_number, rec.decision_date].join(" "));
+        authorityMap[key] = rec;
+      });
+      lastDecisions = lastDecisions.map((d) => {
+        const dk = plainText([d.court, d.esas_no, d.karar_no, d.date].join(" "));
+        const rec = authorityMap[dk];
+        if (rec) {
+          return {
+            ...d,
+            _authority_status: rec.authority_status,
+            _verification_status: rec.verification_status,
+            _relevance_status: rec.relevance_status,
+            _selection_status: rec.selection_status,
+            _duplicate_status: rec.duplicate_status,
+            _source_type: rec.source_type,
+            _precedent_id: rec.precedent_id,
+            _is_fallback: rec.authority_status === "fallback_only",
+            _warnings: rec.warnings || [],
+          };
+        }
+        return d;
+      });
+    }
     renderDecisions(yargitay);
 
     // Precedent audit
