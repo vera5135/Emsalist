@@ -231,6 +231,10 @@ class FinalPetitionDraftRequest(PetitionDraftRequest):
 
 
 class DraftingPackage(BaseModel):
+    profile_id: str = ""
+    court_candidates: list[str] = Field(default_factory=list)
+    court_warning: str = ""
+    missing_information_questions: list[str] = Field(default_factory=list)
     case_identity: DraftingCaseIdentity = Field(default_factory=DraftingCaseIdentity)
     local_draft_seed: str = ""
     missing_fields_to_flag: list[str] = Field(default_factory=list)

@@ -122,25 +122,37 @@ class PetitionDraftService:
 
     @staticmethod
     def _court_heading(*, profile: PetitionProfile, case_text: str, answers: dict[str, str]) -> str:
+        combined = PetitionDraftService._plain(" ".join([case_text, *answers.keys(), *answers.values()]))
+
+        profile_override = {
+            "labor_receivable": "NÖBETÇİ İŞ MAHKEMESİ'NE",
+            "eviction_need": "NÖBETÇİ SULH HUKUK MAHKEMESİ'NE",
+            "poverty_alimony": "NÖBETÇİ AİLE MAHKEMESİ'NE",
+            "enforcement_objection": "NÖBETÇİ İCRA HUKUK MAHKEMESİ'NE",
+        }
+        if profile.key in profile_override:
+            return profile_override[profile.key]
+
+        if profile.key == "ai_dynamic":
+            return profile.court_heading
+
         if profile.key != "defective_vehicle":
             return profile.court_heading
 
-        combined = PetitionDraftService._plain(" ".join([case_text, *answers.keys(), *answers.values()]))
-        consumer_markers = (
-            "galeri",
-            "sirket",
-            "tacir",
-            "ticari",
-            "oto alim",
-            "oto satis",
-            "yetkili satici",
-            "profesyonel satici",
-            "tuketici islemi",
-        )
-        if any(marker in combined for marker in consumer_markers):
-            return "NÖBETÇİ TÜKETİCİ MAHKEMESİ'NE"
-        # Satıcı sıfatı belirsizse guvenli baslik
-        return "NÖBETÇİ ASLİYE HUKUK MAHKEMESİ'NE\nGÖREVLİ MAHKEME KONTROL EDİLMEK ÜZERE"
+        has_consumer_seller = any(marker in combined for marker in (
+            "galeri", "sirket", "magaza", "yetkili satici", "ticari satis",
+        ))
+        has_tuketici = any(marker in combined for marker in (
+            "tuketici", "tuketici islemi", "tuketici mahkemesi", "6502",
+        ))
+        has_individual = any(marker in combined for marker in (
+            "gercek kisi", "sahis", "sahistan", "bireysel satici",
+        ))
+
+        if has_consumer_seller or has_tuketici:
+            if not has_individual:
+                return "NÖBETÇİ TÜKETİCİ MAHKEMESİ'NE"
+        return "NÖBETÇİ TÜKETİCİ / ASLİYE HUKUK MAHKEMESİ'NE\n(Satıcının sıfatına göre görevli mahkeme değişebilir; kontrol ediniz.)"
 
     @staticmethod
     def _subject_section(*, profile: PetitionProfile, request_type: str) -> str:

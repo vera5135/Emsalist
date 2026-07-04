@@ -168,3 +168,55 @@ class DraftRefineResponse(AIModelMixin):
     accepted: bool
     validator_warnings: list[str] = Field(default_factory=list)
     quality_score: int = Field(default=0, ge=0, le=100)
+
+
+# ── P0.2 Review Workflow Models ──────────────────────────────────────────
+
+
+class WorkflowStepResult(BaseModel):
+    name: str
+    status: str  # pending | running | completed | failed | skipped | fallback
+    started_at: str = ""
+    completed_at: str = ""
+    fallback_used: bool = False
+    safe_error_message: str = ""
+
+
+class WorkflowReviewSummary(BaseModel):
+    case_type: str = ""
+    practice_area: str = ""
+    source_count: int = 0
+    precedent_count: int = 0
+    live_precedent_count: int = 0
+    risk_count: int = 0
+    question_count: int = 0
+
+
+class WorkflowReviewResponse(BaseModel):
+    case_id: str
+    request_id: str
+    workflow_id: str
+    status: str  # completed | partial_success | failed
+    cached: bool = False
+    steps: list[WorkflowStepResult] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    summary: WorkflowReviewSummary = Field(default_factory=WorkflowReviewSummary)
+    analysis: dict[str, Any] = Field(default_factory=dict)
+    enrichment: dict[str, Any] = Field(default_factory=dict)
+    issue_graph: dict[str, Any] = Field(default_factory=dict)
+    questions: dict[str, Any] = Field(default_factory=dict)
+    better_searches: dict[str, Any] = Field(default_factory=dict)
+    legal_brain_results: list[dict[str, Any]] = Field(default_factory=list)
+    source_audit: dict[str, Any] = Field(default_factory=dict)
+    yargitay_results: dict[str, Any] = Field(default_factory=dict)
+    precedent_audit: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowReviewRequest(BaseModel):
+    case_id: str = Field(min_length=1)
+    request_id: str = Field(min_length=1)
+    case_text: str = Field(min_length=10)
+    practice_area: str = "auto"
+    max_yargitay_results: int = Field(default=5, ge=1, le=20)
+    use_ai: bool = True
+    use_legal_brain: bool = True

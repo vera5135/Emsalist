@@ -173,14 +173,43 @@ DELİLLER: Noter satış sözleşmesi, servis raporu, banka dekontu.
         text = "Noter satış sözleşmesi\nSatış bedeli: 350.000 TL\nSatış tarihi: 12.06.2026"
         record = self.service.create_document(file_name="noter_satis.txt", content=text.encode())
         analysis = self.service.analyze_documents(
-            [record.document_id],
+            document_ids=[record.document_id],
             user_claims={"satış bedeli": "500.000 TL"},
+            document_types={record.document_id: "noter satış sözleşmesi"},
         )
         self.assertEqual(len(analysis.conflicts), 1)
         self.assertEqual(analysis.conflicts[0].fact_key, "sale_price")
         self.assertIn("çelişki", analysis.conflicts[0].warning)
         sale_fact = next(fact for fact in analysis.documents[0].extracted_facts if fact.fact_key == "sale_price")
         self.assertEqual(sale_fact.verification_status, "conflict_detected")
+        self.assertFalse(analysis.grounding_ready)
+
+    def test_closed_txt_file_extracts_sale_price_and_detects_conflict(self) -> None:
+        source = Path(self.temporary.name) / "noter_satis_kaynagi.txt"
+        source.write_text(
+            "Noter satış sözleşmesi\nSatış bedeli: 350.000 TL\nSatış tarihi: 12.06.2026",
+            encoding="utf-8",
+        )
+
+        record = self.service.create_document(file_name=source.name, content=source.read_bytes())
+        stored_path = self.service.upload_dir / f"{record.document_id}{record.file_extension}"
+        self.assertTrue(stored_path.is_file())
+
+        analysis = self.service.analyze_documents(
+            document_ids=[record.document_id],
+            user_claims={"satış bedeli": "500.000 TL"},
+            document_types={record.document_id: "noter satış sözleşmesi"},
+        )
+
+        sale_fact = next(
+            fact for fact in analysis.documents[0].extracted_facts
+            if fact.fact_key == "sale_price"
+        )
+        self.assertEqual(analysis.documents[0].extraction_status, "extracted")
+        self.assertIn("Satış bedeli: 350.000 TL", analysis.documents[0].extracted_text_preview)
+        self.assertEqual(sale_fact.fact_value, "350.000 TL")
+        self.assertEqual(sale_fact.verification_status, "conflict_detected")
+        self.assertEqual(analysis.conflicts[0].fact_key, "sale_price")
         self.assertFalse(analysis.grounding_ready)
 
     def test_unsafe_files_and_oversized_files_are_rejected(self) -> None:
