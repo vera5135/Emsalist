@@ -28,6 +28,7 @@ class Settings(BaseModel):
     jwt_issuer: str = "emsalist"
     jwt_access_token_minutes: int = 30
     jwt_refresh_token_days: int = 7
+    jwt_audience: str = "emsalist-api"
 
 
 def _load_env_file() -> None:
