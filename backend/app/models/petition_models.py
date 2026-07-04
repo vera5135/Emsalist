@@ -284,3 +284,6 @@ class FinalPetitionDraftResponse(BaseModel):
     fallback_reason: str = ""
     final_draft_precedent_count: int = 0
     precedent_for_petition_count: int = 0
+    grounding_ready: bool = False
+    grounding_warnings: list[str] = Field(default_factory=list)
+    claim_grounding: dict[str, Any] = Field(default_factory=dict)

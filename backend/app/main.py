@@ -23,6 +23,7 @@ from app.routes.document_routes import router as document_router
 from app.routes.workflow_routes import router as workflow_router
 from app.routes.legal_ground_routes import router as legal_ground_router
 from app.routes.precedent_routes import router as precedent_router
+from app.routes.grounding_routes import router as grounding_router
 
 settings = get_settings()
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -59,6 +60,7 @@ app.include_router(document_router)
 app.include_router(workflow_router)
 app.include_router(legal_ground_router)
 app.include_router(precedent_router)
+app.include_router(grounding_router)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

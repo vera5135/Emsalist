@@ -375,4 +375,20 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
             "warnings": response.warnings,
         },
     )
+    # ── P0.6: Claim grounding ──
+    try:
+        from app.services.claim_grounding_service import claim_grounding_service
+        grounding_result = claim_grounding_service.analyze(
+            case_id=resolved_case_id,
+            petition_text=response.petition_text,
+            case_state=stored_case,
+        )
+        case_session_service.update_case(resolved_case_id, claim_grounding=grounding_result.model_dump(mode="json"))
+        response.grounding_ready = grounding_result.grounding_ready
+        response.grounding_warnings = grounding_result.warnings
+        response.claim_grounding = grounding_result.model_dump(mode="json")
+    except Exception:
+        response.grounding_ready = False
+        response.grounding_warnings = ["Claim grounding başarısız oldu"]
+        response.claim_grounding = {}
     return response
