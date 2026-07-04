@@ -23,6 +23,13 @@ async def upload_document(
     document_type: str | None = Form(default=None),
     case_id: str | None = Form(default=None),
 ) -> DocumentRecord:
+    from app.services.security_service import validate_file_upload
+
+    file_name = file.filename or "belge"
+    valid, error = validate_file_upload(file_name, b"")
+    if not valid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
     content = bytearray()
     while chunk := await file.read(1024 * 1024):
         content.extend(chunk)

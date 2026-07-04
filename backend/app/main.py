@@ -24,6 +24,7 @@ from app.routes.workflow_routes import router as workflow_router
 from app.routes.legal_ground_routes import router as legal_ground_router
 from app.routes.precedent_routes import router as precedent_router
 from app.routes.grounding_routes import router as grounding_router
+from app.routes.security_routes import router as security_router
 
 settings = get_settings()
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -41,9 +42,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:4096", "http://127.0.0.1:4096"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 app.mount("/ui-assets", StaticFiles(directory=WEB_DIR), name="ui-assets")
@@ -61,6 +62,7 @@ app.include_router(workflow_router)
 app.include_router(legal_ground_router)
 app.include_router(precedent_router)
 app.include_router(grounding_router)
+app.include_router(security_router)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
