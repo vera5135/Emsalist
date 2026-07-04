@@ -1,30 +1,37 @@
+# Python
 __pycache__/
 *.py[cod]
-.venv/
-.env
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Virtual environment
+.venv/
+
+# Environment
+.env
+backend/.env
+
+# Document and case stores (runtime data)
 backend/app/document_store/
 backend/app/case_store/
 
-.env
-backend/.env
-*.pyc
-__pycache__/
-.venv/
+# Legal Brain — generated runtime artifacts
+backend/app/legal_brain/uploads/
+backend/app/legal_brain/indexes/chroma/
+backend/app/legal_brain/indexes/*.sqlite3
+backend/app/legal_brain/indexes/*.db
+backend/app/legal_brain/indexes/chunks.jsonl
+backend/app/legal_brain/indexes/legal_brain_index.json
+backend/app/legal_brain/doctrine_cards/
+backend/app/legal_brain/learned_cards/
+backend/app/legal_brain/library/
+backend/app/legal_brain/metadata/
+backend/app/legal_brain/style_cards/
+backend/app/legal_brain/statute_cards/
+backend/app/legal_brain/sources/
 
-
-.env
-backend/.env
-*.pyc
-__pycache__/
-.venv/
-
-
-.env
-backend/.env
-*.pyc
-__pycache__/
-.venv/
-
+# Legal sources (downloaded/scraped)
+legal_sources/resmi_gazete/
+legal_sources/pdf/
+legal_sources/hukuk_sozlugu/
