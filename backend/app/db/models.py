@@ -230,3 +230,43 @@ class ClaimGroundingOrm(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     __table_args__ = (Index("ix_grounding_case_hash", "case_id", "petition_hash", "source_fingerprint"),)
+
+
+# -- Auth Sessions (P1.5) --
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    refresh_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    token_family_id: Mapped[str] = mapped_column(String(64), default="")
+    user_agent_hash: Mapped[str] = mapped_column(String(64), default="")
+    ip_hash: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoke_reason: Mapped[str] = mapped_column(String(50), default="")
+    replaced_by_session_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    __table_args__ = (
+        Index("ix_auth_user_revoked", "user_id", "revoked_at"),
+        Index("ix_auth_family", "token_family_id"),
+        Index("ix_auth_expires", "expires_at"),
+    )
+
+
+# -- Case Members (P1.5) --
+class CaseMember(Base):
+    __tablename__ = "case_members"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    membership_role: Mapped[str] = mapped_column(String(20), default="viewer")
+    permissions_override: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        Index("ix_case_member_case", "case_id", "user_id"),
+        Index("ix_case_member_tenant", "tenant_id", "user_id"),
+    )
