@@ -22,6 +22,12 @@ class Settings(BaseModel):
     gemini_timeout_seconds: int = 30
     database_url: str = ""
     storage_backend: str = "json"  # json | database | dual
+    auth_mode: str = "local"  # local | jwt
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_issuer: str = "emsalist"
+    jwt_access_token_minutes: int = 30
+    jwt_refresh_token_days: int = 7
 
 
 def _load_env_file() -> None:
