@@ -164,6 +164,46 @@ class LegalIssueGraphServiceTests(unittest.TestCase):
         self.assertNotIn("sale_relationship", all_plan)
         self.assertNotIn("defect_existence", all_plan)
 
+    def test_graph_has_canonical_metadata_and_stable_source_fingerprint(self) -> None:
+        state = self._vehicle_case_state()
+        first = legal_issue_graph_service.build(state)
+        second = legal_issue_graph_service.build(state)
+
+        self.assertTrue(first.canonical)
+        self.assertEqual(first.model_version, "p0.3")
+        self.assertEqual(first.source_fingerprint, second.source_fingerprint)
+
+        changed = legal_issue_graph_service.build({**state, "question_answers": {"Satıcı sıfatı nedir?": "Galeridir"}})
+        self.assertNotEqual(first.source_fingerprint, changed.source_fingerprint)
+
+    def test_generic_case_graph_does_not_leak_vehicle_profile(self) -> None:
+        graph = legal_issue_graph_service.build({
+            "case_id": "generic_001",
+            "area": "Genel hukuk",
+            "case_type": "generic",
+            "event_text": "Mirasbırakanın vasiyetnamesinin tenfizi talep edilmektedir.",
+            "document_facts": [],
+            "question_answers": [],
+        })
+        serialized = graph.model_dump_json().casefold()
+
+        self.assertEqual(graph.case_type, "generic")
+        self.assertTrue(graph.issues)
+        for leaked_term in ("ayıplı araç", "tramer", "motor arızası", "satış bedelinin iadesi"):
+            self.assertNotIn(leaked_term, serialized)
+
+    def test_compatibility_views_are_derived_from_graph(self) -> None:
+        graph = legal_issue_graph_service.build(self._vehicle_case_state())
+        views = legal_issue_graph_service.project(graph)
+
+        self.assertEqual(
+            [item["title"] for item in views["legal_issues"]],
+            [issue.title for issue in graph.issues],
+        )
+        self.assertEqual(views["research_queries"], graph.research_plan)
+        self.assertEqual(views["risk_items"], graph.global_risks)
+        self.assertEqual(views["drafting_plan"], [item.model_dump(mode="json") for item in graph.drafting_plan])
+
 
 if __name__ == "__main__":
     unittest.main()

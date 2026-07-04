@@ -22,13 +22,15 @@ from app.services.case_session_service import case_session_service
 from app.services.case_state_service import case_state_service
 from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_service
 from app.services.legal_brain_service import legal_brain_service
-from app.services.legal_issue_graph_service import legal_issue_graph_service
 from app.services.legal_question_agent import legal_question_agent
 from app.services.precedent_quality_agent import precedent_quality_agent
 from app.services.research_service import research_service
 from app.services.search_quality_agent import search_quality_agent
 from app.services.source_relevance_agent import source_relevance_agent
 from app.services.petition_profile_service import get_petition_profile
+
+WORKFLOW_VERSION = "p0.3"
+
 
 class ReviewWorkflowService:
 
@@ -72,11 +74,29 @@ class ReviewWorkflowService:
         # ── C. Legal Issue Graph (IMPORTANT) ──
         issue_graph: dict[str, Any] = {}
         try:
-            case_state = case_session_service.get_case_state(case_id)
-            case_state = {**case_state, **case_session_service.get_case(case_id)}
-            graph = legal_issue_graph_service.build(case_state)
-            issue_graph = graph.model_dump(mode="json")
-            case_session_service.update_case(case_id, legal_issue_graph=issue_graph)
+            stored = case_session_service.get_case_state(case_id)
+            previous = dict(stored.get("case_state") or {})
+            profile = get_petition_profile(request.case_text)
+            canonical_state = case_state_service.build(
+                case_id=case_id,
+                event_text=request.case_text,
+                area=str(enrichment.get("detected_practice_area") or analysis.get("legal_topic") or ""),
+                case_type=profile.key,
+                document_facts=list(stored.get("document_facts") or []),
+                question_answers=dict(stored.get("question_answers") or {}),
+                legal_sources=list(dynamic_reasoning.get("research_queries") or []),
+                precedent_candidates=list(stored.get("final_precedents") or []),
+                drafting_package=dict(stored.get("drafting_package") or {}),
+                analysis_context={
+                    "documents": list(stored.get("documents") or []),
+                    "warnings": [
+                        *list(previous.get("warnings") or []),
+                        *list(enrichment.get("warnings") or []),
+                    ],
+                },
+            )
+            issue_graph = dict(canonical_state["legal_issue_graph"])
+            case_session_service.update_case_state(case_id, canonical_state)
             steps.append(WorkflowStepResult(
                 name="issue_graph", status="completed",
                 started_at=now, completed_at=now,
@@ -100,10 +120,14 @@ class ReviewWorkflowService:
                 use_gemini=request.use_ai,
             )
             questions = q_response.model_dump(mode="json")
+            questions["canonical_questions"] = list(issue_graph.get("next_best_questions") or [])
             case_session_service.update_case(case_id, generated_questions=questions)
             steps.append(WorkflowStepResult(name="questions", status="completed", started_at=now, completed_at=now))
             warnings.extend(questions.get("warnings", []))
         except Exception:
+            questions = {
+                "canonical_questions": list(issue_graph.get("next_best_questions") or []),
+            }
             steps.append(WorkflowStepResult(
                 name="questions", status="fallback", started_at=now, completed_at=now, fallback_used=True,
                 safe_error_message="question_generation_failed",
@@ -119,9 +143,21 @@ class ReviewWorkflowService:
                 use_gemini=request.use_ai,
             )
             better_searches = s_response.model_dump(mode="json")
+            canonical_queries = list(issue_graph.get("research_plan") or [])
+            better_searches["canonical_research_plan"] = canonical_queries
+            better_searches["yargitay_queries"] = self._dedupe_strings([
+                *canonical_queries,
+                *list(better_searches.get("yargitay_queries") or []),
+            ])
+            if not better_searches.get("legal_brain_query") and canonical_queries:
+                better_searches["legal_brain_query"] = " ".join(canonical_queries[:3])
             case_session_service.update_case(case_id, better_searches=better_searches)
             steps.append(WorkflowStepResult(name="searches", status="completed", started_at=now, completed_at=now))
         except Exception:
+            better_searches = {
+                "canonical_research_plan": list(issue_graph.get("research_plan") or []),
+                "yargitay_queries": list(issue_graph.get("research_plan") or []),
+            }
             steps.append(WorkflowStepResult(
                 name="searches", status="fallback", started_at=now, completed_at=now, fallback_used=True,
                 safe_error_message="search_build_failed",
@@ -187,8 +223,8 @@ class ReviewWorkflowService:
             source_count=len(brain_results),
             precedent_count=len(final_precedents),
             live_precedent_count=step_results.get("yargitay_results", {}).get("final_live_result_count", 0),
-            risk_count=len(enrichment.get("risk_flags", [])),
-            question_count=len(questions.get("questions", [])),
+            risk_count=len(issue_graph.get("global_risks", [])),
+            question_count=len(issue_graph.get("next_best_questions", [])),
         )
 
         response = WorkflowReviewResponse(
@@ -272,12 +308,12 @@ class ReviewWorkflowService:
             legal_sources=list(reasoning_dict.get("research_queries", [])),
         )
 
-        case_session_service.update_case(
+        case_session_service.update_case_state(
             case_id,
+            case_state,
             event_text=case_text,
             title=analysis_result.legal_topic or "Yeni dava",
             legal_topic=analysis_result.legal_topic,
-            case_state=case_state,
             dynamic_reasoning=reasoning_dict,
         )
         return analysis_dict, reasoning_dict
@@ -364,11 +400,24 @@ class ReviewWorkflowService:
         case_session_service.update_case(case_id, precedent_audit=audit_dict)
         return audit_dict
 
+    @staticmethod
+    def _dedupe_strings(values: list[str]) -> list[str]:
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            clean = " ".join(str(value or "").split())
+            key = clean.casefold()
+            if clean and key not in seen:
+                seen.add(key)
+                result.append(clean)
+        return result
+
     # ── Cache / Idempotency ──
 
     @staticmethod
     def _fingerprint(request: WorkflowReviewRequest) -> str:
         components = [
+            WORKFLOW_VERSION,
             request.case_id,
             request.case_text,
             request.practice_area,

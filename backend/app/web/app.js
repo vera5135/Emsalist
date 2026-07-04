@@ -505,10 +505,53 @@ function currentCaseState(source = null) {
 }
 
 function caseStatePlanItems(caseState, key) {
+  const graph = caseState?.legal_issue_graph || lastLegalIssueGraph;
+  if (graph && Array.isArray(graph.issues)) {
+    if (key === "drafting_plan") return Array.isArray(graph.drafting_plan) ? graph.drafting_plan : [];
+    if (key === "question_plan") {
+      return graph.issues.flatMap((issue) => (issue.client_questions || []).map((question) => ({
+        question,
+        reason: issue.risk_reason || `${issue.title || "Hukuki mesele"} başlığını netleştirmek için sorulur.`,
+        related_issue_key: issue.issue_id || "",
+        answer_options: ["Evet", "Hayır", "Bilinmiyor"],
+      })));
+    }
+    if (key === "evidence_plan") {
+      const evidence = new Map();
+      graph.issues.forEach((issue) => {
+        [...(issue.available_evidence || []), ...(issue.missing_evidence || [])].forEach((title) => {
+          const current = evidence.get(title) || {
+            title,
+            proves: [],
+            status: (issue.available_evidence || []).includes(title) ? "available" : "missing",
+            risk_if_missing: issue.risk_reason || "",
+          };
+          if (issue.issue_id && !current.proves.includes(issue.issue_id)) current.proves.push(issue.issue_id);
+          evidence.set(title, current);
+        });
+      });
+      return [...evidence.values()];
+    }
+    if (key === "risk_plan") {
+      return graph.issues
+        .filter((issue) => ["high", "medium"].includes(issue.risk_level))
+        .map((issue) => ({
+          title: issue.title,
+          level: issue.risk_level,
+          reason: issue.risk_reason,
+          related_issue_keys: [issue.issue_id],
+          needed_evidence: issue.missing_evidence || [],
+        }));
+    }
+  }
   return Array.isArray(caseState?.[key]) ? caseState[key] : [];
 }
 
 function caseStateIssueTitles(caseState) {
+  const graph = caseState?.legal_issue_graph || lastLegalIssueGraph;
+  if (graph && Array.isArray(graph.issues)) {
+    return graph.issues.map((item) => item?.title || "").filter(Boolean);
+  }
   return (Array.isArray(caseState?.legal_issues) ? caseState.legal_issues : [])
     .map((item) => (typeof item === "string" ? item : item?.title || ""))
     .filter(Boolean);

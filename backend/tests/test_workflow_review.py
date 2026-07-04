@@ -127,6 +127,23 @@ class WorkflowReviewEndpointTests(unittest.TestCase):
             "case_b should not have enrichment data from case_a",
         )
 
+    def test_workflow_persists_one_canonical_graph_snapshot(self) -> None:
+        with patch("app.services.review_workflow_service.research_service.research_yargitay", new_callable=AsyncMock) as mock_yargitay:
+            mock_yargitay.return_value = dict(MOCK_YARGITAY_RESULT)
+            response = self.client.post("/workflow/review", json=_make_request(self.case_a, "wf-canonical-p03"))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        stored = case_session_service.get_case_state(self.case_a)
+        graph = data["issue_graph"]
+
+        self.assertTrue(graph["canonical"])
+        self.assertEqual(graph, stored["legal_issue_graph"])
+        self.assertEqual(graph, stored["case_state"]["legal_issue_graph"])
+        self.assertEqual(data["summary"]["risk_count"], len(graph["global_risks"]))
+        self.assertEqual(data["summary"]["question_count"], len(graph["next_best_questions"]))
+        self.assertEqual(data["better_searches"]["canonical_research_plan"], graph["research_plan"])
+
 
 if __name__ == "__main__":
     unittest.main()

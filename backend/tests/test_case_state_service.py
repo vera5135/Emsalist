@@ -46,6 +46,17 @@ class CaseStateServiceTests(unittest.TestCase):
         self.assertIn("precedent_query_context", state)
         self.assertIn("TRAMER kaydı araştırılacak", state["warnings"])
         self.assertIn("Servis/ekspertiz raporu", state["evidence_items"])
+        graph = state["legal_issue_graph"]
+        self.assertEqual(state["canonical_model"], "legal_issue_graph")
+        self.assertTrue(graph["canonical"])
+        self.assertEqual(state["graph_source_fingerprint"], graph["source_fingerprint"])
+        self.assertEqual(state["research_queries"], graph["research_plan"])
+        self.assertEqual(state["risk_items"], graph["global_risks"])
+        self.assertEqual(state["drafting_plan"], graph["drafting_plan"])
+        self.assertEqual(
+            [item["title"] for item in state["legal_issues"]],
+            [item["title"] for item in graph["issues"]],
+        )
 
 
 if __name__ == "__main__":

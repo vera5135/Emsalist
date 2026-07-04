@@ -5,12 +5,15 @@ For each active case, the graph produces:
   available evidence → missing evidence → risk → client questions →
   research queries → petition argument
 
-This is a v1 skeleton. It is optimised for defective vehicle / hidden defect
-cases and does NOT replace the existing dynamic_legal_reasoner_service.
+Vehicle disputes retain their specialised rules. Other case types use a safe
+generic graph so the graph can act as the canonical case model without leaking
+vehicle-specific issues into unrelated disputes.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from typing import Any
 
@@ -19,6 +22,7 @@ from app.models.legal_issue_graph_models import (
     LegalIssue,
     LegalIssueGraph,
 )
+from app.services.petition_profile_service import get_petition_profile
 
 # ── helpers ──────────────────────────────────────────────────────────────
 
@@ -36,19 +40,53 @@ def _plain(text: str) -> str:
     return text.translate(_ASCII).casefold().strip()
 
 
-def _fact_map(document_facts: list[str]) -> dict[str, str]:
+def _fact_map(document_facts: list[Any]) -> dict[str, str]:
     """Convert ['key: value', …] into a dict."""
     result: dict[str, str] = {}
-    for line in document_facts:
+    for item in document_facts:
+        if isinstance(item, dict):
+            key = str(item.get("fact_key") or "").strip()
+            value = str(item.get("fact_value") or "").strip()
+            if key and value:
+                result[key] = value
+            continue
+        line = str(item or "")
         if ":" in line:
             key, _, value = line.partition(":")
-            result[key.strip()] = value.strip()
+            if key.strip() and value.strip():
+                result[key.strip()] = value.strip()
     return result
 
 
-def _answer_map(question_answers: dict[str, str]) -> dict[str, str]:
+def _answer_map(question_answers: Any) -> dict[str, str]:
     """Normalise question-answer keys to plain text."""
-    return {_plain(k): v for k, v in (question_answers or {}).items()}
+    if isinstance(question_answers, dict):
+        items = question_answers.items()
+    elif isinstance(question_answers, list):
+        items = (
+            (item.get("question", ""), item.get("answer", ""))
+            for item in question_answers
+            if isinstance(item, dict)
+        )
+    else:
+        items = []
+    return {
+        _plain(str(question)): str(answer).strip()
+        for question, answer in items
+        if str(question).strip() and str(answer).strip()
+    }
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        clean = " ".join(str(value or "").split())
+        key = _plain(clean)
+        if clean and key not in seen:
+            seen.add(key)
+            result.append(clean)
+    return result
 
 
 def _has_answer(answers: dict[str, str], *terms: str) -> bool:
@@ -215,13 +253,32 @@ class LegalIssueGraphService:
         case_id = str(case_state.get("case_id") or "")
         legal_area = str(case_state.get("area") or "")
         case_type = str(case_state.get("case_type") or "")
-        document_facts: list[str] = list(case_state.get("document_facts") or [])
-        question_answers: dict[str, str] = dict(case_state.get("question_answers") or {})
+        document_facts: list[Any] = list(case_state.get("document_facts") or [])
+        question_answers = case_state.get("question_answers") or {}
         event_text: str = str(case_state.get("event_text") or "")
 
         fm = _fact_map(document_facts)
         am = _answer_map(question_answers)
         plain_event = _plain(event_text)
+        source_fingerprint = self._source_fingerprint(
+            case_id=case_id,
+            legal_area=legal_area,
+            case_type=case_type,
+            event_text=event_text,
+            fact_map=fm,
+            answer_map=am,
+        )
+
+        if not self._is_vehicle_case(case_type=case_type, plain_event=plain_event):
+            return self._build_generic_graph(
+                case_id=case_id,
+                legal_area=legal_area,
+                case_type=case_type,
+                event_text=event_text,
+                fact_map=fm,
+                answer_map=am,
+                source_fingerprint=source_fingerprint,
+            )
 
         issues: list[LegalIssue] = []
         global_risks: list[str] = []
@@ -274,15 +331,292 @@ class LegalIssueGraphService:
             drafting_plan = self._default_drafting_plan(issues)
 
         return LegalIssueGraph(
+            source_fingerprint=source_fingerprint,
             case_id=case_id,
-            legal_area=legal_area,
-            case_type=case_type,
+            legal_area=legal_area or "Borçlar hukuku",
+            case_type=case_type or "defective_vehicle",
             issues=issues,
             global_risks=global_risks,
             next_best_questions=next_best_questions,
             research_plan=research_plan,
             drafting_plan=drafting_plan,
         )
+
+    @staticmethod
+    def _is_vehicle_case(*, case_type: str, plain_event: str) -> bool:
+        combined = f"{_plain(case_type)} {plain_event}"
+        return any(
+            marker in combined
+            for marker in (
+                "defective_vehicle",
+                "ayipli arac",
+                "gizli ayip",
+                "ikinci el arac",
+                "motor arizasi",
+                "tramer",
+            )
+        )
+
+    @staticmethod
+    def _source_fingerprint(
+        *,
+        case_id: str,
+        legal_area: str,
+        case_type: str,
+        event_text: str,
+        fact_map: dict[str, str],
+        answer_map: dict[str, str],
+    ) -> str:
+        payload = json.dumps(
+            {
+                "case_id": case_id,
+                "legal_area": legal_area,
+                "case_type": case_type,
+                "event_text": " ".join(event_text.split()),
+                "facts": fact_map,
+                "answers": answer_map,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+    def _build_generic_graph(
+        self,
+        *,
+        case_id: str,
+        legal_area: str,
+        case_type: str,
+        event_text: str,
+        fact_map: dict[str, str],
+        answer_map: dict[str, str],
+        source_fingerprint: str,
+    ) -> LegalIssueGraph:
+        profile = get_petition_profile(event_text, case_type)
+        resolved_case_type = case_type or profile.key
+        resolved_area = legal_area or profile.practice_area
+        confirmed_facts = [f"{key}: {value}" for key, value in fact_map.items()]
+        combined = _plain(" ".join([event_text, *fact_map.values(), *answer_map.values()]))
+        has_parties = any(term in combined for term in ("davaci", "davali", "muvekkil", "talep eden"))
+        has_relief = any(term in combined for term in ("talep", "istem", "dava", "tahsil", "iptal", "tenfiz"))
+
+        evidence_candidates = _dedupe(list(profile.evidence))[:8]
+        available_evidence = [item for item in evidence_candidates if _plain(item) in combined]
+        missing_evidence = [item for item in evidence_candidates if item not in available_evidence]
+
+        factual_missing = []
+        if not has_parties:
+            factual_missing.append("Tarafların kimliği ve uyuşmazlıktaki sıfatları")
+        if not event_text.strip():
+            factual_missing.append("Uyuşmazlığı doğuran olayların kronolojisi")
+
+        relief_missing = [] if has_relief else ["Mahkemeden istenecek somut talep sonucu"]
+        generic_profile = profile.key == "generic"
+        classification_risk = "medium" if generic_profile else "low"
+        classification_reason = (
+            "Uyuşmazlık tanımlı dava profillerinden biriyle eşleşmedi; hukuki nitelendirme doğrulanmalıdır."
+            if generic_profile
+            else "Dava profili olay ve talep metniyle eşleşmektedir."
+        )
+
+        issues = [
+            LegalIssue(
+                issue_id="case_facts",
+                title="Maddi vakıalar ve taraflar",
+                issue_type="factual",
+                legal_basis=["HMK m. 119"],
+                required_facts=["Taraf sıfatları", "Olay kronolojisi", "Uyuşmazlığın konusu"],
+                confirmed_facts=confirmed_facts,
+                uncertain_facts=[event_text] if event_text.strip() and not confirmed_facts else [],
+                missing_facts=factual_missing,
+                risk_level="medium" if factual_missing or not confirmed_facts else "low",
+                risk_reason=(
+                    "Taraf ve olay bilgileri belgeyle bağlantılı biçimde tamamlanmalıdır."
+                    if factual_missing or not confirmed_facts
+                    else "Temel vakıalar belge verileriyle desteklenmektedir."
+                ),
+                client_questions=list(profile.questions[:3]),
+                research_queries=[],
+                petition_argument="Olaylar kronolojik olarak ve yalnız doğrulanabilen bilgilerle açıklanmalıdır.",
+                drafting_priority=1,
+            ),
+            LegalIssue(
+                issue_id="legal_classification",
+                title="Hukuki nitelendirme",
+                issue_type="legal_analysis",
+                legal_basis=list(profile.legal_basis),
+                required_facts=["Dava türü", "Uygulanacak hukuk", "Görev ve yetki"],
+                risk_level=classification_risk,
+                risk_reason=classification_reason,
+                client_questions=list(profile.questions[3:5]),
+                research_queries=_dedupe(
+                    [f"{profile.petition_type} {basis}" for basis in profile.legal_basis]
+                )[:6],
+                petition_argument=(
+                    "Hukuki nitelendirme, görevli mahkeme ve uygulanacak hükümler ek bilgiler doğrulandıktan sonra kesinleştirilmelidir."
+                    if generic_profile
+                    else f"Uyuşmazlık {profile.petition_type} çerçevesinde değerlendirilmelidir."
+                ),
+                drafting_priority=2,
+            ),
+            LegalIssue(
+                issue_id="evidence_strategy",
+                title="Delil ve ispat planı",
+                issue_type="evidence",
+                legal_basis=["HMK m. 190"],
+                required_facts=["Her vakıanın dayandığı delil"],
+                available_evidence=available_evidence,
+                missing_evidence=missing_evidence,
+                risk_level="high" if not available_evidence else "medium" if missing_evidence else "low",
+                risk_reason=(
+                    "Talebi destekleyen doğrulanmış delil henüz bulunmuyor."
+                    if not available_evidence
+                    else "Eksik deliller tamamlanmalı ve her vakıayla eşleştirilmelidir."
+                    if missing_evidence
+                    else "Temel delil başlıkları mevcut görünmektedir."
+                ),
+                client_questions=[profile.questions[3]] if len(profile.questions) > 3 else [],
+                research_queries=[],
+                petition_argument="Her maddi vakıa, mevcut veya celbi istenecek delille açıkça eşleştirilmelidir.",
+                drafting_priority=3,
+            ),
+            LegalIssue(
+                issue_id="relief_scope",
+                title="Talep sonucu ve usuli çerçeve",
+                issue_type="procedural",
+                legal_basis=["HMK m. 119", "HMK m. 26"],
+                required_facts=["Somut talep", "Görevli ve yetkili mahkeme", "Süre ve dava şartları"],
+                missing_facts=relief_missing,
+                risk_level="medium" if relief_missing or generic_profile else "low",
+                risk_reason=(
+                    "Talep sonucu veya usuli koşullar kesinleştirilmeden dava iskeleti tamamlanamaz."
+                    if relief_missing or generic_profile
+                    else "Talep ve usuli çerçeve belirlenmiştir."
+                ),
+                client_questions=list(profile.questions[-2:]),
+                research_queries=[],
+                petition_argument="Sonuç ve istem, yalnız doğrulanan talep kapsamında açık ve tereddütsüz kurulmalıdır.",
+                drafting_priority=4,
+            ),
+        ]
+        global_risks = [
+            f"[{issue.risk_level.upper()}] {issue.title}: {issue.risk_reason}"
+            for issue in issues
+            if issue.risk_level in {"high", "medium"}
+        ]
+        next_best_questions = _dedupe(
+            [question for issue in issues for question in issue.client_questions]
+        )[:10]
+        research_plan = _dedupe(
+            [query for issue in issues for query in issue.research_queries]
+        )[:12]
+        drafting_plan = [
+            DraftingPlanItem(
+                section=issue.title,
+                use_facts=issue.confirmed_facts[:5],
+                argument=issue.petition_argument,
+            )
+            for issue in sorted(issues, key=lambda item: item.drafting_priority)
+            if issue.petition_argument
+        ]
+        return LegalIssueGraph(
+            source_fingerprint=source_fingerprint,
+            case_id=case_id,
+            legal_area=resolved_area,
+            case_type=resolved_case_type or "generic",
+            issues=issues,
+            global_risks=global_risks,
+            next_best_questions=next_best_questions,
+            research_plan=research_plan,
+            drafting_plan=drafting_plan,
+        )
+
+    @staticmethod
+    def project(graph: LegalIssueGraph) -> dict[str, Any]:
+        """Expose backwards-compatible views derived only from the graph."""
+        question_plan: list[dict[str, Any]] = []
+        seen_questions: set[str] = set()
+        evidence_by_title: dict[str, dict[str, Any]] = {}
+        risk_plan: list[dict[str, Any]] = []
+        legal_issues: list[dict[str, Any]] = []
+
+        for issue in graph.issues:
+            legal_issues.append({
+                "issue_key": issue.issue_id,
+                "title": issue.title,
+                "description": issue.petition_argument,
+                "legal_basis": issue.legal_basis,
+                "required_facts": issue.required_facts,
+                "known_facts": issue.confirmed_facts,
+                "missing_facts": issue.missing_facts,
+                "required_evidence": _dedupe([*issue.available_evidence, *issue.missing_evidence]),
+                "risk_level": issue.risk_level,
+                "risk_reason": issue.risk_reason,
+                "questions": issue.client_questions,
+                "research_queries": issue.research_queries,
+            })
+            for question in issue.client_questions:
+                question_key = _plain(question)
+                if not question_key or question_key in seen_questions:
+                    continue
+                seen_questions.add(question_key)
+                question_plan.append({
+                    "question": question,
+                    "reason": issue.risk_reason or f"{issue.title} başlığını netleştirmek için sorulur.",
+                    "related_issue_key": issue.issue_id,
+                    "answer_options": ["Evet", "Hayır", "Bilinmiyor"],
+                })
+            for title in issue.available_evidence:
+                item = evidence_by_title.setdefault(title, {
+                    "evidence_key": re.sub(r"[^a-z0-9]+", "_", _plain(title)).strip("_") or "evidence",
+                    "title": title,
+                    "proves": [],
+                    "status": "available",
+                    "source": "Dosya içeriği",
+                    "risk_if_missing": "",
+                })
+                item["status"] = "available"
+                item["source"] = "Dosya içeriği"
+                item["risk_if_missing"] = ""
+                if issue.issue_id not in item["proves"]:
+                    item["proves"].append(issue.issue_id)
+            for title in issue.missing_evidence:
+                item = evidence_by_title.setdefault(title, {
+                    "evidence_key": re.sub(r"[^a-z0-9]+", "_", _plain(title)).strip("_") or "evidence",
+                    "title": title,
+                    "proves": [],
+                    "status": "missing",
+                    "source": "Dosyaya sunulacak veya celbi istenecek delil",
+                    "risk_if_missing": issue.risk_reason,
+                })
+                if issue.issue_id not in item["proves"]:
+                    item["proves"].append(issue.issue_id)
+            if issue.risk_level in {"high", "medium"}:
+                risk_plan.append({
+                    "risk_key": issue.issue_id,
+                    "title": issue.title,
+                    "level": issue.risk_level,
+                    "reason": issue.risk_reason,
+                    "related_issue_keys": [issue.issue_id],
+                    "mitigation": issue.petition_argument,
+                    "needed_evidence": issue.missing_evidence,
+                })
+
+        evidence_plan = list(evidence_by_title.values())
+        evidence_items = _dedupe([item["title"] for item in evidence_plan])
+        if "servis raporu" in [_plain(item) for item in evidence_items] and "ekspertiz raporu" in [_plain(item) for item in evidence_items]:
+            evidence_items.append("Servis/ekspertiz raporu")
+
+        return {
+            "legal_issues": legal_issues,
+            "question_plan": question_plan,
+            "evidence_plan": evidence_plan,
+            "risk_plan": risk_plan,
+            "evidence_items": _dedupe(evidence_items),
+            "risk_items": list(graph.global_risks),
+            "research_queries": list(graph.research_plan),
+            "drafting_plan": [item.model_dump(mode="json") for item in graph.drafting_plan],
+        }
 
     # ── per-issue builder ────────────────────────────────────────────
 

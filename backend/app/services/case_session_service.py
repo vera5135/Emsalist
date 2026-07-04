@@ -118,6 +118,20 @@ class CaseSessionService:
             self._persist()
             return deepcopy(payload)
 
+    def update_case_state(self, case_id: str, case_state: dict[str, Any], **changes: Any) -> dict[str, Any]:
+        """Persist the canonical graph and its compatibility projections atomically."""
+        graph = dict(case_state.get("legal_issue_graph") or {})
+        if case_state.get("canonical_model") != "legal_issue_graph" or not graph.get("canonical"):
+            raise ValueError("case_state must contain a canonical Legal Issue Graph")
+        changes.pop("case_state", None)
+        changes.pop("legal_issue_graph", None)
+        return self.update_case(
+            case_id,
+            **changes,
+            case_state=case_state,
+            legal_issue_graph=graph,
+        )
+
     def get_case_state(self, case_id: str) -> dict[str, Any]:
         payload = self.get_case(case_id)
         return {

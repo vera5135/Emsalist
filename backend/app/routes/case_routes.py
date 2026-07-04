@@ -14,10 +14,29 @@ from app.services.case_analyzer import case_analyzer
 from app.services.case_session_service import case_session_service
 from app.services.case_state_service import case_state_service
 from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_service
-from app.services.legal_issue_graph_service import legal_issue_graph_service
 from app.services.petition_profile_service import get_petition_profile
 
 router = APIRouter(prefix="/case", tags=["Case Analysis"])
+
+
+def _rebuild_canonical_state(case_id: str) -> dict:
+    stored = case_session_service.get_case_state(case_id)
+    previous = dict(stored.get("case_state") or {})
+    return case_state_service.build(
+        case_id=case_id,
+        event_text=str(stored.get("event_text") or previous.get("event_text") or ""),
+        area=str(previous.get("area") or stored.get("legal_topic") or ""),
+        case_type=str(previous.get("case_type") or ""),
+        document_facts=list(stored.get("document_facts") or previous.get("document_facts") or []),
+        question_answers=dict(stored.get("question_answers") or {}),
+        legal_sources=list(previous.get("legal_sources") or []),
+        precedent_candidates=list(stored.get("final_precedents") or previous.get("precedent_candidates") or []),
+        drafting_package=dict(stored.get("drafting_package") or previous.get("drafting_package") or {}),
+        analysis_context={
+            "documents": list(stored.get("documents") or previous.get("documents") or []),
+            "warnings": list(previous.get("warnings") or []),
+        },
+    )
 
 
 @router.post("/new")
@@ -73,12 +92,12 @@ def analyze_case(request: CaseAnalyzeRequest) -> CaseAnalyzeResponse:
             "documents": [{"document_type": item.get("document_type", "")} for item in existing.get("documents", []) if isinstance(item, dict)],
         },
     )
-    case_session_service.update_case(
+    case_session_service.update_case_state(
         resolved_case_id,
+        case_state,
         event_text=case_text,
         title=(case_text[:80] + "...") if len(case_text) > 80 else case_text,
         legal_topic=analysis.legal_topic,
-        case_state=case_state,
         dynamic_reasoning=reasoning,
     )
     return CaseAnalyzeResponse(
@@ -105,11 +124,11 @@ def build_case_state(request: CaseStateRequest) -> dict:
         drafting_package=request.drafting_package,
         analysis_context=request.analysis_context,
     )
-    case_session_service.update_case(
+    case_session_service.update_case_state(
         resolved_case_id,
+        case_state,
         event_text=request.event_text,
         question_answers=request.question_answers,
-        case_state=case_state,
         drafting_package=request.drafting_package,
     )
     return case_state
@@ -135,11 +154,11 @@ def run_dynamic_reasoner(request: DynamicReasonerRequest) -> dict:
         drafting_package={},
         analysis_context=request.analysis_context,
     )
-    case_session_service.update_case(
+    case_session_service.update_case_state(
         resolved_case_id,
+        case_state,
         event_text=request.event_text,
         question_answers=request.question_answers,
-        case_state=case_state,
         dynamic_reasoning=reasoning,
     )
     return {**reasoning, "case_state": case_state}
@@ -149,11 +168,9 @@ def run_dynamic_reasoner(request: DynamicReasonerRequest) -> dict:
 def get_legal_issue_graph(case_id: Annotated[str | None, Query()] = None) -> dict:
     """Build and return the Legal Issue Graph for the current case."""
     resolved_case_id = case_session_service.resolve_case_id(case_id)
-    case_state = case_session_service.get_case_state(resolved_case_id)
-    graph = legal_issue_graph_service.build(case_state)
-    graph_dict = graph.model_dump(mode="json")
-    case_session_service.update_case(
+    case_state = _rebuild_canonical_state(resolved_case_id)
+    case_session_service.update_case_state(
         resolved_case_id,
-        legal_issue_graph=graph_dict,
+        case_state,
     )
-    return graph_dict
+    return dict(case_state["legal_issue_graph"])

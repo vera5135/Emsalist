@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 
 from app.models.document_models import DocumentAnalyzeRequest, DocumentAnalyzeResponse, DocumentRecord
+from app.services.case_state_service import case_state_service
 from app.services.case_session_service import case_session_service
 from app.services.document_intake_service import (
     DocumentDuplicateError,
@@ -62,10 +63,30 @@ def analyze_documents(request: DocumentAnalyzeRequest) -> DocumentAnalyzeRespons
             user_claims=request.user_claims,
             document_types=request.document_types,
         )
-        case_session_service.update_case(
+        stored = case_session_service.get_case_state(resolved_case_id)
+        previous = dict(stored.get("case_state") or {})
+        document_facts = [f"{item.fact_key}: {item.fact_value}" for item in response.confirmed_facts]
+        documents = [item.model_dump(mode="json") for item in response.documents]
+        canonical_state = case_state_service.build(
+            case_id=resolved_case_id,
+            event_text=str(stored.get("event_text") or previous.get("event_text") or ""),
+            area=str(previous.get("area") or stored.get("legal_topic") or ""),
+            case_type=str(previous.get("case_type") or ""),
+            document_facts=document_facts,
+            question_answers=dict(stored.get("question_answers") or {}),
+            legal_sources=list(previous.get("legal_sources") or []),
+            precedent_candidates=list(stored.get("final_precedents") or []),
+            drafting_package=dict(stored.get("drafting_package") or {}),
+            analysis_context={
+                "documents": documents,
+                "warnings": [*list(previous.get("warnings") or []), *response.warnings],
+            },
+        )
+        case_session_service.update_case_state(
             resolved_case_id,
-            documents=[item.model_dump(mode="json") for item in response.documents],
-            document_facts=[f"{item.fact_key}: {item.fact_value}" for item in response.confirmed_facts],
+            canonical_state,
+            documents=documents,
+            document_facts=document_facts,
         )
         return response
     except KeyError as exc:
@@ -95,9 +116,35 @@ def delete_document(document_id: str, case_id: Annotated[str | None, Query()] = 
         resolved_case_id = case_session_service.resolve_case_id(case_id)
         document_intake_service.delete_document(document_id, case_id=resolved_case_id)
         remaining = document_intake_service.list_documents(case_id=resolved_case_id)
-        case_session_service.update_case(
+        documents = [item.model_dump(mode="json") for item in remaining]
+        document_facts = [
+            f"{fact.fact_key}: {fact.fact_value}"
+            for record in remaining
+            for fact in record.extracted_facts
+            if fact.verification_status == "fact_confirmed"
+        ]
+        stored = case_session_service.get_case_state(resolved_case_id)
+        previous = dict(stored.get("case_state") or {})
+        canonical_state = case_state_service.build(
+            case_id=resolved_case_id,
+            event_text=str(stored.get("event_text") or previous.get("event_text") or ""),
+            area=str(previous.get("area") or stored.get("legal_topic") or ""),
+            case_type=str(previous.get("case_type") or ""),
+            document_facts=document_facts,
+            question_answers=dict(stored.get("question_answers") or {}),
+            legal_sources=list(previous.get("legal_sources") or []),
+            precedent_candidates=list(stored.get("final_precedents") or []),
+            drafting_package=dict(stored.get("drafting_package") or {}),
+            analysis_context={
+                "documents": documents,
+                "warnings": list(previous.get("warnings") or []),
+            },
+        )
+        case_session_service.update_case_state(
             resolved_case_id,
-            documents=[item.model_dump(mode="json") for item in remaining],
+            canonical_state,
+            documents=documents,
+            document_facts=document_facts,
         )
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Belge bulunamadÄ±.") from exc

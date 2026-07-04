@@ -6,6 +6,7 @@ import hashlib
 from typing import Any
 
 from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_service
+from app.services.legal_issue_graph_service import legal_issue_graph_service
 
 
 class CaseStateService:
@@ -47,29 +48,50 @@ class CaseStateService:
                 *list(context.get("warnings", [])),
             ]
         )
-        return {
-            "case_id": case_id or self._case_id(clean_event_text, document_facts, answers),
+        resolved_case_id = case_id or self._case_id(clean_event_text, document_facts, answers)
+        graph = legal_issue_graph_service.build({
+            "case_id": resolved_case_id,
             "event_text": clean_event_text,
             "area": " ".join(str(area or context.get("area") or "").split()),
             "case_type": " ".join(str(case_type or context.get("case_type") or "").split()),
+            "document_facts": document_facts,
+            "question_answers": answers,
+            "documents": list(context.get("documents", [])),
+        })
+        graph_dict = graph.model_dump(mode="json")
+        graph_views = legal_issue_graph_service.project(graph)
+        graph_legal_sources = self._clean_list([
+            basis
+            for issue in graph.issues
+            for basis in issue.legal_basis
+        ])
+        return {
+            "case_id": resolved_case_id,
+            "canonical_model": "legal_issue_graph",
+            "graph_source_fingerprint": graph.source_fingerprint,
+            "legal_issue_graph": graph_dict,
+            "event_text": clean_event_text,
+            "area": graph.legal_area,
+            "case_type": graph.case_type,
             "legal_area_candidates": self._clean_list(reasoning.get("legal_area_candidates", [])),
             "case_type_candidates": self._clean_list(reasoning.get("case_type_candidates", [])),
-            "legal_issues": list(reasoning.get("legal_issues", [])),
+            "legal_issues": graph_views["legal_issues"],
             "documents": list(context.get("documents", [])),
             "document_facts": document_facts,
             "question_answers": [
                 {"question": question, "answer": answer}
                 for question, answer in answers.items()
             ],
-            "evidence_items": self._clean_list([item.get("title", "") for item in reasoning.get("evidence_plan", [])]),
-            "risk_items": self._clean_list([item.get("title", "") for item in reasoning.get("risk_plan", [])]),
-            "legal_sources": self._clean_list(legal_sources or []),
+            "evidence_items": graph_views["evidence_items"],
+            "risk_items": graph_views["risk_items"],
+            "legal_sources": self._clean_list([*(legal_sources or []), *graph_legal_sources]),
             "precedent_candidates": precedent_candidates,
             "usable_precedents": usable_precedents,
-            "research_queries": self._clean_list(reasoning.get("research_queries", [])),
-            "question_plan": list(reasoning.get("question_plan", [])),
-            "evidence_plan": list(reasoning.get("evidence_plan", [])),
-            "risk_plan": list(reasoning.get("risk_plan", [])),
+            "research_queries": graph_views["research_queries"],
+            "question_plan": graph_views["question_plan"],
+            "evidence_plan": graph_views["evidence_plan"],
+            "risk_plan": graph_views["risk_plan"],
+            "drafting_plan": graph_views["drafting_plan"],
             "drafting_package": drafting_package or {},
             "warnings": warnings,
             "reasoner_output": reasoning,

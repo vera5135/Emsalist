@@ -39,6 +39,9 @@ class DraftingPlanItem(BaseModel):
 class LegalIssueGraph(BaseModel):
     """Top-level graph response."""
 
+    model_version: str = "p0.3"
+    canonical: bool = True
+    source_fingerprint: str = ""
     case_id: str = ""
     legal_area: str = ""
     case_type: str = ""

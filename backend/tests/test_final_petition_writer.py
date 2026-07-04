@@ -379,6 +379,10 @@ class FinalPetitionWriterTests(unittest.TestCase):
         self.assertIn("DAVACI", response.petition_text)
         self.assertIn("question_answers", response.case_state)
         self.assertIn("document_facts", response.case_state)
+        self.assertEqual(response.case_state["canonical_model"], "legal_issue_graph")
+        graph = response.case_state["legal_issue_graph"]
+        self.assertTrue(graph["canonical"])
+        self.assertEqual(response.drafting_package.drafting_plan, graph["drafting_plan"])
 
     def test_dynamic_reasoner_builds_vehicle_issues_and_queries(self) -> None:
         reasoning = dynamic_legal_reasoner_service.analyze(
