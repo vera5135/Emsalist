@@ -223,3 +223,70 @@ class WorkflowReviewRequest(BaseModel):
     max_yargitay_results: int = Field(default=5, ge=1, le=20)
     use_ai: bool = True
     use_legal_brain: bool = True
+
+
+# ── P1.1: AI Run Models ──────────────────────────────────────────────────
+
+
+class AIRunRecord(BaseModel):
+    run_id: str = ""
+    case_id: str = ""
+    workflow_id: str = ""
+    request_id: str = ""
+    actor_id_hash: str = ""
+    operation: str = ""
+    provider: str = "deepseek"
+    model: str = ""
+    status: str = "started"
+    started_at: str = ""
+    completed_at: str = ""
+    duration_ms: int = 0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    estimated_cost: float | None = None
+    currency: str = "USD"
+    retry_count: int = 0
+    timeout_seconds: int = 120
+    fallback_used: bool = False
+    fallback_type: str = ""
+    error_code: str = ""
+    safe_error_message: str = ""
+    prompt_template_id: str = ""
+    prompt_template_version: str = ""
+    input_fingerprint: str = ""
+    output_fingerprint: str = ""
+    source_fingerprint: str = ""
+    metadata_safe: dict[str, str] = Field(default_factory=dict)
+    created_at: str = ""
+
+
+class AIRunSummary(BaseModel):
+    case_id: str = ""
+    total_runs: int = 0
+    completed: int = 0
+    failed: int = 0
+    fallback: int = 0
+    timeout: int = 0
+    total_tokens: int | None = None
+    estimated_cost: float | None = None
+    currency: str = "USD"
+    by_operation: dict[str, int] = Field(default_factory=dict)
+
+
+MODEL_PRICING: dict[str, dict] = {
+    "deepseek-chat": {
+        "input_cost_per_million": 0.27,
+        "output_cost_per_million": 1.10,
+        "currency": "USD",
+    },
+}
+
+
+def estimate_cost(model: str, input_tokens: int | None, output_tokens: int | None) -> float | None:
+    if input_tokens is None or output_tokens is None:
+        return None
+    pricing = MODEL_PRICING.get(model)
+    if not pricing:
+        return None
+    return round((input_tokens / 1_000_000) * pricing["input_cost_per_million"] + (output_tokens / 1_000_000) * pricing["output_cost_per_million"], 6)

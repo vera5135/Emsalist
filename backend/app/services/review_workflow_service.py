@@ -384,18 +384,29 @@ class ReviewWorkflowService:
         return analysis_dict, reasoning_dict
 
     def _run_enrich(self, case_id: str, request: WorkflowReviewRequest):
-        response = case_enrichment_agent.enrich(
-            case_text=request.case_text,
-            practice_area=request.practice_area,
-            use_gemini=request.use_ai,
+        from app.services.ai_run_service import ai_run_service
+        run_id = ai_run_service.start_run(
+            case_id=case_id, operation="case_enrichment",
+            model="deepseek-chat", request_id=request.request_id,
+            prompt_preview=request.case_text[:100],
         )
-        enrichment_dict = response.model_dump(mode="json")
-        case_session_service.update_case(
-            case_id,
-            event_text=request.case_text,
-            case_enrichment=enrichment_dict,
-        )
-        return enrichment_dict
+        try:
+            response = case_enrichment_agent.enrich(
+                case_text=request.case_text,
+                practice_area=request.practice_area,
+                use_gemini=request.use_ai,
+            )
+            enrichment_dict = response.model_dump(mode="json")
+            ai_run_service.complete_run(run_id)
+            case_session_service.update_case(
+                case_id,
+                event_text=request.case_text,
+                case_enrichment=enrichment_dict,
+            )
+            return enrichment_dict
+        except Exception:
+            ai_run_service.fail_run(run_id, error_code="AI_PROVIDER_ERROR")
+            raise
 
     def _run_brain(self, case_id: str, request: WorkflowReviewRequest, better_searches: dict, enrichment: dict):
         brain_query = (
