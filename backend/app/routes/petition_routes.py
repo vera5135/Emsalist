@@ -359,7 +359,20 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
     )
     case_state["drafting_package"] = package.model_dump(mode="json")
 
-    response = final_petition_writer_service.write(package)
+    if getattr(package, "writer_mode", "local") == "ai":
+        try:
+            from app.services.ai_run_service import ai_run_service
+            response = ai_run_service.track_call(
+                case_id=resolved_case_id,
+                operation="final_petition_write",
+                request_id=request.request_id if hasattr(request, "request_id") else "",
+                fn=lambda: final_petition_writer_service.write(package),
+            )
+        except Exception:
+            response = final_petition_writer_service.write(package)
+    else:
+        response = final_petition_writer_service.write(package)
+
     response.case_state = case_state
     case_session_service.update_case_state(
         resolved_case_id,

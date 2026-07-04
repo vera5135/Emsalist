@@ -136,6 +136,16 @@ class AIRunService:
         summary.estimated_cost = round(total_cost, 6) if has_cost else None
         return summary
 
+    def track_call(self, *, case_id: str, operation: str, model: str = "deepseek-chat", request_id: str = "", workflow_id: str = "", fn):
+        run_id = self.start_run(case_id=case_id, operation=operation, model=model, request_id=request_id, workflow_id=workflow_id)
+        try:
+            result = fn()
+            self.complete_run(run_id)
+            return result
+        except Exception:
+            self.fail_run(run_id, error_code="AI_PROVIDER_ERROR")
+            raise
+
     def purge_case(self, case_id: str) -> None:
         with self._lock:
             self._records.pop(case_id, None)

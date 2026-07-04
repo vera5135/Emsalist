@@ -317,14 +317,7 @@ class ReviewWorkflowService:
 
     def _track_ai(self, case_id: str, operation: str, request: WorkflowReviewRequest, fn):
         from app.services.ai_run_service import ai_run_service
-        run_id = ai_run_service.start_run(case_id=case_id, operation=operation, model="deepseek-chat", request_id=request.request_id)
-        try:
-            result = fn()
-            ai_run_service.complete_run(run_id)
-            return result
-        except Exception:
-            ai_run_service.fail_run(run_id, error_code="AI_PROVIDER_ERROR")
-            raise
+        return ai_run_service.track_call(case_id=case_id, operation=operation, model="deepseek-chat", request_id=request.request_id, fn=fn)
 
     def _run_step(self, name: str, steps: list[WorkflowStepResult], fn):
         started = self._now()

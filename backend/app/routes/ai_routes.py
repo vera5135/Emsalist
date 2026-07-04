@@ -111,12 +111,18 @@ def audit_precedents(request: PrecedentAuditRequest) -> PrecedentAuditResponse:
 
 @router.post("/audit-draft", response_model=DraftAuditResponse)
 def audit_draft(request: DraftAuditRequest) -> DraftAuditResponse:
-    response = petition_quality_agent.audit(
-        draft_text=request.draft_text,
-        case_text=request.case_text,
-        case_enrichment=request.case_enrichment,
-        selected_decisions=request.selected_decisions,
-        use_gemini=request.use_gemini,
+    from app.services.ai_run_service import ai_run_service
+    response = ai_run_service.track_call(
+        case_id=request.case_id,
+        operation="draft_audit",
+        model="deepseek-chat",
+        fn=lambda: petition_quality_agent.audit(
+            draft_text=request.draft_text,
+            case_text=request.case_text,
+            case_enrichment=request.case_enrichment,
+            selected_decisions=request.selected_decisions,
+            use_gemini=request.use_gemini,
+        ),
     )
     resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
@@ -128,12 +134,22 @@ def audit_draft(request: DraftAuditRequest) -> DraftAuditResponse:
 
 @router.post("/refine-draft", response_model=DraftRefineResponse)
 def refine_draft(request: DraftRefineRequest) -> DraftRefineResponse:
-    response = petition_refine_agent.refine(
-        draft_text=request.draft_text,
-        case_text=request.case_text,
-        case_enrichment=request.case_enrichment,
-        selected_decisions=request.selected_decisions,
-        use_gemini=request.use_gemini,
+    from app.services.ai_run_service import ai_run_service
+
+    def _call():
+        return petition_refine_agent.refine(
+            draft_text=request.draft_text,
+            case_text=request.case_text,
+            case_enrichment=request.case_enrichment,
+            selected_decisions=request.selected_decisions,
+            use_gemini=request.use_gemini,
+        )
+
+    response = ai_run_service.track_call(
+        case_id=request.case_id,
+        operation="petition_refine",
+        model="deepseek-chat",
+        fn=_call,
     )
     resolved_case_id = case_session_service.require_existing_case(request.case_id)
     case_session_service.update_case(
