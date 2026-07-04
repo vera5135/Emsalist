@@ -194,26 +194,60 @@ class PrecedentAuthorityService:
         existing_use = str(item.get("use_class") or item.get("use_in_petition") or "")
         relevance = "directly_relevant" if existing_use in ("direct_support", "supporting_with_caution") else "partially_relevant"
 
-        # Domain mismatch detection
+        # Profile-based relevance detection
+        item_profile = str(item.get("profile_id") or "").casefold()
         case_hint = str(item.get("case_summary", "")).casefold()
         title_lower = title.casefold()
-        if "Iscilik" in title or court.startswith("9.") or "9. " in court:
-            if not any(t in case_hint for t in ("iscilik", "isci", "kidem", "labor")):
-                relevance = "irrelevant"
-        elif "Kira" in title or "kira" in title_lower or court.startswith("3.") or "3. " in court:
-            if not any(t in case_hint for t in ("kira", "rent")):
-                if any(t in case_hint for t in ("arac", "car", "iscilik", "isci", "bosanma", "nafaka", "icra")):
+
+        if item_profile:
+            profile_courts = {
+                "car": ("13", "19", "hgk"),
+                "rent": ("3",),
+                "labor": ("9", "22"),
+                "family": ("2",),
+                "enf": ("12",),
+                "tort": ("4",),
+                "admin": ("idd", "danistay", "10", "8"),
+                "generic": (),
+            }
+            expected_courts = profile_courts.get(item_profile, ())
+            court_check = f"{court} {chamber}".casefold()
+            court_match = any(ec in court_check for ec in expected_courts)
+
+            # Simple court-based relevance
+            detected_domain = PrecedentAuthorityService._detect_domain(court, title_lower)
+            if detected_domain:
+                if detected_domain == item_profile:
+                    relevance = "directly_relevant"
+                else:
                     relevance = "irrelevant"
-        elif "Tasinmaz" in title or "tasinmaz" in title_lower or "daire" in title_lower or "konut" in title_lower:
-            if not any(t in case_hint for t in ("tasinmaz", "konut", "daire", "kira", "rent")):
-                if any(t in case_hint for t in ("arac", "car")):
+            elif court_match:
+                relevance = "directly_relevant"
+
+        # Fallback: original domain mismatch detection (only when relevance is still uncertain)
+        if relevance not in ("irrelevant", "directly_relevant"):
+            if "Iscilik" in title or court.startswith("9.") or "9. " in court:
+                if not any(t in case_hint for t in ("labor", "iscilik", "isci", "kidem")):
                     relevance = "irrelevant"
+            elif "Kira" in title or "kira" in title_lower or court.startswith("3.") or "3. " in court:
+                if not any(t in case_hint for t in ("kira", "rent")):
+                    if any(t in case_hint for t in ("arac", "car", "iscilik", "isci", "labor", "bosanma", "nafaka", "icra", "enf", "tazminat", "tort")):
+                        relevance = "irrelevant"
+            elif "Tasinmaz" in title or "tasinmaz" in title_lower or "daire" in title_lower or "konut" in title_lower:
+                if not any(t in case_hint for t in ("tasinmaz", "konut", "daire", "kira", "rent")):
+                    if any(t in case_hint for t in ("arac", "car")):
+                        relevance = "irrelevant"
 
         precedent_id = f"prec_{canonical_key.replace(':', '_').replace('/', '_')[:48]}"
         if precedent_id in existing_rejected:
             selection = "rejected"
+        elif authority == "fallback_only":
+            selection = "candidate"
         elif item_source == "official_yargitay" and docket and dec_num:
-            selection = "accepted"
+            if relevance == "irrelevant":
+                selection = "rejected"
+            else:
+                selection = "accepted"
         else:
             selection = "candidate"
 
@@ -312,6 +346,32 @@ class PrecedentAuthorityService:
         if fallback:
             warnings.append(f"{fallback} fallback kayıt mevcut; resmî doğrulama yapılmadan kullanılmamalı")
         return warnings
+
+
+        return warnings
+
+
+    @staticmethod
+    def _detect_domain(court: str, title_lower: str) -> str:
+        court_lower = court.casefold()
+        combined = f"{court_lower} {title_lower}"
+        for d in ("9. hukuk", "9.hd", "22. hukuk", "iscilik", "isci", "kidem"):
+            if d in combined: return "labor"
+        for d in ("3. hukuk", "3.hd", "kira", "tahliye"):
+            if d in combined: return "rent"
+        for d in ("2. hukuk", "2.hd", "bosanma", "nafaka", "velayet"):
+            if d in combined: return "family"
+        for d in ("12. hukuk", "12.hd", "icra", "itiraz"):
+            if d in combined: return "enf"
+        for d in ("4. hukuk", "4.hd", "tazminat", "kazasi"):
+            if d in combined: return "tort"
+        for d in ("13. hukuk", "13.hd", "19. hukuk", "19.hd", "hgk", "arac", "ayip"):
+            if d in combined: return "car"
+        for d in ("danistay", "idd", "idare"):
+            if d in combined: return "admin"
+        for d in ("11. hukuk", "11.hd", "ticaret", "ticari"):
+            if d in combined: return "generic"
+        return ""
 
 
 precedent_authority_service = PrecedentAuthorityService()

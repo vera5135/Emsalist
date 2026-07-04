@@ -39,6 +39,7 @@ class PrecedentEvaluationService:
         precinct_input = dict(item.get("precedent_input", {}))
         case_summary = item.get("case_summary", "") or item.get("profile_id", "")
         precinct_input["case_summary"] = case_summary
+        precinct_input["profile_id"] = item.get("profile_id", "")
         live_results = [precinct_input] if precinct_input.get("source_type") == "official_yargitay" else []
         brain_results = [precinct_input] if precinct_input.get("source_type") != "official_yargitay" else []
 
