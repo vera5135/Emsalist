@@ -47,7 +47,7 @@ class CanonicalKeyTests(unittest.TestCase):
 class PrecedentAuthorityServiceTests(unittest.TestCase):
 
     def test_live_results_become_accepted_verified(self) -> None:
-        live = [{"court": "Yargıtay 3. HD", "chamber": "3. Hukuk Dairesi", "esas_no": "2023/1234", "karar_no": "2024/5678", "date": "16.05.2024", "title": "Test karar"}]
+        live = [{"court": "Yargıtay 13. HD", "chamber": "13. Hukuk Dairesi", "esas_no": "2023/1234", "karar_no": "2024/5678", "date": "16.05.2024", "title": "Ayıplı araç satışı kararı", "profile_id": "car", "case_summary": "arac satisi ayip"}]
         authority = precedent_authority_service.build_authority(case_id="test-1", live_results=live, brain_results=[])
         self.assertEqual(len(authority.records), 1)
         self.assertEqual(authority.records[0].verification_status, "verified")

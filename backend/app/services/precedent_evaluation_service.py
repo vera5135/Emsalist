@@ -92,6 +92,7 @@ class PrecedentEvaluationService:
             "predicted": record,
             "expected": item,
             "field_results": field_results,
+            "predicted_usable": predicted_usable,
             "passed": passed,
             "errors": errors,
             "critical_false_positive": is_critical_fp,
@@ -113,9 +114,9 @@ class PrecedentEvaluationService:
             ok = sum(1 for r in subset if r["field_results"].get(field))
             return round(ok / len(subset) * 100, 1) if subset else 0
 
-        tp = sum(1 for r in results if r["field_results"].get("usable") and r["expected"].get("expected_usable"))
-        fp = sum(1 for r in results if r["field_results"].get("usable") and not r["expected"].get("expected_usable"))
-        fn = sum(1 for r in results if not r["field_results"].get("usable") and r["expected"].get("expected_usable"))
+        tp = sum(1 for r in results if r.get("predicted_usable") and r["expected"].get("expected_usable"))
+        fp = sum(1 for r in results if r.get("predicted_usable") and not r["expected"].get("expected_usable"))
+        fn = sum(1 for r in results if not r.get("predicted_usable") and r["expected"].get("expected_usable"))
         tn = total - tp - fp - fn
 
         precision = round(tp / (tp + fp) * 100, 1) if (tp + fp) else 0

@@ -157,11 +157,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": true,
+      "expected_usable": false,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "corrected",
+      "label_source": "reverted",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -724,11 +724,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": true,
+      "expected_usable": false,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "corrected",
+      "label_source": "reverted",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -914,11 +914,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": true,
+      "expected_usable": false,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "corrected",
+      "label_source": "reverted",
       "reviewer_notes": "",
       "difficulty_score": 50
     },
@@ -1104,11 +1104,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": true,
+      "expected_usable": false,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "corrected",
+      "label_source": "reverted",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -1252,11 +1252,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": true,
+      "expected_usable": false,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "corrected",
+      "label_source": "reverted",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -1404,11 +1404,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": true,
+      "expected_usable": false,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "corrected",
+      "label_source": "reverted",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -3920,5 +3920,5 @@
       "difficulty_score": 60
     }
   ],
-  "checksum": "dc57093234f70098"
+  "checksum": "59c8d5adb193d1e7"
 }

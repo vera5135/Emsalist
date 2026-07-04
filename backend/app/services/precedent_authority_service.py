@@ -246,8 +246,10 @@ class PrecedentAuthorityService:
         elif item_source == "official_yargitay" and docket and dec_num:
             if relevance == "irrelevant":
                 selection = "rejected"
-            else:
+            elif relevance == "directly_relevant":
                 selection = "accepted"
+            else:
+                selection = "candidate"
         else:
             selection = "candidate"
 

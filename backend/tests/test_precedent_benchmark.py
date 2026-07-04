@@ -41,9 +41,9 @@ class PrecedentBenchmarkTests(unittest.TestCase):
     def test_selection_accuracy_above_85(self) -> None:
         self.assertGreaterEqual(self.result["selection_accuracy"], 85.0)
 
-    def test_usable_precision_above_78(self) -> None:
-        self.assertGreaterEqual(self.result["usable_precision"], 78.0,
-            f"Precision {self.result['usable_precision']}% below 78%")
+    def test_usable_precision_above_90(self) -> None:
+        self.assertGreaterEqual(self.result["usable_precision"], 90.0,
+            f"Precision {self.result['usable_precision']}% below 90%")
 
     def test_usable_recall_above_80(self) -> None:
         self.assertGreaterEqual(self.result["usable_recall"], 80.0,
