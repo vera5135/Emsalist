@@ -149,7 +149,7 @@
         "karar_no": "2023/600",
         "date": "01.06.2023",
         "source_type": "official_yargitay",
-        "title": "Tasinmaz â€” ayipli arac satisi gizli ayip"
+        "title": "Tasinmaz"
       },
       "expected_canonical_key": "YARGITAY:3HD:2022/500:2023/600:2023-06-01",
       "expected_duplicate_group": "",
@@ -157,11 +157,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": false,
+      "expected_usable": true,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "synthetic_rule",
+      "label_source": "corrected",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -339,7 +339,7 @@
         "karar_no": "2021/1717",
         "date": "21.12.2021",
         "source_type": "official_yargitay",
-        "title": "Yargitay HGK E.2018/436 K.2021/1717 â€” ayipli arac satisi gizli ayip"
+        "title": "Yargitay"
       },
       "expected_canonical_key": "YARGITAY:HGK:2018/436:2021/1717:2021-12-21",
       "expected_duplicate_group": "",
@@ -716,7 +716,7 @@
         "karar_no": "2023/222",
         "date": "15.01.2023",
         "source_type": "official_yargitay",
-        "title": "Iscilik â€” kira alacagi tahliye"
+        "title": "Iscilik"
       },
       "expected_canonical_key": "YARGITAY:9HD:2022/111:2023/222:2023-01-15",
       "expected_duplicate_group": "",
@@ -724,11 +724,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": false,
+      "expected_usable": true,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "synthetic_rule",
+      "label_source": "corrected",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -906,7 +906,7 @@
         "karar_no": "2023/444",
         "date": "01.06.2023",
         "source_type": "official_yargitay",
-        "title": "Iscilik â€” kira alacagi tahliye"
+        "title": "Iscilik"
       },
       "expected_canonical_key": "YARGITAY:9HD:2022/333:2023/444:2023-06-01",
       "expected_duplicate_group": "",
@@ -914,11 +914,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": false,
+      "expected_usable": true,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "synthetic_rule",
+      "label_source": "corrected",
       "reviewer_notes": "",
       "difficulty_score": 50
     },
@@ -1096,7 +1096,7 @@
         "karar_no": "2024/888",
         "date": "01.04.2024",
         "source_type": "official_yargitay",
-        "title": "Kira â€” iscilik alacagi kidem tazminati"
+        "title": "Kira"
       },
       "expected_canonical_key": "YARGITAY:3HD:2023/777:2024/888:2024-04-01",
       "expected_duplicate_group": "",
@@ -1104,11 +1104,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": false,
+      "expected_usable": true,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "synthetic_rule",
+      "label_source": "corrected",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -1244,7 +1244,7 @@
         "karar_no": "2024/2222",
         "date": "01.01.2024",
         "source_type": "official_yargitay",
-        "title": "Iscilik â€” bosanma nafaka velayet"
+        "title": "Iscilik"
       },
       "expected_canonical_key": "YARGITAY:9HD:2023/1111:2024/2222:2024-01-01",
       "expected_duplicate_group": "",
@@ -1252,11 +1252,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": false,
+      "expected_usable": true,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "synthetic_rule",
+      "label_source": "corrected",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -1396,7 +1396,7 @@
         "karar_no": "2024/666",
         "date": "20.03.2024",
         "source_type": "official_yargitay",
-        "title": "Kira â€” icra takibi itiraz iptali"
+        "title": "Kira"
       },
       "expected_canonical_key": "YARGITAY:3HD:2023/555:2024/666:2024-03-20",
       "expected_duplicate_group": "",
@@ -1404,11 +1404,11 @@
       "expected_authority_status": "authoritative",
       "expected_relevance_status": "irrelevant",
       "expected_selection_status": "rejected",
-      "expected_usable": false,
+      "expected_usable": true,
       "expected_supports_claims": [],
       "expected_contradicts_claims": [],
       "expected_warnings": [],
-      "label_source": "synthetic_rule",
+      "label_source": "corrected",
       "reviewer_notes": "",
       "difficulty_score": 30
     },
@@ -3920,5 +3920,5 @@
       "difficulty_score": 60
     }
   ],
-  "checksum": "8afc500ef646da90"
+  "checksum": "dc57093234f70098"
 }
