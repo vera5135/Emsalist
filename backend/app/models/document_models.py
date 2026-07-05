@@ -45,6 +45,8 @@ class DocumentConflict(BaseModel):
 
 
 class DocumentRecord(BaseModel):
+    model_config = {"extra": "allow"}
+
     document_id: str
     case_id: str = ""
     file_name: str
@@ -64,6 +66,8 @@ class DocumentRecord(BaseModel):
     extracted_facts: list[ExtractedFact] = Field(default_factory=list)
     conflicts: list[DocumentConflict] = Field(default_factory=list)
     missing_fields: list[str] = Field(default_factory=list)
+    deleted_at: str | None = None
+    restore_deadline: str | None = None
 
 
 class DocumentAnalyzeRequest(BaseModel):
