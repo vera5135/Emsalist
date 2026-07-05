@@ -128,6 +128,53 @@ class LegalIssueGraph(Base):
     __table_args__ = (Index("ix_graphs_case_fingerprint", "case_id", "source_fingerprint"),)
 
 
+# -- P1.7 Legal Issue Graph Nodes --
+class LegalIssueNode(Base):
+    __tablename__ = "legal_issue_nodes"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    node_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="proposed")
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_type: Mapped[str] = mapped_column(String(30), nullable=False, default="system")
+    source_id: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="system")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        Index("ix_lgn_tenant_case", "tenant_id", "case_id"),
+        Index("ix_lgn_case_type", "case_id", "node_type"),
+        Index("ix_lgn_source", "source_type", "source_id"),
+    )
+
+
+class LegalIssueEdge(Base):
+    __tablename__ = "legal_issue_edges"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    source_node_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_node_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    weight: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="system")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        Index("ix_lge_tenant_case", "tenant_id", "case_id"),
+        Index("ix_lge_source", "source_node_id"),
+        Index("ix_lge_target", "target_node_id"),
+    )
+
+
 # -- Precedents --
 class Precedent(Base):
     __tablename__ = "precedents"

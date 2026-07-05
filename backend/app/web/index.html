@@ -162,6 +162,7 @@
           <button class="tab-button" type="button" data-tab="evidence">Deliller</button>
           <button class="tab-button" type="button" data-tab="officialSources">Resmî Kaynak Takibi</button>
           <button class="tab-button" type="button" data-tab="risks">Eksikler / Riskler</button>
+          <button class="tab-button" type="button" data-tab="legalmap">Hukuki Mesele Haritası</button>
         </div>
 
         <article class="tab-panel active" data-tab-panel="summary">
@@ -256,6 +257,30 @@
             <span id="riskCount">0</span>
           </div>
           <div id="riskOutput" class="empty-state">Henüz risk değerlendirmesi yok.</div>
+        </article>
+
+        <article class="tab-panel" data-tab-panel="legalmap">
+          <div class="section-head">
+            <h2>Hukuki Mesele Haritası</h2>
+            <div class="legalmap-actions">
+              <button id="legalMapRebuildBtn" class="primary-btn" type="button">Haritayı Oluştur/Güncelle</button>
+              <button id="legalMapValidateBtn" class="ghost-btn" type="button">Doğrula</button>
+              <button id="legalMapMissingBtn" class="ghost-btn" type="button">Eksikleri Göster</button>
+            </div>
+          </div>
+          <div id="legalMapSummary" class="legalmap-summary empty-state">Henüz harita oluşturulmadı.</div>
+          <div id="legalMapIssues" class="legalmap-issues" style="display:none"></div>
+          <div id="legalMapGraphData" class="legalmap-graph" style="display:none"></div>
+          <div id="legalMapMissingOutput" class="legalmap-missing" style="display:none"></div>
+          <div id="legalMapNodeEditor" class="legalmap-editor" style="display:none">
+            <h3>Yeni Düğüm Ekle</h3>
+            <div class="editor-row">
+              <select id="legalMapNodeType"><option value="fact">Vakıa</option><option value="legal_issue">Hukuki Mesele</option><option value="legal_element">Hukuki Unsur</option><option value="evidence">Delil</option><option value="official_source">Resmî Kaynak</option><option value="argument">Lehe Argüman</option><option value="counterargument">Karşı Argüman</option><option value="risk">Risk</option><option value="remedy">Talep/Sonuç</option><option value="missing_information">Eksik Bilgi</option></select>
+              <select id="legalMapNodeStatus"><option value="proposed">Öneri</option><option value="confirmed">Doğrulandı</option><option value="disputed">Tartışmalı</option><option value="missing">Eksik</option><option value="rejected">Reddedildi</option></select>
+              <input id="legalMapNodeTitle" type="text" placeholder="Başlık" maxlength="500" />
+              <button id="legalMapAddNodeBtn" class="primary-btn" type="button">Ekle</button>
+            </div>
+          </div>
         </article>
       </section>
     </main>

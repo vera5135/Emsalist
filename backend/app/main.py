@@ -29,6 +29,7 @@ from app.routes.auth_routes_new import router as auth_router
 from app.routes.lifecycle_routes import router as lifecycle_router
 from app.routes.ai_run_routes import router as ai_run_router
 from app.routes.yargitay_health_routes import router as yargitay_health_router
+from app.routes.legal_issue_graph_routes import router as legal_issue_graph_router
 
 settings = get_settings()
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -103,6 +104,7 @@ app.include_router(auth_router)
 app.include_router(lifecycle_router)
 app.include_router(ai_run_router)
 app.include_router(yargitay_health_router)
+app.include_router(legal_issue_graph_router)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

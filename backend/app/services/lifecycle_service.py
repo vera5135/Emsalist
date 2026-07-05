@@ -30,6 +30,8 @@ PURGE_STEP_ORDER: list[tuple[str, str]] = [
     ("document_files", "Document storage files"),
     ("document_facts", "Document facts"),
     ("legal_issue_graphs", "Legal issue graphs"),
+    ("legal_issue_nodes", "Legal issue graph nodes"),
+    ("legal_issue_edges", "Legal issue graph edges"),
     ("legal_grounds", "Legal grounds"),
     ("precedents", "Precedents"),
     ("claim_grounding_snapshots", "Claim grounding snapshots"),
@@ -600,6 +602,7 @@ class DataLifecycleService:
 
     def _purge_case_cascade(self, case_id: str, cdata: dict, tenant_id: str) -> None:
         from app.services.document_intake_service import document_intake_service
+        import asyncio as _asyncio
 
         docs_to_purge = []
         with document_intake_service._lock:
@@ -617,6 +620,31 @@ class DataLifecycleService:
             with document_intake_service._lock:
                 document_intake_service._records.pop(rid, None)
         document_intake_service._persist_records()
+
+        try:
+            loop = _asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        async def _purge_graph() -> None:
+            from app.db.session import get_sessionmaker
+            from app.services.legal_issue_graph_db_service import purge_case_graph
+            sessionmaker = get_sessionmaker()
+            async with sessionmaker() as db:
+                await purge_case_graph(
+                    db, tenant_id=tenant_id, case_id=case_id, dry_run=False,
+                )
+                await db.commit()
+
+        if loop is not None:
+            try:
+                import nest_asyncio as _nest
+                _nest.apply(loop)
+            except Exception:
+                pass
+            _asyncio.ensure_future(_purge_graph())
+        else:
+            _asyncio.run(_purge_graph())
 
     def purge_resume(self, run_id: str, tenant_id: str = "",
                      dry_run: bool = False, batch: int = 10) -> dict:

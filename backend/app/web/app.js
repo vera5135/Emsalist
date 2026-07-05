@@ -71,7 +71,19 @@ const els = {
     $("uploadDocumentsBtn"),
     $("analyzeDocumentsBtn"),
     $("confirmPreliminaryDraftBtn"),
+    $("legalMapRebuildBtn"),
+    $("legalMapValidateBtn"),
+    $("legalMapMissingBtn"),
+    $("legalMapAddNodeBtn"),
   ].filter(Boolean),
+  legalMapSummary: $("legalMapSummary"),
+  legalMapIssues: $("legalMapIssues"),
+  legalMapGraphData: $("legalMapGraphData"),
+  legalMapMissingOutput: $("legalMapMissingOutput"),
+  legalMapNodeEditor: $("legalMapNodeEditor"),
+  legalMapNodeType: $("legalMapNodeType"),
+  legalMapNodeStatus: $("legalMapNodeStatus"),
+  legalMapNodeTitle: $("legalMapNodeTitle"),
 };
 
 let lastDecisions = [];
@@ -98,6 +110,8 @@ let lastDocuments = [];
 let lastDocumentAnalysis = null;
 let lastCaseState = null;
 let lastLegalIssueGraph = null;
+let lastLegalMapGraph = null;
+let lastLegalMapValidation = null;
 /** @type {File[]} Gerçek File objelerini saklar, plain object değil. */
 let selectedDocumentFiles = [];
 let uiBusy = false;
@@ -480,6 +494,9 @@ function switchTab(tabName) {
   });
   if (tabName === "strategy" || tabName === "risks") {
     fetchLegalIssueGraph();
+  }
+  if (tabName === "legalmap") {
+    fetchLegalMap();
   }
 }
 
@@ -2049,6 +2066,188 @@ function renderRisks({ caseEnrichment = lastCaseEnrichment, draftAudit = null, s
     .join("");
 }
 
+// ── P1.7 Hukuki Mesele Haritası ──
+
+async function fetchLegalMap() {
+  if (!activeCaseId) {
+    els.legalMapSummary.className = "legalmap-summary empty-state";
+    els.legalMapSummary.textContent = "Aktif dosya bulunamadı.";
+    return;
+  }
+  try {
+    const summary = await apiPost(`/api/cases/${activeCaseId}/legal-graph/summary`, { case_id: activeCaseId });
+    lastLegalMapGraph = summary;
+    renderLegalMapSummary(summary);
+    await fetchLegalMapGraph();
+  } catch (e) {
+    els.legalMapSummary.className = "legalmap-summary empty-state";
+    els.legalMapSummary.textContent = "Harita yüklenemedi: " + (e.message || "bağlantı hatası");
+  }
+}
+
+async function fetchLegalMapGraph() {
+  if (!activeCaseId) return;
+  try {
+    const graph = await apiPost(`/api/cases/${activeCaseId}/legal-graph`, { case_id: activeCaseId });
+    lastLegalMapGraph = graph;
+    renderLegalMapFull(graph);
+  } catch (e) {
+    els.legalMapIssues.style.display = "none";
+    els.legalMapGraphData.style.display = "none";
+  }
+}
+
+function renderLegalMapSummary(summary) {
+  if (!summary || summary.total_nodes === 0) {
+    els.legalMapSummary.className = "legalmap-summary empty-state";
+    els.legalMapSummary.innerHTML = "<p>Henüz harita oluşturulmadı. Haritayı Oluştur butonuna tıklayın.</p>";
+    els.legalMapIssues.style.display = "none";
+    els.legalMapGraphData.style.display = "none";
+    els.legalMapNodeEditor.style.display = "none";
+    return;
+  }
+  els.legalMapSummary.className = "legalmap-summary";
+  els.legalMapSummary.innerHTML = `
+    <div class="legalmap-stats">
+      <div class="stat-item"><span class="stat-value">${summary.legal_issue_count}</span><span class="stat-label">Hukuki Mesele</span></div>
+      <div class="stat-item"><span class="stat-value">${summary.fact_count}</span><span class="stat-label">Vakıa</span></div>
+      <div class="stat-item"><span class="stat-value">${summary.evidence_count}</span><span class="stat-label">Delil</span></div>
+      <div class="stat-item"><span class="stat-value">${summary.official_source_count}</span><span class="stat-label">Resmî Kaynak</span></div>
+      <div class="stat-item"><span class="stat-value">${summary.risk_count}</span><span class="stat-label">Risk</span></div>
+      <div class="stat-item"><span class="stat-value">${summary.missing_information_count}</span><span class="stat-label">Eksik Bilgi</span></div>
+    </div>
+    <div class="legalmap-validation">
+      Doğrulama: ${summary.validation_valid ? '<span class="chip green">Geçerli</span>' : '<span class="chip red">Uyarılar var</span>'}
+      ${summary.validation_warning_count ? ` (${summary.validation_warning_count} uyarı)` : ''}
+    </div>
+  `;
+  els.legalMapNodeEditor.style.display = "block";
+}
+
+function renderLegalMapFull(graph) {
+  if (!graph || !graph.nodes || graph.nodes.length === 0) {
+    els.legalMapIssues.style.display = "none";
+    els.legalMapGraphData.style.display = "none";
+    return;
+  }
+
+  const nodes = graph.nodes;
+  const edges = graph.edges || [];
+  const nodeMap = {};
+  nodes.forEach((n) => { nodeMap[n.id] = n; });
+
+  const issues = nodes.filter((n) => n.node_type === "legal_issue");
+  if (issues.length) {
+    els.legalMapIssues.style.display = "block";
+    els.legalMapIssues.innerHTML = "<h3>Hukuki Meseleler</h3>" + issues.map((issue) => {
+      const connected = edges.filter((e) => e.source_node_id === issue.id || e.target_node_id === issue.id);
+      const relatedNodes = connected.map((e) => {
+        const otherId = e.source_node_id === issue.id ? e.target_node_id : e.source_node_id;
+        const other = nodeMap[otherId];
+        if (!other) return null;
+        const relLabel = { supports: "Destekliyor", requires: "Gerektiriyor", depends_on: "Bağlı", leads_to: "Yönlendiriyor" }[e.relation_type] || e.relation_type;
+        return `<li>${relLabel}: <strong>${escapeHtml(other.title)}</strong> <span class="chip small">${other.node_type}</span> <span class="chip ${other.status === 'confirmed' ? 'green' : 'blue'} small">${other.status}</span></li>`;
+      }).filter(Boolean).join("");
+      return `
+        <div class="legalmap-issue-card">
+          <h4>${escapeHtml(issue.title)} <span class="chip ${issue.status === 'confirmed' ? 'green' : 'blue'}">${issue.status}</span></h4>
+          ${issue.description ? `<p>${escapeHtml(issue.description)}</p>` : ""}
+          ${relatedNodes ? `<ul class="compact-list">${relatedNodes}</ul>` : "<p>Bağlantı yok.</p>"}
+        </div>
+      `;
+    }).join("");
+  } else {
+    els.legalMapIssues.style.display = "none";
+  }
+
+  rimNodes = nodes;
+  rimEdges = edges;
+}
+
+let rimNodes = [];
+let rimEdges = [];
+
+function renderLegalMapMissing(validation) {
+  if (!validation || (!validation.errors.length && !validation.warnings.length)) {
+    els.legalMapMissingOutput.style.display = "block";
+    els.legalMapMissingOutput.className = "legalmap-missing";
+    els.legalMapMissingOutput.innerHTML = "<p>Tüm bağlantılar tutarlı, eksik veya kritik uyarı bulunamadı.</p>";
+    return;
+  }
+  els.legalMapMissingOutput.style.display = "block";
+  els.legalMapMissingOutput.className = "legalmap-missing";
+  const errorHtml = validation.errors.map((e) => `<li class="danger">HATA: ${escapeHtml(e.detail)}</li>`).join("");
+  const warningHtml = validation.warnings.map((w) => `<li class="warning">UYARI [${w.type}]: ${escapeHtml(w.detail)}</li>`).join("");
+  els.legalMapMissingOutput.innerHTML = `
+    ${errorHtml ? `<h4>Hatalar</h4><ul class="compact-list">${errorHtml}</ul>` : ""}
+    ${warningHtml ? `<h4>Uyarılar</h4><ul class="compact-list">${warningHtml}</ul>` : ""}
+    ${!errorHtml && !warningHtml ? "<p>Tüm bağlantılar tutarlı.</p>" : ""}
+  `;
+}
+
+async function rebuildLegalMap() {
+  if (!activeCaseId) return;
+  setStatus("Harita oluşturuluyor...");
+  try {
+    const result = await apiPost(`/api/cases/${activeCaseId}/legal-graph/rebuild`, { case_id: activeCaseId });
+    lastLegalMapGraph = result;
+    await fetchLegalMap();
+    setStatus("Harita güncellendi.");
+  } catch (e) {
+    setStatus("Harita oluşturulamadı: " + (e.message || "hata"));
+  }
+}
+
+async function validateLegalMap() {
+  if (!activeCaseId) return;
+  setStatus("Doğrulanıyor...");
+  try {
+    const validation = await apiPost(`/api/cases/${activeCaseId}/legal-graph/validate`, { case_id: activeCaseId });
+    lastLegalMapValidation = validation;
+    renderLegalMapMissing(validation);
+    setStatus(validation.valid ? "Harita geçerli." : "Haritada sorunlar bulundu.");
+  } catch (e) {
+    setStatus("Doğrulama başarısız: " + (e.message || "hata"));
+  }
+}
+
+async function addLegalMapNode() {
+  if (!activeCaseId) return;
+  const nodeType = els.legalMapNodeType.value;
+  const status = els.legalMapNodeStatus.value;
+  const title = els.legalMapNodeTitle.value.trim();
+  if (!title) { setStatus("Başlık gerekli."); return; }
+  setStatus("Düğüm ekleniyor...");
+  try {
+    await apiPost(`/api/cases/${activeCaseId}/legal-graph/nodes`, {
+      case_id: activeCaseId,
+      node_type: nodeType,
+      title: title,
+      status: status,
+      source_type: "user_input",
+    });
+    els.legalMapNodeTitle.value = "";
+    await fetchLegalMap();
+    setStatus("Düğüm eklendi.");
+  } catch (e) {
+    setStatus("Düğüm eklenemedi: " + (e.message || "hata"));
+  }
+}
+
+function clearLegalMapState() {
+  lastLegalMapGraph = null;
+  lastLegalMapValidation = null;
+  rimNodes = [];
+  rimEdges = [];
+  els.legalMapSummary.className = "legalmap-summary empty-state";
+  els.legalMapSummary.textContent = "Henüz harita oluşturulmadı.";
+  els.legalMapIssues.style.display = "none";
+  els.legalMapIssues.innerHTML = "";
+  els.legalMapGraphData.style.display = "none";
+  els.legalMapMissingOutput.style.display = "none";
+  els.legalMapNodeEditor.style.display = "none";
+}
+
 function renderReviewSummary({ analysis = null, enrichment = null, sourceCount = 0, precedentCount = 0, qualityScore = null } = {}) {
   const topic = enrichment?.detected_case_type || analysis?.legal_topic || "Hukuki inceleme";
   const keywords = enrichment?.search_keywords || analysis?.legal_keywords || [];
@@ -3180,6 +3379,13 @@ function wireEvents() {
     els.draftReadinessDialog.close();
     if (options) runDraft(options).catch((error) => setStatus(error.message, true));
   });
+  $("legalMapRebuildBtn").addEventListener("click", () => rebuildLegalMap().catch((error) => setStatus(error.message, true)));
+  $("legalMapValidateBtn").addEventListener("click", () => validateLegalMap().catch((error) => setStatus(error.message, true)));
+  $("legalMapMissingBtn").addEventListener("click", () => {
+    if (lastLegalMapValidation) { renderLegalMapMissing(lastLegalMapValidation); }
+    else { validateLegalMap().catch((error) => setStatus(error.message, true)); }
+  });
+  $("legalMapAddNodeBtn").addEventListener("click", () => addLegalMapNode().catch((error) => setStatus(error.message, true)));
   els.draftReadinessDialog.addEventListener("cancel", (event) => {
     event.preventDefault();
     pendingPreliminaryDraftOptions = null;
@@ -3332,6 +3538,8 @@ function resetCaseUiState({ preserveCaseId = true, clearStatus = true } = {}) {
 
   lastLegalIssueGraph = null;
   renderLegalIssueGraph();
+
+  clearLegalMapState();
 
   resetQuestions();
   setCaseState(null);
