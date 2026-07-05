@@ -367,6 +367,105 @@ class TestRetryPolicy:
         assert "AUTHORIZATION_ERROR" in NON_RETRYABLE_CODES
 
 
+class TestHandlerRegistryReal:
+    def test_no_noop_handlers(self):
+        for jt in KNOWN_JOB_TYPES:
+            h = handler_registry.get(jt)
+            assert h is not None, f"No handler for {jt}"
+            assert "noop" not in h.handler.__name__.lower(), f"{jt} uses noop handler ({h.handler.__name__})"
+
+    def test_all_production_types_have_real_handlers(self):
+        types = handler_registry.list_types()
+        for jt in KNOWN_JOB_TYPES:
+            assert jt in types, f"Missing production type: {jt}"
+
+    def test_yargitay_handler_exists(self):
+        h = handler_registry.get("yargitay_search")
+        assert h is not None
+        assert h.timeout_seconds == 600
+        assert h.max_attempts == 3
+
+    def test_retention_handler_requires_admin(self):
+        h = handler_registry.get("retention_purge")
+        assert h is not None
+        assert h.required_permission == "tenant_admin"
+
+    def test_export_handler_exists(self):
+        h = handler_registry.get("export_generate")
+        assert h is not None
+        assert h.max_attempts == 2
+
+    def test_registry_startup_validation(self):
+        for jt in KNOWN_JOB_TYPES:
+            assert handler_registry.get(jt) is not None
+
+
+class TestRealHandlerExecutions:
+    @pytest.mark.asyncio
+    async def test_graph_handler_runs(self, db_session):
+        from app.services.job_handlers import _handle_graph_build
+        from app.services.job_context import JobContext
+        ctx = JobContext("j1", "w1", {})
+        result = await _handle_graph_build(ctx, {"case_id": "c-p8-a", "tenant_id": "t-p8", "actor_id": "u-p8"}, {"id": "j1", "tenant_id": "t-p8"})
+        assert result["status"] == "completed"
+        assert "node_count" in result
+
+    @pytest.mark.asyncio
+    async def test_petition_handler_runs(self, db_session):
+        from app.services.job_handlers import _handle_petition_generate
+        from app.services.job_context import JobContext
+        ctx = JobContext("j2", "w1", {})
+        result = await _handle_petition_generate(ctx, {
+            "case_id": "c-p8-a",
+            "case_text": "Muvekkil ikinci el araci galeriden satin aldi motor arizasi cikti.",
+            "request_type": "Talebimizin kabulu",
+        }, {"id": "j2"})
+        assert result["status"] == "completed"
+
+    @pytest.mark.asyncio
+    async def test_export_handler_creates_file(self, db_session):
+        from app.services.job_handlers import _handle_export_generate
+        from app.services.job_context import JobContext
+        ctx = JobContext("j3", "w1", {})
+        result = await _handle_export_generate(ctx, {
+            "case_id": "c-p8-a",
+            "format": "txt",
+            "content": "Test export content",
+        }, {"id": "j3"})
+        assert result["status"] == "completed"
+        assert "artifact_id" in result
+
+    @pytest.mark.asyncio
+    async def test_ground_handler_runs(self, db_session):
+        from app.services.job_handlers import _handle_legal_ground_validate
+        from app.services.job_context import JobContext
+        ctx = JobContext("j4", "w1", {})
+        result = await _handle_legal_ground_validate(ctx, {
+            "case_id": "c-p8-a",
+            "raw_grounds": ["TBK 219"],
+        }, {"id": "j4"})
+        assert "normalized_grounds" in result or "registry_version" in result
+
+    @pytest.mark.asyncio
+    async def test_claim_grounding_runs(self, db_session):
+        from app.services.job_handlers import _handle_claim_grounding
+        from app.services.job_context import JobContext
+        ctx = JobContext("j5", "w1", {})
+        result = await _handle_claim_grounding(ctx, {
+            "case_id": "c-p8-a",
+            "petition_text": "Davali satici ayibi gizlemistir. Sozlesmeden donme talep edilmektedir.",
+        }, {"id": "j5"})
+        assert result["status"] == "completed"
+
+    @pytest.mark.asyncio
+    async def test_purge_handler_runs(self, db_session):
+        from app.services.job_handlers import _handle_retention_purge
+        from app.services.job_context import JobContext
+        ctx = JobContext("j6", "w1", {})
+        result = await _handle_retention_purge(ctx, {"tenant_id": "t-p8", "dry_run": True, "batch": 5}, {"id": "j6", "tenant_id": "t-p8"})
+        assert "purged" in result or "status" in result
+
+
 class TestJobService:
     @pytest.mark.asyncio
     async def test_enqueue_valid_job(self, db_session):
