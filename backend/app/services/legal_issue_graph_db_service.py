@@ -164,6 +164,7 @@ async def create_node(
     )
     db.add(node)
     await db.flush()
+    await db.commit()
     await _write_audit(db, tenant_id, actor_id, case_id, "LEGAL_GRAPH_NODE_CREATED", node.id)
     return _node_to_dict(node)
 
@@ -205,6 +206,7 @@ async def update_node(
 
     node.updated_at = datetime.now(UTC)
     await db.flush()
+    await db.commit()
     await _write_audit(db, tenant_id, actor_id, case_id, "LEGAL_GRAPH_NODE_UPDATED", node.id)
     return _node_to_dict(node)
 
@@ -227,6 +229,7 @@ async def delete_node(
     node.deleted_at = datetime.now(UTC)
     node.updated_at = datetime.now(UTC)
     await db.flush()
+    await db.commit()
     await _write_audit(db, tenant_id, actor_id, case_id, "LEGAL_GRAPH_NODE_DELETED", node.id)
     return _node_to_dict(node)
 
@@ -249,6 +252,7 @@ async def restore_node(
     node.deleted_at = None
     node.updated_at = datetime.now(UTC)
     await db.flush()
+    await db.commit()
     await _write_audit(db, tenant_id, actor_id, case_id, "LEGAL_GRAPH_NODE_RESTORED", node.id)
     return _node_to_dict(node)
 
@@ -346,6 +350,7 @@ async def create_edge(
     )
     db.add(edge)
     await db.flush()
+    await db.commit()
     await _write_audit(db, tenant_id, actor_id, case_id, "LEGAL_GRAPH_EDGE_CREATED", edge.id)
     return _edge_to_dict(edge)
 
@@ -377,6 +382,7 @@ async def update_edge(
 
     edge.updated_at = datetime.now(UTC)
     await db.flush()
+    await db.commit()
     await _write_audit(db, tenant_id, actor_id, case_id, "LEGAL_GRAPH_EDGE_UPDATED", edge.id)
     return _edge_to_dict(edge)
 
@@ -399,6 +405,7 @@ async def delete_edge(
     edge.deleted_at = datetime.now(UTC)
     edge.updated_at = datetime.now(UTC)
     await db.flush()
+    await db.commit()
     await _write_audit(db, tenant_id, actor_id, case_id, "LEGAL_GRAPH_EDGE_DELETED", edge.id)
     return _edge_to_dict(edge)
 
@@ -421,6 +428,7 @@ async def restore_edge(
     edge.deleted_at = None
     edge.updated_at = datetime.now(UTC)
     await db.flush()
+    await db.commit()
     await _write_audit(db, tenant_id, actor_id, case_id, "LEGAL_GRAPH_EDGE_RESTORED", edge.id)
     return _edge_to_dict(edge)
 

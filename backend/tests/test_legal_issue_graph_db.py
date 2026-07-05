@@ -11,6 +11,17 @@ from app.db.session import get_sessionmaker
 
 @pytest_asyncio.fixture
 async def db_session():
+    import sqlite3, os
+    db_path = os.path.join(os.path.dirname(__file__), "..", "case_store", "emsalist.db")
+    conn = sqlite3.connect(db_path)
+    conn.execute("DELETE FROM legal_issue_edges WHERE tenant_id IN ('t-a-g','t-b-g')")
+    conn.execute("DELETE FROM legal_issue_nodes WHERE tenant_id IN ('t-a-g','t-b-g')")
+    conn.execute("DELETE FROM case_members WHERE tenant_id IN ('t-a-g','t-b-g')")
+    conn.execute("DELETE FROM cases WHERE tenant_id IN ('t-a-g','t-b-g')")
+    conn.execute("DELETE FROM users WHERE tenant_id IN ('t-a-g','t-b-g')")
+    conn.execute("DELETE FROM tenants WHERE id IN ('t-a-g','t-b-g')")
+    conn.commit()
+    conn.close()
     maker = get_sessionmaker()
     async with maker() as session:
         yield session
