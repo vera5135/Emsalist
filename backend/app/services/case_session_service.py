@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 import uuid
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -200,10 +201,20 @@ class CaseSessionService:
                     json.dumps(self._state, ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
-                temporary.replace(self.index_path)
+                for attempt in range(8):
+                    try:
+                        temporary.replace(self.index_path)
+                        break
+                    except PermissionError:
+                        if attempt == 7:
+                            raise
+                        time.sleep(0.02 * (attempt + 1))
             finally:
                 if temporary.exists():
-                    temporary.unlink()
+                    try:
+                        temporary.unlink()
+                    except OSError:
+                        pass
 
 
     def require_existing_case(self, case_id: str) -> str:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -19,9 +20,13 @@ logger = logging.getLogger(__name__)
 
 class AIRunService:
     def __init__(self, store_path: str = "") -> None:
-        self._lock = threading.Lock()
-        default_path = Path(__file__).resolve().parents[2] / "case_store" / "ai_runs.json"
-        self.store_path = Path(store_path) if store_path else default_path
+        self._lock = threading.RLock()
+        if store_path:
+            self.store_path = Path(store_path)
+        else:
+            configured = os.getenv("EMSALIST_CASE_STORE_DIR", "").strip()
+            base = Path(configured) if configured else Path(__file__).resolve().parents[2] / "case_store"
+            self.store_path = base / "ai_runs.json"
         self._records: dict[str, list[dict]] = {}
         self._max_per_case = 500
         self._retention_days = 90
@@ -45,46 +50,49 @@ class AIRunService:
         return run.run_id
 
     def complete_run(self, run_id: str, *, input_tokens: int | None = None, output_tokens: int | None = None) -> None:
-        record = self._update(run_id)
-        if not record:
-            return
-        record["status"] = "completed"
-        record["completed_at"] = datetime.now(UTC).isoformat()
-        started = record.get("started_at", "")
-        if started:
-            try:
-                st = datetime.fromisoformat(started)
-                record["duration_ms"] = int((datetime.now(UTC) - st).total_seconds() * 1000)
-            except (ValueError, TypeError):
-                pass
-        if input_tokens is not None:
-            record["input_tokens"] = input_tokens
-        if output_tokens is not None:
-            record["output_tokens"] = output_tokens
-        if input_tokens is not None and output_tokens is not None:
-            record["total_tokens"] = input_tokens + output_tokens
-            record["estimated_cost"] = estimate_cost(record.get("model", "deepseek-chat"), input_tokens, output_tokens)
-        self._persist()
+        with self._lock:
+            record = self._update(run_id)
+            if not record:
+                return
+            record["status"] = "completed"
+            record["completed_at"] = datetime.now(UTC).isoformat()
+            started = record.get("started_at", "")
+            if started:
+                try:
+                    st = datetime.fromisoformat(started)
+                    record["duration_ms"] = int((datetime.now(UTC) - st).total_seconds() * 1000)
+                except (ValueError, TypeError):
+                    pass
+            if input_tokens is not None:
+                record["input_tokens"] = input_tokens
+            if output_tokens is not None:
+                record["output_tokens"] = output_tokens
+            if input_tokens is not None and output_tokens is not None:
+                record["total_tokens"] = input_tokens + output_tokens
+                record["estimated_cost"] = estimate_cost(record.get("model", "deepseek-chat"), input_tokens, output_tokens)
+            self._persist()
 
     def fail_run(self, run_id: str, *, error_code: str = "AI_UNKNOWN_ERROR", safe_message: str = "") -> None:
-        record = self._update(run_id)
-        if not record:
-            return
-        record["status"] = "failed"
-        record["completed_at"] = datetime.now(UTC).isoformat()
-        record["error_code"] = error_code
-        record["safe_error_message"] = safe_message[:200]
-        self._persist()
+        with self._lock:
+            record = self._update(run_id)
+            if not record:
+                return
+            record["status"] = "failed"
+            record["completed_at"] = datetime.now(UTC).isoformat()
+            record["error_code"] = error_code
+            record["safe_error_message"] = safe_message[:200]
+            self._persist()
 
     def mark_fallback(self, run_id: str, *, fallback_type: str = "") -> None:
-        record = self._update(run_id)
-        if not record:
-            return
-        record["status"] = "fallback"
-        record["completed_at"] = datetime.now(UTC).isoformat()
-        record["fallback_used"] = True
-        record["fallback_type"] = fallback_type
-        self._persist()
+        with self._lock:
+            record = self._update(run_id)
+            if not record:
+                return
+            record["status"] = "fallback"
+            record["completed_at"] = datetime.now(UTC).isoformat()
+            record["fallback_used"] = True
+            record["fallback_type"] = fallback_type
+            self._persist()
 
     def get_run(self, run_id: str) -> dict | None:
         for records in self._records.values():
@@ -192,9 +200,23 @@ class AIRunService:
 
     def _persist(self) -> None:
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.store_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self._records, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(self.store_path)
+        tmp = self.store_path.with_name(f".{self.store_path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            tmp.write_text(json.dumps(self._records, ensure_ascii=False, indent=2), encoding="utf-8")
+            for attempt in range(8):
+                try:
+                    tmp.replace(self.store_path)
+                    break
+                except PermissionError:
+                    if attempt == 7:
+                        raise
+                    time.sleep(0.02 * (attempt + 1))
+        finally:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
 
 
 ai_run_service = AIRunService()
