@@ -387,3 +387,96 @@ class PurgeItem(Base):
     failure_code: Mapped[str] = mapped_column(String(50), default="")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# -- P1.8: Background Jobs --
+class BackgroundJob(Base):
+    __tablename__ = "background_jobs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("cases.id"), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    job_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
+    priority: Mapped[int] = mapped_column(Integer, default=0)
+    idempotency_key: Mapped[str] = mapped_column(String(64), default="")
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    safe_payload_hash: Mapped[str] = mapped_column(String(64), default="")
+    result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    safe_error_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    progress_percent: Mapped[int] = mapped_column(Integer, default=0)
+    progress_stage: Mapped[str] = mapped_column(String(50), default="")
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    worker_id_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parent_job_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(32), default="")
+    request_id: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_bg_jobs_tenant", "tenant_id"),
+        Index("ix_bg_jobs_case", "case_id"),
+        Index("ix_bg_jobs_status", "status"),
+        Index("ix_bg_jobs_tenant_status", "tenant_id", "status"),
+        Index("ix_bg_jobs_lease", "status", "lease_expires_at"),
+        Index("ix_bg_jobs_idem", "tenant_id", "idempotency_key"),
+    )
+
+
+class BackgroundJobAttempt(Base):
+    __tablename__ = "background_job_attempts"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    job_id: Mapped[str] = mapped_column(String(32), ForeignKey("background_jobs.id"), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="started")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    worker_id_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    retryable: Mapped[bool] = mapped_column(Boolean, default=False)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    safe_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    __table_args__ = (Index("ix_bg_attempts_job", "job_id"),)
+
+
+class BackgroundJobEvent(Base):
+    __tablename__ = "background_job_events"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    job_id: Mapped[str] = mapped_column(String(32), ForeignKey("background_jobs.id"), nullable=False)
+    sequence_number: Mapped[int] = mapped_column(Integer, default=0)
+    event_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    progress_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    safe_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    safe_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (Index("ix_bg_events_job_seq", "job_id", "sequence_number"),)
+
+
+class BackgroundJobArtifact(Base):
+    __tablename__ = "background_job_artifacts"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    job_id: Mapped[str] = mapped_column(String(32), ForeignKey("background_jobs.id"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("cases.id"), nullable=True)
+    artifact_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), default="")
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        Index("ix_bg_artifacts_job", "job_id"),
+        Index("ix_bg_artifacts_tenant", "tenant_id", "case_id"),
+    )

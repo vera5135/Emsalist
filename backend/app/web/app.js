@@ -3603,6 +3603,50 @@ async function startNewCase() {
   }
 }
 
+// ── P1.8 Job Polling ──
+let _jobPollTimers = {};
+let _maxJobPollSeconds = 120;
+
+async function trackJob(jobId, onComplete, onProgress) {
+  if (!jobId) return;
+  if (_jobPollTimers[jobId]) clearTimeout(_jobPollTimers[jobId]);
+  let elapsed = 0;
+  async function poll() {
+    try {
+      const job = await apiFetch(apiUrl(`/jobs/${jobId}`));
+      const data = await job.json();
+      if (onProgress) onProgress(data);
+      if (data.status === "succeeded") {
+        delete _jobPollTimers[jobId];
+        if (onComplete) onComplete(data);
+        return;
+      }
+      if (data.status === "failed" || data.status === "cancelled" || data.status === "dead_lettered") {
+        delete _jobPollTimers[jobId];
+        setStatus("Islem tamamlanamadi: " + (data.safe_error_code || data.status));
+        return;
+      }
+      elapsed += 2;
+      if (elapsed > _maxJobPollSeconds) {
+        delete _jobPollTimers[jobId];
+        setStatus("Islem zaman asimina ugradi.");
+        return;
+      }
+      _jobPollTimers[jobId] = setTimeout(poll, 2000);
+    } catch (e) {
+      delete _jobPollTimers[jobId];
+    }
+  }
+  poll();
+}
+
+function cancelTrackedJob(jobId) {
+  if (_jobPollTimers[jobId]) {
+    clearTimeout(_jobPollTimers[jobId]);
+    delete _jobPollTimers[jobId];
+  }
+}
+
 wireEvents();
 renderOfficialSourcesStatus();
 checkHealth();
