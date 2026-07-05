@@ -31,7 +31,7 @@ async def db_session():
     async with maker() as session:
         from app.db.models import Tenant, User, Case, CaseMember
         session.add(Tenant(id="t-p8", name="P8", slug="t-p8", status="active"))
-        session.add(User(id="u-p8", tenant_id="t-p8", email_normalized="p8@t.com", display_name="P8 User", status="active", role="lawyer"))
+        session.add(User(id="u-p8", tenant_id="t-p8", email_normalized="p8@t.com", display_name="P8 User", status="active", role="tenant_admin"))
         session.add(User(id="u-p8-v", tenant_id="t-p8", email_normalized="p8v@t.com", display_name="P8 Viewer", status="active", role="viewer"))
         session.add(Case(id="c-p8-a", tenant_id="t-p8", owner_user_id="u-p8", title="CaseA", legal_topic="test", profile_id="default", event_text="", status="active", version=1))
         session.add(Case(id="c-p8-b", tenant_id="t-p8", owner_user_id="u-p8", title="CaseB", legal_topic="test", profile_id="default", event_text="", status="active", version=1))
@@ -463,7 +463,7 @@ class TestRealHandlerExecutions:
         from app.services.job_handlers import _handle_retention_purge
         from app.services.job_context import JobContext
         ctx = JobContext("j6", "w1", {})
-        result = await _handle_retention_purge(ctx, {"tenant_id": "t-p8", "dry_run": True, "batch": 5}, {"id": "j6", "tenant_id": "t-p8"})
+        result = await _handle_retention_purge(ctx, {"tenant_id": "t-p8", "dry_run": True, "batch": 5}, {"id": "j6", "tenant_id": "t-p8", "created_by": "u-p8"})
         assert "purged" in result or "status" in result
 
 

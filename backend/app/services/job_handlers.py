@@ -38,7 +38,7 @@ class JobHandlerRegistry:
 handler_registry = JobHandlerRegistry()
 
 
-async def _verify_execution_auth(tenant_id: str, case_id: str = "", actor_id: str = "", document_id: str = "") -> None:
+async def _verify_execution_auth(tenant_id: str, case_id: str = "", actor_id: str = "", document_id: str = "", document_ids: list | None = None, required_role: str = "") -> None:
     """Verify authorization at handler execution time (not just enqueue time)."""
     if not tenant_id:
         raise PermissionError("TENANT_ID_REQUIRED")
@@ -57,28 +57,35 @@ async def _verify_execution_auth(tenant_id: str, case_id: str = "", actor_id: st
                 raise PermissionError("CASE_NOT_FOUND")
             if case.status in ("deleted", "purged"):
                 raise PermissionError("CASE_DELETED")
-            if actor_id:
+            if actor_id and not required_role.startswith("tenant_"):
                 m = await db.execute(
-                    select(CaseMember.id).where(
+                    select(CaseMember.membership_role).where(
                         CaseMember.tenant_id == tenant_id,
                         CaseMember.case_id == case_id,
                         CaseMember.user_id == actor_id,
                         CaseMember.revoked_at.is_(None),
                     ).limit(1)
                 )
-                if not m.first():
+                role_row = m.first()
+                if not role_row:
                     raise PermissionError("MEMBERSHIP_REVOKED")
-        if document_id:
+        if actor_id and required_role:
+            from app.db.models import User
+            u = await db.execute(select(User.role).where(User.id == actor_id, User.status == "active").limit(1))
+            if not u.first():
+                raise PermissionError("ACTOR_INACTIVE")
+        for did in ([document_id] if document_id else (document_ids or [])):
+            if not did:
+                continue
             d = await db.execute(
                 select(Document.id).where(
-                    Document.id == document_id,
+                    Document.id == did,
                     Document.tenant_id == tenant_id,
-                    Document.case_id == case_id if case_id else None,
                     Document.deleted_at.is_(None),
                 ).limit(1)
             )
             if not d.first():
-                raise PermissionError("DOCUMENT_NOT_AVAILABLE")
+                raise PermissionError(f"DOCUMENT_NOT_AVAILABLE:{did}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -142,8 +149,8 @@ async def _handle_document_extract(ctx: JobContext, payload: dict, job_meta: dic
 async def _handle_document_analyze(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.document_intake_service import document_intake_service
     case_id = (payload.get("case_id") or "").strip()
-    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"))
     doc_ids = payload.get("document_ids") or []
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"), document_ids=doc_ids)
 
     await ctx.set_progress(10, "validating_documents")
     ctx.check_cancelled()
@@ -433,7 +440,7 @@ async def _handle_export_generate(ctx: JobContext, payload: dict, job_meta: dict
 async def _handle_retention_purge(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.lifecycle_service import lifecycle_service
     tenant_id = (payload.get("tenant_id") or job_meta.get("tenant_id", "")).strip()
-    await _verify_execution_auth(tenant_id=tenant_id, actor_id=job_meta.get("created_by","system"))
+    await _verify_execution_auth(tenant_id=tenant_id, actor_id=job_meta.get("created_by","system"), required_role="tenant_admin")
     dry_run = bool(payload.get("dry_run", False))
     batch = int(payload.get("batch", 10))
 
