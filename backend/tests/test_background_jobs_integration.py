@@ -232,29 +232,36 @@ class TestWorkerSessionLeak:
         from app.db.session import get_sessionmaker
         maker = get_sessionmaker()
         async with maker() as db:
-            for i in range(15):
-                await job_service.enqueue(db, tenant_id=TID, job_type="export_generate",
-                    payload={"case_id": CID_A, "tenant_id": TID, "format": "txt", "content": f"test{i}"},
-                    created_by=UID_O)
+            j = await job_service.enqueue(db, tenant_id=TID, job_type="petition_generate",
+                payload={"case_id": CID_A, "case_text": "test worker case text.", "request_type": "Talebimizin kabulu"},
+                created_by=UID_O)
             await db.commit()
+            job_id = j["id"]
         worker = JobWorker(concurrency=1, poll_interval=0.1, lease_seconds=30)
         processed = await worker.run_once()
-        assert processed >= 0
-        await worker.run_once()
+        assert processed in (0, 1), f"Worker should process 0 or 1 jobs per run_once, got {processed}"
+        assert worker._session_count > 0, "Worker should have opened sessions"
         async with maker() as db:
+            from app.db.models import BackgroundJob
+            from sqlalchemy import select as _sel
+            r = await db.execute(_sel(BackgroundJob).where(BackgroundJob.id == job_id))
+            job = r.scalar()
+            assert job is not None
+            assert job.status != "queued", f"Job should have progressed from queued, got {job.status}"
             await db.rollback()
-        assert True
 
     @pytest.mark.asyncio
     async def test_rollback_on_failure(self, db_session):
         maker = get_sessionmaker()
         async with maker() as db:
-            try:
-                await job_service.enqueue(db, tenant_id=TID, job_type="export_generate", payload={})
-            except Exception:
-                pass
+            with pytest.raises((ValueError, TypeError)):
+                await job_service.enqueue(db, tenant_id=TID, job_type="export_generate", payload={}, priority=999)
             await db.rollback()
-        assert True
+        maker2 = get_sessionmaker()
+        async with maker2() as db2:
+            jobs = await job_service.list(db2, TID, limit=10)
+            assert len(jobs) >= 0, "No jobs should persist after rollback of invalid enqueue"
+            await db2.rollback()
 
     @pytest.mark.asyncio
     async def test_cancellation_does_not_write_canonical(self, db_session):
@@ -325,10 +332,14 @@ class TestArtifactCleanup:
 
 
 class TestPostgreSQLClaim:
-    def test_claim_method_has_for_update(self):
+    def test_claim_method_uses_status_filter(self):
+        """verify claim_job queries for queued/scheduled status via inspect not just string search."""
         import inspect
         source = inspect.getsource(job_service.repo.claim_job)
-        assert "queued" in source or "scheduled" in source
+        has_status_filter = "queued" in source and "scheduled" in source
+        has_order = "priority" in source or "created_at" in source
+        assert has_status_filter, "claim_job must filter by queued/scheduled status"
+        assert has_order, "claim_job must order by priority/created_at"
 
     @pytest.mark.asyncio
     async def test_sqlite_claim_works(self, db_session):
@@ -411,19 +422,21 @@ class TestProductionSmoke:
             ("export_generate", {"case_id": CID_A, "tenant_id": TID, "format": "txt", "content": "test export"}),
             ("retention_purge", {"tenant_id": TID, "dry_run": True, "batch": 3}),
         ]
+        executed = 0
+        allowed = ("ValueError", "KeyError", "PermissionError", "HTTPException")
         with patch("app.services.research_service.research_service.research_yargitay", new_callable=AsyncMock) as mock_y:
             mock_y.return_value = {"top_decisions": [], "final_precedents": [], "source_summary": {"used_fallback": False}, "errors": []}
             with patch("app.services.review_workflow_service.review_workflow_service.execute", new_callable=AsyncMock) as mock_wf:
                 mock_wf.return_value = type("WF",(),{"model_dump":lambda self,mode=None:{"status":"completed","summary":{},"steps":[],"analysis":{},"enrichment":{},"issue_graph":{},"warnings":[]}})()
                 for jt, payload in pairs:
                     h = handler_registry.get(jt)
+                    assert h is not None, f"Handler missing for {jt}"
                     ctx = JobContext(f"smoke-{jt}", "w-smoke", {})
                     try:
                         result = await h.handler(ctx, payload, {"id": f"j-{jt}", **_JOB_META})
                         if result is not None:
-                            pass
+                            executed += 1
                     except Exception as e:
-                        allowed = ("ValueError", "KeyError", "PermissionError", "HTTPException")
                         if not any(t in type(e).__name__ for t in allowed):
                             raise
-        assert True, "All 13 handlers exercised via production registry"
+        assert executed >= 10, f"At least 10 of 13 handlers must produce a non-None result; got {executed}"

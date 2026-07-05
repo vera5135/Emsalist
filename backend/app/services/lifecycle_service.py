@@ -90,27 +90,30 @@ class DataLifecycleService:
         except RuntimeError:
             loop = None
 
+        nest_ok = False
         if loop is not None:
-            import nest_asyncio
             try:
+                import nest_asyncio
                 nest_asyncio.apply(loop)
+                nest_ok = True
             except Exception:
                 pass
 
         membership = None
-        try:
-            loop = asyncio.get_event_loop()
-            from app.db.session import get_sessionmaker
+        if loop is None or nest_ok:
+            try:
+                ev_loop = asyncio.get_event_loop()
+                from app.db.session import get_sessionmaker
 
-            async def _get_membership():
-                async with get_sessionmaker()() as sess:
-                    return await CaseMemberRepository.get_active_membership(
-                        sess, tenant_id, case_id, actor_id
-                    )
+                async def _get_membership():
+                    async with get_sessionmaker()() as sess:
+                        return await CaseMemberRepository.get_active_membership(
+                            sess, tenant_id, case_id, actor_id
+                        )
 
-            membership = loop.run_until_complete(_get_membership())
-        except Exception:
-            pass
+                membership = ev_loop.run_until_complete(_get_membership())
+            except Exception:
+                pass
 
         effective_role = actor_role
         if membership:
@@ -131,12 +134,72 @@ class DataLifecycleService:
     # ── retention policy ───────────────────────────────────────────────
 
     def get_retention_policy(self, tenant_id: str, resource_type: str = "case") -> dict:
+        """Resolve retention policy: tenant override → system default → hardcoded fallback."""
+        import asyncio as _asyncio
+
+        async def _resolve() -> dict | None:
+            try:
+                from app.db.models import RetentionPolicy
+                from app.db.session import get_sessionmaker
+                from sqlalchemy import select
+                maker = get_sessionmaker()
+                async with maker() as db:
+                    result = await db.execute(
+                        select(RetentionPolicy).where(
+                            RetentionPolicy.tenant_id == tenant_id,
+                            RetentionPolicy.resource_type == resource_type,
+                            RetentionPolicy.enabled == True,
+                        ).limit(1)
+                    )
+                    row = result.scalar()
+                    if row:
+                        return {
+                            "soft_delete_days": max(int(row.soft_delete_days), MIN_SOFT_DELETE_DAYS),
+                            "purge_after_days": max(int(row.purge_after_days), MIN_PURGE_AFTER_DAYS),
+                            "audit_retention_days": max(int(row.audit_retention_days), MIN_AUDIT_RETENTION_DAYS),
+                            "tenant_id": tenant_id,
+                            "resource_type": resource_type,
+                            "source": "tenant_override",
+                        }
+                    result_sys = await db.execute(
+                        select(RetentionPolicy).where(
+                            RetentionPolicy.tenant_id.is_(None),
+                            RetentionPolicy.resource_type == resource_type,
+                            RetentionPolicy.enabled == True,
+                        ).limit(1)
+                    )
+                    row_sys = result_sys.scalar()
+                    if row_sys:
+                        return {
+                            "soft_delete_days": max(int(row_sys.soft_delete_days), MIN_SOFT_DELETE_DAYS),
+                            "purge_after_days": max(int(row_sys.purge_after_days), MIN_PURGE_AFTER_DAYS),
+                            "audit_retention_days": max(int(row_sys.audit_retention_days), MIN_AUDIT_RETENTION_DAYS),
+                            "tenant_id": tenant_id,
+                            "resource_type": resource_type,
+                            "source": "system_default",
+                        }
+                return None
+            except Exception:
+                return None
+
+        db_policy = None
+        try:
+            loop = _asyncio.get_running_loop()
+            fut = _asyncio.ensure_future(_resolve())
+            db_policy = fut.result(timeout=5)
+        except (RuntimeError, _asyncio.TimeoutError, Exception):
+            pass
+
+        if db_policy:
+            return db_policy
+
         return {
             "soft_delete_days": DEFAULT_SOFT_DELETE_DAYS,
             "purge_after_days": DEFAULT_PURGE_AFTER_DAYS,
             "audit_retention_days": DEFAULT_AUDIT_RETENTION_DAYS,
             "tenant_id": tenant_id,
             "resource_type": resource_type,
+            "source": "hardcoded_fallback",
         }
 
     def validate_retention_policy(self, policy: dict) -> list[str]:
@@ -259,6 +322,7 @@ class DataLifecycleService:
             version=new_version,
         )
         self._write_audit(tenant_id, actor_id, case_id, "case.restore", "success")
+        self._update_deletion_request(tenant_id, "case", case_id, "restored")
         return {"case_id": case_id, "status": "active", "restored": True, "version": new_version}
 
     # ── deleted case listing ───────────────────────────────────────────
@@ -541,6 +605,8 @@ class DataLifecycleService:
             item_result = self._purge_case(cid, cdata, dry_run, tenant_id)
             if item_result.get("purged"):
                 purged += 1
+                if not dry_run:
+                    self._update_deletion_request(tenant_id, "case", cid, "completed")
                 run_state.setdefault("items", {})[cid] = {"status": "purged", "steps": item_result.get("steps", {})}
             elif item_result.get("error"):
                 failed += 1
@@ -764,7 +830,95 @@ class DataLifecycleService:
                               resource_type: str, resource_id: str,
                               reason_code: str, status: str,
                               restore_deadline: datetime) -> None:
-        pass
+        """Persist a DeletionRequest to the database.
+
+        Idempotent: duplicate requests for the same resource_type+resource_id
+        are silently skipped unless the previous one is terminal.
+        """
+        import asyncio as _asyncio
+
+        async def _persist():
+            from app.db.models import DeletionRequest, new_uuid
+            from app.db.session import get_sessionmaker
+            from sqlalchemy import select
+            now = datetime.now(UTC)
+            maker = get_sessionmaker()
+            try:
+                async with maker() as db:
+                    existing = await db.execute(
+                        select(DeletionRequest).where(
+                            DeletionRequest.tenant_id == tenant_id,
+                            DeletionRequest.resource_type == resource_type,
+                            DeletionRequest.resource_id == resource_id,
+                            DeletionRequest.status.notin_(["completed", "cancelled", "restored"]),
+                        ).limit(1)
+                    )
+                    if existing.scalar() is not None:
+                        return
+                    req = DeletionRequest(
+                        id=new_uuid(),
+                        tenant_id=tenant_id,
+                        requested_by=requested_by,
+                        resource_type=resource_type,
+                        resource_id=resource_id,
+                        reason_code=reason_code,
+                        status=status,
+                        requested_at=now,
+                        restore_deadline=restore_deadline,
+                        safe_metadata={},
+                    )
+                    db.add(req)
+                    await db.commit()
+            except Exception:
+                pass
+
+        try:
+            loop = _asyncio.get_running_loop()
+            _asyncio.ensure_future(_persist())
+        except RuntimeError:
+            try:
+                _asyncio.run(_persist())
+            except Exception:
+                pass
+
+    def _update_deletion_request(self, tenant_id: str, resource_type: str,
+                                 resource_id: str, new_status: str) -> None:
+        """Update DeletionRequest status for restore/cancel/complete lifecycle events."""
+        import asyncio as _asyncio
+
+        async def _persist():
+            from app.db.models import DeletionRequest
+            from app.db.session import get_sessionmaker
+            from sqlalchemy import select
+            now = datetime.now(UTC)
+            maker = get_sessionmaker()
+            try:
+                async with maker() as db:
+                    result = await db.execute(
+                        select(DeletionRequest).where(
+                            DeletionRequest.tenant_id == tenant_id,
+                            DeletionRequest.resource_type == resource_type,
+                            DeletionRequest.resource_id == resource_id,
+                            DeletionRequest.status.notin_(["completed", "cancelled", "restored"]),
+                        ).limit(1)
+                    )
+                    row = result.scalar()
+                    if row:
+                        row.status = new_status
+                        if new_status in ("completed", "restored", "cancelled"):
+                            row.completed_at = now
+                        await db.commit()
+            except Exception:
+                pass
+
+        try:
+            loop = _asyncio.get_running_loop()
+            _asyncio.ensure_future(_persist())
+        except RuntimeError:
+            try:
+                _asyncio.run(_persist())
+            except Exception:
+                pass
 
     def _write_audit(self, tenant_id: str, actor_id: str, case_id: str,
                      action: str, outcome: str = "success",
