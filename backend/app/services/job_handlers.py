@@ -38,6 +38,49 @@ class JobHandlerRegistry:
 handler_registry = JobHandlerRegistry()
 
 
+async def _verify_execution_auth(tenant_id: str, case_id: str = "", actor_id: str = "", document_id: str = "") -> None:
+    """Verify authorization at handler execution time (not just enqueue time)."""
+    if not tenant_id:
+        raise PermissionError("TENANT_ID_REQUIRED")
+    from app.db.session import get_sessionmaker
+    from app.db.models import Tenant, Case, CaseMember, Document
+    from sqlalchemy import select
+    maker = get_sessionmaker()
+    async with maker() as db:
+        t = await db.execute(select(Tenant.id).where(Tenant.id == tenant_id, Tenant.status == "active").limit(1))
+        if not t.first():
+            raise PermissionError("TENANT_INACTIVE")
+        if case_id:
+            c = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == tenant_id).limit(1))
+            case = c.scalar()
+            if case is None:
+                raise PermissionError("CASE_NOT_FOUND")
+            if case.status in ("deleted", "purged"):
+                raise PermissionError("CASE_DELETED")
+            if actor_id:
+                m = await db.execute(
+                    select(CaseMember.id).where(
+                        CaseMember.tenant_id == tenant_id,
+                        CaseMember.case_id == case_id,
+                        CaseMember.user_id == actor_id,
+                        CaseMember.revoked_at.is_(None),
+                    ).limit(1)
+                )
+                if not m.first():
+                    raise PermissionError("MEMBERSHIP_REVOKED")
+        if document_id:
+            d = await db.execute(
+                select(Document.id).where(
+                    Document.id == document_id,
+                    Document.tenant_id == tenant_id,
+                    Document.case_id == case_id if case_id else None,
+                    Document.deleted_at.is_(None),
+                ).limit(1)
+            )
+            if not d.first():
+                raise PermissionError("DOCUMENT_NOT_AVAILABLE")
+
+
 # ═══════════════════════════════════════════════════════════════
 # Real handler implementations
 # ═══════════════════════════════════════════════════════════════
@@ -117,20 +160,33 @@ async def _handle_document_analyze(ctx: JobContext, payload: dict, job_meta: dic
 
 
 async def _handle_legal_brain_ingest(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
-    from app.services.legal_brain_service import legal_brain_service
-    query = (payload.get("query") or payload.get("brain_query") or "").strip()
-    practice_area = payload.get("practice_area") or "Genel hukuk"
-    max_results = int(payload.get("max_results", 5))
+    from app.services.book_ingestion_service import BookIngestionService
+    book_id = (payload.get("book_id") or "").strip()
 
-    await ctx.set_progress(10, "searching")
+    await ctx.set_progress(5, "validating")
     ctx.check_cancelled()
 
-    response = legal_brain_service.search(query=query, practice_area=practice_area, max_results=max_results)
-    ctx.check_cancelled()
+    if book_id:
+        await ctx.set_progress(15, "extracting_text")
+        ctx.check_cancelled()
+        service = BookIngestionService()
+        result = service.ingest(book_id)
+        ctx.check_cancelled()
+    else:
+        source_path = payload.get("source_path", "")
+        content = payload.get("content", "")
+        if not content and not source_path:
+            raise ValueError("LEGAL_BRAIN_INGEST_REQUIRES_BOOK_ID_OR_CONTENT")
+        await ctx.set_progress(15, "ingesting_source")
+        ctx.check_cancelled()
+        from app.services.legal_source_ingest_service import LegalSourceIngestService
+        svc = LegalSourceIngestService()
+        result = svc.ingest_uploads()
+        ctx.check_cancelled()
 
-    await ctx.set_progress(80, "normalizing")
+    await ctx.set_progress(85, "chunking")
     await ctx.set_progress(100, "completed")
-    return {"results": [r.model_dump(mode="json") for r in response.results], "count": len(response.results)}
+    return {"ingested": True, "result": str(result)[:500], "status": "completed"}
 
 
 async def _handle_workflow_review(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
@@ -143,6 +199,11 @@ async def _handle_workflow_review(ctx: JobContext, payload: dict, job_meta: dict
 
     await ctx.set_progress(5, "validating_case")
     ctx.check_cancelled()
+    await _verify_execution_auth(
+        tenant_id=job_meta.get("tenant_id", "local"),
+        case_id=case_id,
+        actor_id=job_meta.get("created_by", "system"),
+    )
     case_session_service.require_existing_case(case_id)
 
     await ctx.set_progress(15, "preparing")
@@ -273,56 +334,89 @@ async def _handle_petition_generate(ctx: JobContext, payload: dict, job_meta: di
 
 
 async def _handle_petition_refine(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
-    from app.services.final_petition_writer_service import final_petition_writer_service
+    from app.services.petition_refine_agent import PetitionRefineAgent
     case_id = (payload.get("case_id") or "").strip()
+    draft_text = (payload.get("draft_text") or "").strip()
     case_text = (payload.get("case_text") or "").strip()
-    request_type = payload.get("request_type", "Talebimizin kabulü")
+    case_enrichment = payload.get("case_enrichment") or {}
+    decisions = payload.get("selected_decisions") or []
 
     await ctx.set_progress(10, "validating")
     ctx.check_cancelled()
 
-    package = final_petition_writer_service.build_package(
-        case_text=case_text, request_type=request_type, writer_mode="gemini",
+    if not draft_text:
+        raise ValueError("REFINE_REQUIRES_DRAFT_TEXT")
+
+    agent = PetitionRefineAgent()
+    result = agent.refine(
+        draft_text=draft_text, case_text=case_text,
+        case_enrichment=case_enrichment,
+        selected_decisions=decisions,
+        use_gemini=bool(payload.get("use_ai", False)),
     )
     ctx.check_cancelled()
-    draft = final_petition_writer_service.write(package)
-    ctx.check_cancelled()
 
+    await ctx.set_progress(90, "finalizing")
     await ctx.set_progress(100, "completed")
-    return {"case_id": case_id, "refined": True, "status": "completed"}
+    return {
+        "case_id": case_id, "refined": True,
+        "accepted": result.accepted,
+        "refined_draft": result.refined_draft[:500],
+        "status": "completed",
+    }
 
 
 async def _handle_export_generate(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
-    import os, hashlib
+    import os, hashlib, uuid
     from pathlib import Path
 
     case_id = (payload.get("case_id") or "").strip()
+    tenant_id = (payload.get("tenant_id") or job_meta.get("tenant_id", "")).strip()
     fmt = (payload.get("format") or "txt").strip().lower()
-    if fmt not in ("txt", "docx", "pdf", "udf"):
+    valid_formats = frozenset({"txt", "docx", "pdf", "udf"})
+    if fmt not in valid_formats:
         raise ValueError(f"Unsupported export format: {fmt}")
 
     content = (payload.get("content") or "").strip()
-    content_bytes = content.encode("utf-8")
+    if not content:
+        raise ValueError("EXPORT_CONTENT_REQUIRED")
 
-    storage_root = Path(os.path.join(os.path.dirname(__file__), "..", "..", "export_store"))
-    storage_root.mkdir(parents=True, exist_ok=True)
-
-    safe_name = f"export_{case_id}_{job_meta.get('id','')[:8]}.{fmt}"
-    storage_key = str(storage_root / safe_name)
-    sha = hashlib.sha256(content_bytes).hexdigest()[:32]
-
-    await ctx.set_progress(20, "generating")
+    await ctx.set_progress(10, "validating_export")
     ctx.check_cancelled()
 
-    with open(storage_key, "wb") as f:
+    store_root = os.getenv("EMSALIST_STORAGE_ROOT", "").strip()
+    if not store_root:
+        store_root = os.path.join(os.path.dirname(__file__), "..", "..", "export_store")
+    export_dir = Path(os.path.join(store_root, "exports")).resolve()
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_token = uuid.uuid4().hex[:16]
+    safe_name = f"{case_id}_{safe_token}.{fmt}"
+    resolved = (export_dir / safe_name).resolve()
+    if not str(resolved).startswith(str(export_dir)):
+        raise ValueError("EXPORT_PATH_TRAVERSAL_BLOCKED")
+
+    content_bytes = content.encode("utf-8")
+    sha = hashlib.sha256(content_bytes).hexdigest()[:32]
+    size = len(content_bytes)
+
+    await ctx.set_progress(30, "writing_export")
+    ctx.check_cancelled()
+
+    with open(str(resolved), "wb") as f:
         f.write(content_bytes)
 
-    size = len(content_bytes)
+    await ctx.set_progress(70, "storing_artifact")
+    ctx.check_cancelled()
+
     artifact = await ctx.store_artifact("export", f"exports/{safe_name}", f"application/{fmt}", size, sha)
+
+    await ctx.set_progress(95, "finalizing")
     await ctx.set_progress(100, "completed")
     return {
         "case_id": case_id, "format": fmt, "size_bytes": size, "sha256": sha,
-        "artifact_id": artifact.get("id", ""), "status": "completed",
+        "storage_key": f"exports/{safe_name}", "artifact_id": artifact.get("id", ""),
+        "status": "completed",
     }
 
 
