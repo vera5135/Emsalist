@@ -419,7 +419,7 @@ class TestRealHandlerExecutions:
             "case_id": "c-p8-a",
             "case_text": "Muvekkil ikinci el araci galeriden satin aldi motor arizasi cikti.",
             "request_type": "Talebimizin kabulu",
-        }, {"id": "j2"})
+        }, {"id": "j2", "tenant_id": "t-p8", "created_by": "u-p8"})
         assert result["status"] == "completed"
 
     @pytest.mark.asyncio
@@ -429,9 +429,10 @@ class TestRealHandlerExecutions:
         ctx = JobContext("j3", "w1", {})
         result = await _handle_export_generate(ctx, {
             "case_id": "c-p8-a",
+            "tenant_id": "t-p8",
             "format": "txt",
             "content": "Test export content",
-        }, {"id": "j3"})
+        }, {"id": "j3", "tenant_id": "t-p8", "created_by": "u-p8"})
         assert result["status"] == "completed"
         assert "artifact_id" in result
 
@@ -443,7 +444,7 @@ class TestRealHandlerExecutions:
         result = await _handle_legal_ground_validate(ctx, {
             "case_id": "c-p8-a",
             "raw_grounds": ["TBK 219"],
-        }, {"id": "j4"})
+        }, {"id": "j4", "tenant_id": "t-p8", "created_by": "u-p8"})
         assert "normalized_grounds" in result or "registry_version" in result
 
     @pytest.mark.asyncio
@@ -454,7 +455,7 @@ class TestRealHandlerExecutions:
         result = await _handle_claim_grounding(ctx, {
             "case_id": "c-p8-a",
             "petition_text": "Davali satici ayibi gizlemistir. Sozlesmeden donme talep edilmektedir.",
-        }, {"id": "j5"})
+        }, {"id": "j5", "tenant_id": "t-p8", "created_by": "u-p8"})
         assert result["status"] == "completed"
 
     @pytest.mark.asyncio

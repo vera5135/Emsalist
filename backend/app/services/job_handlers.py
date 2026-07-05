@@ -88,6 +88,7 @@ async def _verify_execution_auth(tenant_id: str, case_id: str = "", actor_id: st
 async def _handle_yargitay_search(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.research_service import research_service
     case_id = (payload.get("case_id") or "").strip()
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"))
     case_text = (payload.get("case_text") or "").strip()
     max_results = int(payload.get("max_results", 10))
     query_templates = payload.get("yargitay_query_templates") or payload.get("queries") or []
@@ -118,6 +119,7 @@ async def _handle_document_extract(ctx: JobContext, payload: dict, job_meta: dic
     from app.services.document_intake_service import document_intake_service
     case_id = (payload.get("case_id") or "").strip()
     document_id = (payload.get("document_id") or "").strip()
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"), document_id=document_id)
 
     await ctx.set_progress(10, "checking_document")
     ctx.check_cancelled()
@@ -140,6 +142,7 @@ async def _handle_document_extract(ctx: JobContext, payload: dict, job_meta: dic
 async def _handle_document_analyze(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.document_intake_service import document_intake_service
     case_id = (payload.get("case_id") or "").strip()
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"))
     doc_ids = payload.get("document_ids") or []
 
     await ctx.set_progress(10, "validating_documents")
@@ -234,6 +237,7 @@ async def _handle_graph_build(ctx: JobContext, payload: dict, job_meta: dict) ->
     case_id = (payload.get("case_id") or "").strip()
     tenant_id = (payload.get("tenant_id") or job_meta.get("tenant_id", "")).strip()
     actor_id = (payload.get("actor_id") or payload.get("created_by") or job_meta.get("created_by", "system")).strip()
+    await _verify_execution_auth(tenant_id=tenant_id, case_id=case_id, actor_id=actor_id)
 
     await ctx.set_progress(10, "building_graph")
     ctx.check_cancelled()
@@ -254,6 +258,7 @@ async def _handle_graph_build(ctx: JobContext, payload: dict, job_meta: dict) ->
 async def _handle_legal_ground_validate(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.legal_ground_validator_service import legal_ground_validator
     case_id = (payload.get("case_id") or "").strip()
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"))
     raw_grounds = payload.get("raw_grounds") or []
     case_type = payload.get("case_type", "")
     event_date = payload.get("event_date", "")
@@ -273,6 +278,7 @@ async def _handle_legal_ground_validate(ctx: JobContext, payload: dict, job_meta
 async def _handle_precedent_evaluate(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.precedent_authority_service import precedent_authority_service
     case_id = (payload.get("case_id") or "").strip()
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"))
     live_results = payload.get("live_results") or []
     brain_results = payload.get("brain_results") or []
 
@@ -290,6 +296,7 @@ async def _handle_precedent_evaluate(ctx: JobContext, payload: dict, job_meta: d
 async def _handle_claim_grounding(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.claim_grounding_service import claim_grounding_service
     case_id = (payload.get("case_id") or "").strip()
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"))
     petition_text = (payload.get("petition_text") or "").strip()
 
     await ctx.set_progress(10, "analyzing_claims")
@@ -306,6 +313,7 @@ async def _handle_claim_grounding(ctx: JobContext, payload: dict, job_meta: dict
 async def _handle_petition_generate(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.final_petition_writer_service import final_petition_writer_service
     case_id = (payload.get("case_id") or "").strip()
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"))
     case_text = (payload.get("case_text") or "").strip()
     request_type = payload.get("request_type", "Talebimizin kabulü")
     writer_mode = payload.get("writer_mode", "local")
@@ -336,6 +344,7 @@ async def _handle_petition_generate(ctx: JobContext, payload: dict, job_meta: di
 async def _handle_petition_refine(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.petition_refine_agent import PetitionRefineAgent
     case_id = (payload.get("case_id") or "").strip()
+    await _verify_execution_auth(tenant_id=job_meta.get("tenant_id","local"), case_id=case_id, actor_id=job_meta.get("created_by","system"))
     draft_text = (payload.get("draft_text") or "").strip()
     case_text = (payload.get("case_text") or "").strip()
     case_enrichment = payload.get("case_enrichment") or {}
@@ -372,6 +381,7 @@ async def _handle_export_generate(ctx: JobContext, payload: dict, job_meta: dict
 
     case_id = (payload.get("case_id") or "").strip()
     tenant_id = (payload.get("tenant_id") or job_meta.get("tenant_id", "")).strip()
+    await _verify_execution_auth(tenant_id=tenant_id, case_id=case_id, actor_id=job_meta.get("created_by","system"))
     fmt = (payload.get("format") or "txt").strip().lower()
     valid_formats = frozenset({"txt", "docx", "pdf", "udf"})
     if fmt not in valid_formats:
@@ -423,6 +433,7 @@ async def _handle_export_generate(ctx: JobContext, payload: dict, job_meta: dict
 async def _handle_retention_purge(ctx: JobContext, payload: dict, job_meta: dict) -> dict:
     from app.services.lifecycle_service import lifecycle_service
     tenant_id = (payload.get("tenant_id") or job_meta.get("tenant_id", "")).strip()
+    await _verify_execution_auth(tenant_id=tenant_id, actor_id=job_meta.get("created_by","system"))
     dry_run = bool(payload.get("dry_run", False))
     batch = int(payload.get("batch", 10))
 
