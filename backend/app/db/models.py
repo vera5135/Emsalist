@@ -270,3 +270,73 @@ class CaseMember(Base):
         Index("ix_case_member_case", "case_id", "user_id"),
         Index("ix_case_member_tenant", "tenant_id", "user_id"),
     )
+
+
+# -- P1.6: Lifecycle Models --
+class RetentionPolicy(Base):
+    __tablename__ = "retention_policies"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=True)
+    resource_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    soft_delete_days: Mapped[int] = mapped_column(Integer, default=30)
+    purge_after_days: Mapped[int] = mapped_column(Integer, default=365)
+    audit_retention_days: Mapped[int] = mapped_column(Integer, default=3650)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class DeletionRequest(Base):
+    __tablename__ = "deletion_requests"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    requested_by: Mapped[str] = mapped_column(String(32), default="")
+    resource_type: Mapped[str] = mapped_column(String(50), default="")
+    resource_id: Mapped[str] = mapped_column(String(32), default="")
+    reason_code: Mapped[str] = mapped_column(String(50), default="")
+    status: Mapped[str] = mapped_column(String(20), default="requested")
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    restore_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    safe_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class LegalHold(Base):
+    __tablename__ = "legal_holds"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(50), default="")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    safe_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class PurgeRun(Base):
+    __tablename__ = "purge_runs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
+    scanned_count: Mapped[int] = mapped_column(Integer, default=0)
+    purged_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    safe_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class PurgeItem(Base):
+    __tablename__ = "purge_items"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    purge_run_id: Mapped[str] = mapped_column(String(32), ForeignKey("purge_runs.id"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(32), default="")
+    resource_type: Mapped[str] = mapped_column(String(50), default="")
+    resource_id: Mapped[str] = mapped_column(String(32), default="")
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    failure_code: Mapped[str] = mapped_column(String(50), default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
