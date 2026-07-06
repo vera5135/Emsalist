@@ -100,6 +100,13 @@ def validate_production_config(settings: Settings) -> list[str]:
     if not settings.allowed_hosts:
         blocking.append("ALLOWED_HOSTS productionda bos olamaz")
 
+    if not settings.database_url:
+        blocking.append("DATABASE_URL productionda bos olamaz")
+    elif "sqlite" in settings.database_url.lower():
+        blocking.append("DATABASE_URL SQLite olamaz; production PostgreSQL gerektirir")
+    elif "postgres" not in settings.database_url.lower():
+        blocking.append("DATABASE_URL PostgreSQL olmalidir; yalnizca PostgreSQL desteklenir")
+
     cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
     if not cors_origins:
         blocking.append("CORS_ALLOW_ORIGINS productionda bos olamaz")

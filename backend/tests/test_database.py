@@ -1,12 +1,9 @@
 """P1.4 — Database layer tests."""
-
 from __future__ import annotations
 
 import os
 import unittest
 from datetime import UTC, datetime
-
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./case_store/emsalist_test.db"
 
 from app.db.models import (
     Base,
@@ -29,8 +26,16 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        import app.config
+        app.config.get_settings.cache_clear()
+        os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./case_store/emsalist_test.db")
+        cls._setup_sync()
         import asyncio
         asyncio.run(cls._setup())
+
+    @classmethod
+    def _setup_sync(cls):
+        pass
 
     @classmethod
     async def _setup(cls) -> None:
@@ -38,6 +43,11 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        import app.config
+        app.config.get_settings.cache_clear()
 
     async def test_tenant_creation(self) -> None:
         sm = get_sessionmaker()
@@ -170,37 +180,40 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AlembicUrlConversionTests(unittest.TestCase):
-    """P1.14 — Verify Alembic env converts async URLs to sync equivalents."""
-
-    def _convert_url(self, url: str) -> str:
-        result = url
-        for driver in ("+asyncpg", "+aiosqlite"):
-            if driver in result:
-                if driver == "+asyncpg":
-                    result = result.replace("+asyncpg", "+psycopg")
-                elif driver == "+aiosqlite":
-                    result = result.replace("+aiosqlite", "")
-                break
-        return result
+    """P1.14 — Test production migration_utils.to_sync_migration_url()."""
 
     def test_alembic_uses_psycopg_for_sync_migrations(self):
-        """asyncpg URLs must be converted to psycopg for Alembic sync engine."""
+        from app.db.migration_utils import to_sync_migration_url
         pg_url = "postgresql+asyncpg://user:pass@localhost:5432/db"
-        converted = self._convert_url(pg_url)
+        converted = to_sync_migration_url(pg_url)
         self.assertIn("+psycopg", converted)
         self.assertNotIn("+asyncpg", converted)
         self.assertEqual(converted, "postgresql+psycopg://user:pass@localhost:5432/db")
 
     def test_sqlite_strips_async_driver(self):
+        from app.db.migration_utils import to_sync_migration_url
         sqlite_url = "sqlite+aiosqlite:///./case_store/emsalist.db"
-        converted = self._convert_url(sqlite_url)
+        converted = to_sync_migration_url(sqlite_url)
         self.assertNotIn("+aiosqlite", converted)
         self.assertEqual(converted, "sqlite:///./case_store/emsalist.db")
 
     def test_non_async_url_passthrough(self):
+        from app.db.migration_utils import to_sync_migration_url
         plain_url = "postgresql+psycopg://user:pass@localhost/db"
-        converted = self._convert_url(plain_url)
+        converted = to_sync_migration_url(plain_url)
         self.assertEqual(converted, plain_url)
+
+    def test_empty_url_passthrough(self):
+        from app.db.migration_utils import to_sync_migration_url
+        self.assertEqual(to_sync_migration_url(""), "")
+
+    def test_percent_encoded_url_preserved(self):
+        from app.db.migration_utils import to_sync_migration_url
+        pg_url = "postgresql+asyncpg://user:p%40ss@localhost:5432/db%5Ftest"
+        converted = to_sync_migration_url(pg_url)
+        self.assertIn("p%40ss", converted)
+        self.assertIn("db%5Ftest", converted)
+        self.assertNotIn("+asyncpg", converted)
 
 
 if __name__ == "__main__":

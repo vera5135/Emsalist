@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -257,20 +258,27 @@ class InternalIntegrationTests(unittest.TestCase):
 class OpenAPIDriftDetectionTests(unittest.TestCase):
     """P1.14 — OpenAPI drift detection guards."""
 
-    def test_openapi_drift_check_detects_real_difference(self):
+    def test_repository_openapi_matches_runtime_schema(self):
         from app.main import app
         import json
 
         runtime_schema = app.openapi()
         runtime_json = json.dumps(runtime_schema, sort_keys=True, indent=2)
 
-        altered = dict(runtime_schema)
-        altered["info"] = dict(altered.get("info", {}))
-        altered["info"]["version"] = "999.0.0"
-        altered_json = json.dumps(altered, sort_keys=True, indent=2)
+        repo_path = Path(__file__).resolve().parents[2] / "docs" / "api" / "openapi-v1.json"
+        if not repo_path.exists():
+            self.skipTest("Repository openapi-v1.json not found")
+        repo_json = json.dumps(
+            json.loads(repo_path.read_text(encoding="utf-8")),
+            sort_keys=True, indent=2,
+        )
 
-        self.assertNotEqual(runtime_json, altered_json,
-                            "Schema modification must produce detectable diff")
+        self.assertEqual(
+            runtime_json, repo_json,
+            "Runtime OpenAPI schema differs from repository docs/api/openapi-v1.json. "
+            "Run: python -c \"from app.main import app; import json; "
+            "open('docs/api/openapi-v1.json','w').write(json.dumps(app.openapi(),sort_keys=True,indent=2))\""
+        )
 
     def test_runtime_openapi_matches_self(self):
         from app.main import app

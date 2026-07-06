@@ -89,7 +89,7 @@ jobs:
     name: PostgreSQL migration
     needs: environment-report
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16-alpine
@@ -168,7 +168,7 @@ jobs:
         working-directory: backend
         run: |
           set -e
-          python -m alembic check 2>&1 || echo "alembic check note: may report new tables if autogenerate is used"
+          python -m alembic check
           echo "PASS: Migration check complete"
 
       - name: Alembic downgrade -1 then upgrade
@@ -403,7 +403,7 @@ jobs:
         run: docker history --no-trunc emsalist:p1.14
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@6c3f29c0b5829cf0c4da20bb7188d5911abaa6ab
         with:
           image-ref: emsalist:p1.14
           format: table
@@ -411,7 +411,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Trivy config scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@6c3f29c0b5829cf0c4da20bb7188d5911abaa6ab
         with:
           scan-type: config
           scan-ref: .
@@ -485,8 +485,8 @@ jobs:
       - name: Verify compose services
         run: |
           docker compose ps
-          docker compose logs --no-color migration 2>/dev/null || echo "No migration logs"
-          docker compose logs --no-color api --tail=20 2>/dev/null || echo "No api logs"
+          docker compose logs --no-color migration 2>/dev/null
+          docker compose logs --no-color api --tail=20 2>/dev/null
 
       - name: Verify live endpoint
         run: |
@@ -562,7 +562,19 @@ jobs:
       - name: Compare OpenAPI schemas
         run: |
           set -e
-          diff -u docs/api/openapi-v1.json /tmp/runtime-openapi.json && echo "PASS: OpenAPI schema matches repo" || { echo "FAIL: OpenAPI drift detected"; exit 1; }
+          python -c "
+          import json, sys
+          with open('docs/api/openapi-v1.json') as f:
+              repo = json.load(f)
+          with open('/tmp/runtime-openapi.json') as f:
+              runtime = json.load(f)
+          repo_json = json.dumps(repo, sort_keys=True, indent=2)
+          runtime_json = json.dumps(runtime, sort_keys=True, indent=2)
+          if repo_json != runtime_json:
+              print('FAIL: OpenAPI drift detected')
+              sys.exit(1)
+          print('PASS: OpenAPI schema matches repository')
+          "
 
       - name: Count operation IDs
         working-directory: backend
@@ -632,7 +644,7 @@ jobs:
         run: |
           FAILURES=0
           for RESULT in "${ENV_RESULT}" "${COLL_RESULT}" "${MIG_RESULT}" "${PURGE_RESULT}" "${TEST_RESULT}" "${DOCKER_RESULT}" "${COMPOSE_RESULT}" "${OAPI_RESULT}"; do
-            if [ "${RESULT}" != "success" ] && [ "${RESULT}" != "skipped" ]; then
+            if [ "${RESULT}" != "success" ]; then
               echo "FAIL: Job result = ${RESULT}"
               FAILURES=$((FAILURES + 1))
             fi

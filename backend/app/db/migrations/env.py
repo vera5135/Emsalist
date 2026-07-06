@@ -10,17 +10,11 @@ from sqlalchemy import engine_from_config, pool
 config = context.config
 
 from app.config import get_settings
+from app.db.migration_utils import to_sync_migration_url
+
 settings = get_settings()
 db_url = settings.database_url or "sqlite:///./case_store/emsalist.db"
-
-_alembic_url = db_url
-for _driver in ("+asyncpg", "+aiosqlite"):
-    if _driver in _alembic_url:
-        if _driver == "+asyncpg":
-            _alembic_url = _alembic_url.replace("+asyncpg", "+psycopg")
-        elif _driver == "+aiosqlite":
-            _alembic_url = _alembic_url.replace("+aiosqlite", "")
-        break
+_alembic_url = to_sync_migration_url(db_url)
 config.set_main_option("sqlalchemy.url", _alembic_url)
 
 from app.db.models import Base
