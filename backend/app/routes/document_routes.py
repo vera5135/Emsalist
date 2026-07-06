@@ -2,8 +2,9 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
+from app.config import get_settings
 from app.models.document_models import DocumentAnalyzeRequest, DocumentAnalyzeResponse, DocumentRecord
 from app.services.case_state_service import case_state_service
 from app.services.case_session_service import case_session_service
@@ -12,9 +13,12 @@ from app.services.document_intake_service import (
     DocumentIntakeError,
     document_intake_service,
 )
+from app.services.auth_service import SecurityContext, resolve_current_user
+from app.services.auth_manager import require_case_read, require_case_write
 
 
 router = APIRouter(prefix="/documents", tags=["Document Intake"])
+_MAX_UPLOAD = get_settings().max_upload_size_bytes
 
 
 @router.post("/upload", response_model=DocumentRecord, status_code=status.HTTP_200_OK)
@@ -22,21 +26,36 @@ async def upload_document(
     file: UploadFile = File(...),
     document_type: str | None = Form(default=None),
     case_id: str | None = Form(default=None),
+    ctx: SecurityContext = Depends(resolve_current_user),
 ) -> DocumentRecord:
     from app.services.security_service import validate_file_upload
+
+    if case_id:
+        await require_case_read(ctx, case_id)
 
     file_name = file.filename or "belge"
     valid, error = validate_file_upload(file_name, b"")
     if not valid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
+    content_length = file.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > _MAX_UPLOAD:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"Dosya boyutu {_MAX_UPLOAD // (1024 * 1024)} MB sinirini asiyor.",
+                )
+        except (ValueError, TypeError):
+            pass
+
     content = bytearray()
     while chunk := await file.read(1024 * 1024):
         content.extend(chunk)
-        if len(content) > document_intake_service.max_file_size:
+        if len(content) > _MAX_UPLOAD:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Dosya boyutu {document_intake_service.max_file_size // (1024 * 1024)} MB sÄ±nÄ±rÄ±nÄ± aÅŸÄ±yor.",
+                detail=f"Dosya boyutu {_MAX_UPLOAD // (1024 * 1024)} MB sinirini asiyor.",
             )
     resolved_case_id = case_session_service.resolve_case_id(case_id)
     try:
@@ -61,7 +80,12 @@ async def upload_document(
 
 
 @router.post("/analyze", response_model=DocumentAnalyzeResponse)
-def analyze_documents(request: DocumentAnalyzeRequest) -> DocumentAnalyzeResponse:
+async def analyze_documents(
+    request: DocumentAnalyzeRequest,
+    ctx: SecurityContext = Depends(resolve_current_user),
+) -> DocumentAnalyzeResponse:
+    if request.case_id:
+        await require_case_read(ctx, request.case_id)
     try:
         resolved_case_id = case_session_service.resolve_case_id(request.case_id)
         response = document_intake_service.analyze_documents(
@@ -103,22 +127,39 @@ def analyze_documents(request: DocumentAnalyzeRequest) -> DocumentAnalyzeRespons
 
 
 @router.get("", response_model=list[DocumentRecord])
-def list_documents(case_id: Annotated[str | None, Query()] = None) -> list[DocumentRecord]:
+async def list_documents(
+    case_id: Annotated[str | None, Query()] = None,
+    ctx: SecurityContext = Depends(resolve_current_user),
+) -> list[DocumentRecord]:
+    if case_id:
+        await require_case_read(ctx, case_id)
     resolved_case_id = case_session_service.resolve_case_id(case_id)
     return document_intake_service.list_documents(case_id=resolved_case_id)
 
 
 @router.get("/{document_id}", response_model=DocumentRecord)
-def get_document(document_id: str, case_id: Annotated[str | None, Query()] = None) -> DocumentRecord:
+async def get_document(
+    document_id: str,
+    case_id: Annotated[str | None, Query()] = None,
+    ctx: SecurityContext = Depends(resolve_current_user),
+) -> DocumentRecord:
+    if case_id:
+        await require_case_read(ctx, case_id)
     try:
         resolved_case_id = case_session_service.resolve_case_id(case_id)
         return document_intake_service.get_document(document_id, case_id=resolved_case_id)
     except KeyError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Belge bulunamadÄ±.") from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Belge bulunamadi.") from exc
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_document(document_id: str, case_id: Annotated[str | None, Query()] = None) -> None:
+async def delete_document(
+    document_id: str,
+    case_id: Annotated[str | None, Query()] = None,
+    ctx: SecurityContext = Depends(resolve_current_user),
+) -> None:
+    if case_id:
+        await require_case_write(ctx, case_id)
     try:
         resolved_case_id = case_session_service.resolve_case_id(case_id)
         document_intake_service.delete_document(document_id, case_id=resolved_case_id)

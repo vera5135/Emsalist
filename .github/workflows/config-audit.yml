@@ -1,0 +1,72 @@
+name: Config and Migration Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  production-config-check:
+    name: Production configuration validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: pip install pydantic
+
+      - name: Verify production startup fails safely
+        working-directory: backend
+        run: |
+          python -c "
+          import os, sys
+          sys.path.insert(0, '.')
+          os.environ['EMSALIST_ENVIRONMENT'] = 'production'
+          from app.config import validate_production_config, Settings, ProductionConfigError
+          # Should raise ProductionConfigError with default settings
+          try:
+              validate_production_config(Settings(environment='production'))
+              print('FAIL: production config with defaults did not raise')
+              sys.exit(1)
+          except ProductionConfigError as e:
+              print(f'PASS: production correctly rejected: {e}')
+          except Exception as e:
+              print(f'ERROR: unexpected exception: {e}')
+              sys.exit(1)
+          "
+
+      - name: Verify development accepts defaults
+        working-directory: backend
+        run: |
+          python -c "
+          import os, sys
+          sys.path.insert(0, '.')
+          from app.config import validate_production_config, Settings
+          issues = validate_production_config(Settings(environment='development'))
+          assert issues == [], f'development should have no issues: {issues}'
+          print('PASS: development config accepted')
+          "
+
+  migration-check:
+    name: Migration config validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install alembic
+        run: pip install alembic sqlalchemy
+
+      - name: Verify alembic.ini exists
+        run: test -f backend/alembic.ini && echo "alembic.ini found" || (echo "alembic.ini missing" && exit 1)

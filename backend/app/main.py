@@ -13,10 +13,11 @@ if sys.platform.startswith("win"):
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.config import get_settings
+from app.config import get_settings, validate_production_config
 from app.core.logging import setup_logging
 from app.db.session import check_db_health
 
@@ -70,9 +71,22 @@ app = FastAPI(
     debug=settings.debug,
 )
 
+# -- production middleware: trusted hosts --
+if settings.allowed_hosts:
+    hosts = [h.strip() for h in settings.allowed_hosts.split(",") if h.strip()]
+    if hosts:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
+
+# -- production CORS --
+if settings.cors_allow_origins:
+    cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
+else:
+    cors_origins = ["http://localhost:8000", "http://127.0.0.1:8000",
+                    "http://localhost:4096", "http://127.0.0.1:4096"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:4096", "http://127.0.0.1:4096"],
+    allow_origins=cors_origins,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "Authorization", "X-Correlation-ID"],
 )

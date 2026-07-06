@@ -90,6 +90,9 @@ MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
 
 def validate_file_upload(file_name: str, content: bytes) -> tuple[bool, str]:
+    if "\x00" in file_name:
+        return False, "Geçersiz dosya adı."
+
     ext = file_name.lower()
     dot_pos = ext.rfind(".")
     if dot_pos == -1:
@@ -99,10 +102,15 @@ def validate_file_upload(file_name: str, content: bytes) -> tuple[bool, str]:
     if ext not in VALID_FILE_EXTENSIONS:
         return False, f"İzin verilmeyen dosya türü: {ext}"
 
-    if len(content) > MAX_FILE_SIZE_BYTES:
-        return False, f"Dosya boyutu {MAX_FILE_SIZE_BYTES // (1024*1024)} MB sınırını aşıyor."
-
     if ".." in file_name or "/" in file_name or "\\" in file_name:
+        return False, "Geçersiz dosya adı."
+
+    from pathlib import PurePath
+    try:
+        parts = PurePath(file_name).parts
+        if parts and any(p in ("..", "/", "\\") or ":" in p for p in parts):
+            return False, "Geçersiz dosya adı."
+    except (OSError, ValueError):
         return False, "Geçersiz dosya adı."
 
     return True, ""
@@ -176,4 +184,5 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Cache-Control": "no-store, max-age=0",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 }

@@ -4,11 +4,25 @@ Environment variables intentionally keep the service deployment-friendly while
 avoiding a dependency on an external configuration provider at this stage.
 """
 
+from __future__ import annotations
+
 from functools import lru_cache
 from os import getenv
 from pathlib import Path
 
 from pydantic import BaseModel
+
+
+class ProductionConfigError(RuntimeError):
+    """Raised at startup when production configuration is unsafe."""
+
+
+_DEFAULT_JWT_SECRETS = frozenset({
+    "", "emsalist-local-dev-key-change-in-production",
+})
+
+MIN_JWT_SECRET_LENGTH = 32
+MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024
 
 
 class Settings(BaseModel):
@@ -47,6 +61,59 @@ class Settings(BaseModel):
     backup_include_json_projection: bool = True
     backup_include_rebuildable_indexes: bool = False
     metrics_enabled: bool = True
+    allowed_hosts: str = ""  # comma-separated production hostnames
+    cors_allow_origins: str = ""  # comma-separated CORS origins for production
+    max_upload_size_bytes: int = MAX_UPLOAD_SIZE_BYTES
+
+
+def validate_production_config(settings: Settings) -> list[str]:
+    """Validate production configuration and return issues.
+    Returns empty list if safe; raise ProductionConfigError for blocking issues.
+    """
+    issues: list[str] = []
+    blocking: list[str] = []
+
+    if settings.environment != "production":
+        if settings.environment in ("development", "test"):
+            return issues
+        return issues
+
+    if settings.debug:
+        blocking.append("EMSALIST_DEBUG=true productionda kullanilamaz")
+
+    if settings.auth_mode == "local":
+        blocking.append("AUTH_MODE=local productionda kullanilamaz")
+
+    if not settings.jwt_secret_key:
+        blocking.append("JWT_SECRET_KEY bos olamaz")
+    elif settings.jwt_secret_key in _DEFAULT_JWT_SECRETS:
+        blocking.append("Varsayilan JWT_SECRET_KEY productionda kullanilamaz")
+    elif len(settings.jwt_secret_key) < MIN_JWT_SECRET_LENGTH:
+        blocking.append(f"JWT_SECRET_KEY en az {MIN_JWT_SECRET_LENGTH} karakter olmalidir")
+
+    if settings.backup_encryption_enabled and not settings.backup_encryption_key:
+        blocking.append("BACKUP_ENCRYPTION_KEY gerekli fakat bos (backup_encryption_enabled=true)")
+
+    if settings.gemini_enabled and not settings.gemini_api_key:
+        blocking.append("GEMINI_ENABLED=true fakat GEMINI_API_KEY bos")
+
+    if not settings.allowed_hosts:
+        blocking.append("ALLOWED_HOSTS productionda bos olamaz")
+
+    cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
+    if not cors_origins:
+        blocking.append("CORS_ALLOW_ORIGINS productionda bos olamaz")
+    for origin in cors_origins:
+        if origin == "*" or (origin.startswith("*.") and len(origin) > 2):
+            blocking.append("CORS_ALLOW_ORIGINS wildcard ('*') uretimde kullanilamaz")
+            break
+
+    if blocking:
+        raise ProductionConfigError(
+            "production_config_unsafe: " + "; ".join(blocking)
+        )
+
+    return issues
 
 
 def _load_env_file() -> None:
@@ -95,7 +162,7 @@ def get_settings() -> Settings:
     if "PYTEST_CURRENT_TEST" in _os.environ and env != "test":
         env = "test"
 
-    return Settings(
+    settings = Settings(
         debug=getenv("EMSALIST_DEBUG", "false").lower() in {"1", "true", "yes"},
         environment=env,
         log_level=_env("LOG_LEVEL", "INFO" if env == "production" else "DEBUG").upper(),
@@ -106,4 +173,16 @@ def get_settings() -> Settings:
         gemini_api_key=gemini_api_key,
         gemini_model=getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         gemini_timeout_seconds=int(getenv("GEMINI_TIMEOUT_SECONDS", "30")),
+        jwt_secret_key=getenv("JWT_SECRET_KEY", ""),
+        auth_mode=getenv("AUTH_MODE", "local"),
+        backup_encryption_enabled=getenv("BACKUP_ENCRYPTION_ENABLED", "").lower() in {"1", "true", "yes"},
+        backup_encryption_key=getenv("BACKUP_ENCRYPTION_KEY", ""),
+        allowed_hosts=_env("ALLOWED_HOSTS", ""),
+        cors_allow_origins=_env("CORS_ALLOW_ORIGINS", ""),
+        max_upload_size_bytes=int(getenv("EMSALIST_MAX_UPLOAD_SIZE", str(MAX_UPLOAD_SIZE_BYTES))),
     )
+
+    if _os.environ.get("EMSALIST_SKIP_PRODUCTION_VALIDATION", "").lower() not in ("1", "true", "yes"):
+        validate_production_config(settings)
+
+    return settings

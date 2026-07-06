@@ -134,13 +134,23 @@ class DocumentDuplicateError(DocumentIntakeError):
 class DocumentIntakeService:
     def __init__(self, storage_dir: Path | None = None, max_file_size: int | None = None) -> None:
         root = storage_dir or Path(__file__).resolve().parents[1] / "document_store"
-        self.storage_dir = Path(root)
-        self.upload_dir = self.storage_dir / "uploads"
+        self.storage_dir = Path(root).resolve()
+        self.upload_dir = (self.storage_dir / "uploads").resolve()
         self.index_path = self.storage_dir / "documents.json"
-        self.max_file_size = max_file_size or int(os.getenv("EMSALIST_MAX_DOCUMENT_SIZE", str(15 * 1024 * 1024)))
+        from app.config import get_settings
+        _settings = get_settings()
+        self.max_file_size = max_file_size or _settings.max_upload_size_bytes
         self._lock = threading.RLock()
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self._validate_upload_dir()
         self._records: dict[str, DocumentRecord] = self._load_records()
+
+    def _validate_upload_dir(self) -> None:
+        if self.upload_dir.is_symlink():
+            raise DocumentIntakeError("Upload directory must not be a symlink.")
+        _safe = self.upload_dir.resolve()
+        if _safe != self.upload_dir:
+            raise DocumentIntakeError("Upload directory resolves to an unexpected path.")
 
     def create_document(
         self,
@@ -736,7 +746,10 @@ class DocumentIntakeService:
         raise DocumentIntakeError("Geçersiz belge türü seçildi.")
 
     def _file_path(self, document_id: str, extension: str) -> Path:
-        return self.upload_dir / f"{document_id}{extension}"
+        safe = (self.upload_dir / f"{document_id}{extension}").resolve()
+        if not str(safe).startswith(str(self.upload_dir)):
+            raise DocumentIntakeError("Document storage path traversal blocked.")
+        return safe
 
     def _find_duplicate(self, content_sha256: str, *, case_id: str) -> DocumentRecord | None:
         for record in self._records.values():

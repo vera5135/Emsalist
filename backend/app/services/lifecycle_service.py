@@ -712,6 +712,27 @@ class DataLifecycleService:
         else:
             _asyncio.run(_purge_graph())
 
+        self._purge_exports_for_case(case_id)
+
+    def _purge_exports_for_case(self, case_id: str) -> None:
+        export_root = os.getenv("EMSALIST_STORAGE_ROOT", "").strip()
+        if not export_root:
+            export_root = os.path.join(
+                os.path.dirname(__file__), "..", "..", "export_store"
+            )
+        export_dir = Path(os.path.join(export_root, "exports")).resolve()
+        if not export_dir.exists():
+            return
+        try:
+            for entry in export_dir.iterdir():
+                try:
+                    if entry.is_file() and entry.name.startswith(f"{case_id}_"):
+                        entry.unlink()
+                except OSError:
+                    pass
+        except OSError:
+            pass
+
     def purge_resume(self, run_id: str, tenant_id: str = "",
                      dry_run: bool = False, batch: int = 10) -> dict:
         run_state = self._purge_run_cache.get(run_id)
