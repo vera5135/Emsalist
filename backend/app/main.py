@@ -56,6 +56,7 @@ from app.routes.yargitay_health_routes import router as yargitay_health_router
 from app.routes.legal_issue_graph_routes import router as legal_issue_graph_router
 from app.routes.job_routes import router as job_router
 from app.routes.metrics_routes import router as metrics_router
+from app.api.v1 import api_v1_router
 
 logger = logging.getLogger(__name__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -210,27 +211,31 @@ async def security_middleware(request: Request, call_next):
 
 app.mount("/ui-assets", StaticFiles(directory=WEB_DIR), name="ui-assets")
 
-app.include_router(case_router)
-app.include_router(search_router)
-app.include_router(decision_router)
-app.include_router(yargitay_router)
-app.include_router(research_router)
-app.include_router(petition_router)
-app.include_router(legal_brain_router)
-app.include_router(ai_router)
-app.include_router(document_router)
-app.include_router(workflow_router)
-app.include_router(legal_ground_router)
-app.include_router(precedent_router)
-app.include_router(grounding_router)
-app.include_router(security_router)
-app.include_router(auth_router)
-app.include_router(lifecycle_router)
-app.include_router(ai_run_router)
-app.include_router(yargitay_health_router)
-app.include_router(legal_issue_graph_router)
-app.include_router(job_router)
-app.include_router(metrics_router)
+# -- P1.12: Versioned API (canonical /api/v1)
+app.include_router(api_v1_router)
+
+# -- Legacy compatibility paths (preserved for web frontend; excluded from OpenAPI schema)
+app.include_router(case_router, include_in_schema=False)
+app.include_router(search_router, include_in_schema=False)
+app.include_router(decision_router, include_in_schema=False)
+app.include_router(yargitay_router, include_in_schema=False)
+app.include_router(research_router, include_in_schema=False)
+app.include_router(petition_router, include_in_schema=False)
+app.include_router(legal_brain_router, include_in_schema=False)
+app.include_router(ai_router, include_in_schema=False)
+app.include_router(document_router, include_in_schema=False)
+app.include_router(workflow_router, include_in_schema=False)
+app.include_router(legal_ground_router, include_in_schema=False)
+app.include_router(precedent_router, include_in_schema=False)
+app.include_router(grounding_router, include_in_schema=False)
+app.include_router(security_router, include_in_schema=False)
+app.include_router(auth_router, include_in_schema=False)
+app.include_router(lifecycle_router, include_in_schema=False)
+app.include_router(ai_run_router, include_in_schema=False)
+app.include_router(yargitay_health_router, include_in_schema=False)
+app.include_router(legal_issue_graph_router, include_in_schema=False)
+app.include_router(job_router, include_in_schema=False)
+app.include_router(metrics_router, include_in_schema=False)
 
 from app.core.metrics import register_route_pattern, set_metrics_enabled, is_metrics_enabled # noqa: E402
 from app.core.degraded_state import (  # noqa: E402
