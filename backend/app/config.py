@@ -15,6 +15,10 @@ class Settings(BaseModel):
     app_name: str = "Emsalist API"
     app_version: str = "0.1.0"
     debug: bool = False
+    environment: str = "development"  # development | production | test
+    log_level: str = "INFO"  # DEBUG | INFO | WARNING | ERROR
+    log_format: str = "text"  # json | text
+    log_service_name: str = "emsalist-api"
     max_ranked_decisions: int = 10
     gemini_enabled: bool = False
     gemini_api_key: str = ""
@@ -70,6 +74,7 @@ def _load_env_file() -> None:
 @lru_cache
 def get_settings() -> Settings:
     """Return the cached application settings."""
+    import os as _os
     _load_env_file()
     gemini_api_key = getenv("GEMINI_API_KEY", "").strip()
     gemini_enabled_value = getenv("GEMINI_ENABLED")
@@ -78,8 +83,16 @@ def get_settings() -> Settings:
         if gemini_enabled_value is None
         else gemini_enabled_value.lower() in {"1", "true", "yes", "on"}
     )
+    env = getenv("ENVIRONMENT", "development").lower()
+    if "PYTEST_CURRENT_TEST" in _os.environ and env != "test":
+        env = "test"
+
     return Settings(
         debug=getenv("EMSALIST_DEBUG", "false").lower() in {"1", "true", "yes"},
+        environment=env,
+        log_level=getenv("LOG_LEVEL", "INFO" if env == "production" else "DEBUG").upper(),
+        log_format=getenv("LOG_FORMAT", "json" if env == "production" else "text").lower(),
+        log_service_name=getenv("LOG_SERVICE_NAME", "emsalist-api"),
         max_ranked_decisions=int(getenv("EMSALIST_MAX_RANKED_DECISIONS", "10")),
         gemini_enabled=gemini_enabled,
         gemini_api_key=gemini_api_key,

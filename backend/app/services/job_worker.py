@@ -15,6 +15,12 @@ from app.services.job_context import JobContext, CancellationRequested
 from app.services.job_handlers import handler_registry
 from app.services.job_service import JobRepository, job_service
 from app.db.session import get_sessionmaker
+from app.core.correlation import (
+    get_correlation_id,
+    set_correlation_id,
+    clear_correlation_id,
+    generate_correlation_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,13 +123,27 @@ class JobWorker:
                 attempt = await job_service.repo.add_attempt(db, job["id"], job.get("attempt_count", 0) + 1, self.worker_id_hash)
                 await db.commit()
 
+                payload = job.get("payload_json", {}) or {}
+                cid = payload.get("correlation_id", "") if isinstance(payload, dict) else ""
+                set_correlation_id(cid if cid else generate_correlation_id())
+                job_logger = logging.getLogger("app.job")
+                job_logger.info(
+                    "job_started job_id=%s job_type=%s queue=%s",
+                    job["id"], job["job_type"], job["job_type"],
+                    extra={
+                        "job_id": job["id"],
+                        "queue_name": job["job_type"],
+                        "correlation_id": get_correlation_id(),
+                    },
+                )
+
                 start_ms = int(time.time() * 1000)
                 try:
                     result = await asyncio.wait_for(
                         handler_def.handler(ctx, job.get("payload_json", {}), job),
                         timeout=handler_def.timeout_seconds,
                     )
-                    await db.refresh(db.get_bind())  # no-op on SQLite
+                    await db.refresh(db.get_bind())
                     await job_service.repo.update_status(
                         db, job["id"], "succeeded",
                         progress_percent=100, progress_stage="completed",
@@ -159,6 +179,19 @@ class JobWorker:
                     elif job.get("attempt_count", 0) >= job.get("max_attempts", 3) - 1:
                         await job_service.repo.update_status(db, job["id"], "dead_lettered")
                     await db.commit()
+                finally:
+                    duration_ms = int(time.time() * 1000) - start_ms
+                    job_logger.info(
+                        "job_completed job_id=%s job_type=%s duration_ms=%d",
+                        job["id"], job["job_type"], duration_ms,
+                        extra={
+                            "job_id": job["id"],
+                            "queue_name": job["job_type"],
+                            "correlation_id": get_correlation_id(),
+                            "duration_ms": duration_ms,
+                        },
+                    )
+                    clear_correlation_id()
                 return 1
         except Exception:
             logger.exception("Session-level worker error")

@@ -6,7 +6,16 @@ def main():
     import asyncio
     import logging
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+    from app.config import get_settings
+    from app.core.logging import setup_logging
+
+    settings = get_settings()
+    import os as _os
+    _os.environ.setdefault("ENVIRONMENT", settings.environment)
+    _os.environ.setdefault("LOG_LEVEL", settings.log_level)
+    _os.environ.setdefault("LOG_FORMAT", settings.log_format)
+    _os.environ.setdefault("LOG_SERVICE_NAME", settings.log_service_name)
+    setup_logging()
 
     parser = argparse.ArgumentParser(description="Emsalist background job worker")
     parser.add_argument("--once", action="store_true", help="Process one job and exit")
@@ -18,8 +27,6 @@ def main():
     args = parser.parse_args()
 
     from app.services.job_worker import JobWorker, recover_jobs
-    from app.config import get_settings
-    get_settings()
 
     if args.recover:
         n = asyncio.run(recover_jobs())

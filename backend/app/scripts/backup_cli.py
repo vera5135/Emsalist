@@ -5,9 +5,19 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+from app.config import get_settings
+from app.core.logging import setup_logging
+
+_settings = get_settings()
+os.environ.setdefault("ENVIRONMENT", _settings.environment)
+os.environ.setdefault("LOG_LEVEL", _settings.log_level)
+os.environ.setdefault("LOG_FORMAT", _settings.log_format)
+os.environ.setdefault("LOG_SERVICE_NAME", _settings.log_service_name)
+setup_logging()
+
 logger = logging.getLogger("backup")
 
 
