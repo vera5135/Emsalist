@@ -400,6 +400,105 @@ class PurgeTests(unittest.TestCase):
         self.assertIn("case_record", names)
         self.assertIn("json_projection", names)
 
+    def test_purge_db_failure_does_not_report_success(self):
+        cid = self._make_purgeable()
+        with patch.object(self.svc, "_purge_db_graph", side_effect=ConnectionError("PostgreSQL unavailable")):
+            result = self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+        self.assertGreater(result.get("partial_failed", 0), 0,
+                           "Partial DB failure must be reported as partial_failed")
+        self.assertEqual(result.get("purged", 0), 0,
+                         "Case with DB failure should not count as fully purged")
+        self.assertNotIn(cid, self.cases._state["cases"],
+                         "JSON record should still be removed on partial failure")
+        self.assertNotIn("success", self._last_purge_audit_outcome(),
+                         "Audit must not report success for partial failure")
+
+    def test_partial_purge_creates_audit_event(self):
+        cid = self._make_purgeable()
+        self.cases._state["audit_events"] = []
+        with patch.object(self.svc, "_purge_db_graph", side_effect=ConnectionError("DB down")):
+            self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+        events = self.cases._state.get("audit_events", [])
+        actions = [e.get("outcome") for e in events]
+        self.assertIn("partial_failure", actions,
+                      "Partial failure must create audit event with partial_failure outcome")
+        self.assertIn("failed_steps", str(events[-1].get("safe_metadata", {})),
+                      "Audit event must include failed_steps metadata")
+
+    def test_partial_purge_is_retried(self):
+        cid = self._make_purgeable()
+        with patch.object(self.svc, "_purge_db_graph", side_effect=ConnectionError("DB down")):
+            first = self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+        self.assertGreater(first.get("partial_failed", 0), 0,
+                           "First purge must report partial failure")
+
+        retry = self.svc.retry_db_purge(cid, self.tenant_id)
+        self.assertTrue(retry.get("retried"), "Retry must be attempted")
+        self.assertTrue(retry.get("ok"), "Retry must succeed when DB is available")
+        self.assertNotIn("retry_required", retry,
+                         "Successful retry must not require another retry")
+
+    def test_retry_cleans_remaining_db_graph(self):
+        cid = self._make_purgeable()
+
+        original = self.svc._purge_db_graph
+        calls: list[tuple] = []
+
+        def _tracking(case_id: str, tenant_id: str) -> None:
+            calls.append((case_id, tenant_id))
+            if len(calls) == 1:
+                raise ConnectionError("PostgreSQL unavailable")
+
+        self.svc._purge_db_graph = _tracking  # type: ignore[method-assign]
+        try:
+            result = self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+            self.assertGreater(result.get("partial_failed", 0), 0,
+                               "First purge must report partial failure")
+            self.assertEqual(len(calls), 1, "First purge must call _purge_db_graph once")
+
+            retry = self.svc.retry_db_purge(cid, self.tenant_id)
+            self.assertEqual(len(calls), 2, "Retry must call _purge_db_graph again")
+            self.assertTrue(retry.get("ok"), "Retry must succeed and clean DB graph")
+        finally:
+            self.svc._purge_db_graph = original  # type: ignore[method-assign]
+
+    def test_retry_after_json_removal_is_idempotent(self):
+        cid = self._make_purgeable()
+
+        original = self.svc._purge_db_graph
+        calls: list[tuple] = []
+
+        def _tracking(case_id: str, tenant_id: str) -> None:
+            calls.append((case_id, tenant_id))
+            if len(calls) <= 1:
+                raise ConnectionError("PostgreSQL unavailable")
+
+        self.svc._purge_db_graph = _tracking  # type: ignore[method-assign]
+        try:
+            result = self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+            self.assertGreater(result.get("partial_failed", 0), 0,
+                               "First purge must report partial failure")
+            self.assertNotIn(cid, self.cases._state["cases"],
+                             "JSON record must be removed after partial failure")
+
+            retry = self.svc.retry_db_purge(cid, self.tenant_id)
+            self.assertTrue(retry.get("ok"), "Retry after JSON removal must succeed")
+            self.assertEqual(len(calls), 2, "Retry must call _purge_db_graph")
+
+            second_retry = self.svc.retry_db_purge(cid, self.tenant_id)
+            self.assertTrue(second_retry.get("ok"),
+                            "Multiple retries after JSON removal must be idempotent")
+            self.assertEqual(len(calls), 3, "Second retry must call _purge_db_graph again")
+        finally:
+            self.svc._purge_db_graph = original  # type: ignore[method-assign]
+
+    def _last_purge_audit_outcome(self) -> str:
+        events = self.cases._state.get("audit_events", [])
+        for e in reversed(events):
+            if e.get("action") == "case.purge":
+                return e.get("outcome", "")
+        return ""
+
 
 class AuditChainTests(unittest.TestCase):
     def setUp(self):

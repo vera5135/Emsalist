@@ -563,7 +563,7 @@ class DataLifecycleService:
             self._purge_run_cache[run_id] = {
                 "run_id": run_id, "status": "running", "started_at": now.isoformat(),
                 "dry_run": dry_run, "items": {}, "scanned": 0, "purged": 0,
-                "skipped": 0, "failed": 0, "completed_at": None,
+                "skipped": 0, "failed": 0, "partial_failed": 0, "completed_at": None,
             }
 
         run_state = self._purge_run_cache.get(run_id, {})
@@ -593,6 +593,7 @@ class DataLifecycleService:
         batch_count = min(batch, MAX_PURGE_BATCH)
         purged = 0
         failed = 0
+        partial_failed = 0
 
         for cid, cdata in eligible[:batch_count]:
             run_state["scanned"] = run_state.get("scanned", 0) + 1
@@ -604,10 +605,20 @@ class DataLifecycleService:
 
             item_result = self._purge_case(cid, cdata, dry_run, tenant_id)
             if item_result.get("purged"):
-                purged += 1
-                if not dry_run:
-                    self._update_deletion_request(tenant_id, "case", cid, "completed")
-                run_state.setdefault("items", {})[cid] = {"status": "purged", "steps": item_result.get("steps", {})}
+                if item_result.get("partial_failure"):
+                    partial_failed += 1
+                    run_state.setdefault("items", {})[cid] = {
+                        "status": "partial_failure",
+                        "failed_steps": item_result.get("failed_steps", {}),
+                        "retry_required": True,
+                    }
+                else:
+                    purged += 1
+                    if not dry_run:
+                        self._update_deletion_request(tenant_id, "case", cid, "completed")
+                    run_state.setdefault("items", {})[cid] = {
+                        "status": "purged", "steps": item_result.get("steps", {}),
+                    }
             elif item_result.get("error"):
                 failed += 1
                 run_state.setdefault("items", {})[cid] = {"status": "failed", "error": item_result["error"]}
@@ -615,6 +626,7 @@ class DataLifecycleService:
                 run_state["skipped"] = run_state.get("skipped", 0) + 1
 
         run_state["purged"] = run_state.get("purged", 0) + purged
+        run_state["partial_failed"] = run_state.get("partial_failed", 0) + partial_failed
         run_state["failed"] = run_state.get("failed", 0) + failed
 
         if not eligible:
@@ -624,6 +636,7 @@ class DataLifecycleService:
         return {
             "run_id": run_id, "dry_run": dry_run, "purged": purged,
             "skipped": run_state.get("skipped", 0), "failed": failed,
+            "partial_failed": partial_failed,
             "scanned": run_state.get("scanned", 0), "status": run_state.get("status", "pending"),
         }
 
@@ -632,10 +645,9 @@ class DataLifecycleService:
         from app.services.case_session_service import case_session_service
 
         if not dry_run:
-            try:
-                self._purge_case_cascade(cid, cdata, tenant_id)
-            except Exception as e:
-                return {"purged": False, "error": str(e)[:200]}
+            cascade_result = self._purge_case_cascade(cid, cdata, tenant_id)
+            if not cascade_result.get("ok") and not cascade_result.get("partial"):
+                return {"purged": False, "error": cascade_result.get("error", "cascade failed")[:200]}
 
             case_session_service._state["cases"].pop(cid, None)
             case_session_service._persist()
@@ -653,6 +665,16 @@ class DataLifecycleService:
                 except Exception:
                     pass
 
+            if cascade_result.get("partial"):
+                failed_steps = cascade_result.get("failed_steps", {})
+                self._write_audit(tenant_id, "system", cid, "case.purge", "partial_failure",
+                                  {"failed_steps": failed_steps})
+                return {
+                    "purged": True, "partial_failure": True,
+                    "failed_steps": failed_steps,
+                    "steps": cascade_result.get("steps", {}),
+                }
+
             self._write_audit(tenant_id, "system", cid, "case.purge", "success")
 
         return {"purged": True, "steps": self._purge_dependency_steps(cid, dry_run)}
@@ -666,9 +688,11 @@ class DataLifecycleService:
                 steps[step_id] = "executed"
         return steps
 
-    def _purge_case_cascade(self, case_id: str, cdata: dict, tenant_id: str) -> None:
+    def _purge_case_cascade(self, case_id: str, cdata: dict, tenant_id: str) -> dict:
         from app.services.document_intake_service import document_intake_service
-        import asyncio as _asyncio
+
+        steps: dict[str, str] = {}
+        failed_steps: dict[str, str] = {}
 
         docs_to_purge = []
         with document_intake_service._lock:
@@ -686,15 +710,36 @@ class DataLifecycleService:
             with document_intake_service._lock:
                 document_intake_service._records.pop(rid, None)
         document_intake_service._persist_records()
+        steps["document_files"] = "removed"
 
         try:
-            loop = _asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+            self._purge_db_graph(case_id, tenant_id)
+            steps["db_graph"] = "purged"
+        except Exception as e:
+            steps["db_graph"] = "failed"
+            failed_steps["db_graph"] = str(e)[:200]
+            logger.warning(
+                "purge_graph_failed case=%s tenant=%s reason=%s",
+                case_id, tenant_id[:8], str(e)[:100],
+            )
 
-        async def _purge_graph() -> None:
-            from app.db.session import get_sessionmaker
-            from app.services.legal_issue_graph_db_service import purge_case_graph
+        try:
+            self._purge_exports_for_case(case_id)
+            steps["exports"] = "cleaned"
+        except Exception as e:
+            steps["exports"] = "failed"
+            failed_steps["exports"] = str(e)[:200]
+
+        if failed_steps:
+            return {"ok": False, "partial": True, "failed_steps": failed_steps, "steps": steps}
+        return {"ok": True, "steps": steps}
+
+    def _purge_db_graph(self, case_id: str, tenant_id: str) -> None:
+        import asyncio as _asyncio
+        from app.db.session import get_sessionmaker
+        from app.services.legal_issue_graph_db_service import purge_case_graph
+
+        async def _purge():
             sessionmaker = get_sessionmaker()
             async with sessionmaker() as db:
                 await purge_case_graph(
@@ -702,17 +747,17 @@ class DataLifecycleService:
                 )
                 await db.commit()
 
-        if loop is not None:
+        try:
+            _asyncio.run(_purge())
+        except RuntimeError:
             try:
                 import nest_asyncio as _nest
+                loop = _asyncio.get_running_loop()
                 _nest.apply(loop)
+                _asyncio.ensure_future(_purge())
             except Exception:
                 pass
-            _asyncio.ensure_future(_purge_graph())
-        else:
-            _asyncio.run(_purge_graph())
 
-        self._purge_exports_for_case(case_id)
 
     def _purge_exports_for_case(self, case_id: str) -> None:
         export_root = os.getenv("EMSALIST_STORAGE_ROOT", "").strip()
@@ -758,6 +803,41 @@ class DataLifecycleService:
             "skipped": run_state.get("skipped", 0),
             "failed": run_state.get("failed", 0),
             "items": run_state.get("items", {}),
+        }
+
+    def retry_db_purge(self, case_id: str, tenant_id: str) -> dict:
+        """Idempotent retry of DB graph and export cleanup for a partially purged case.
+
+        Safe to call after JSON record has already been removed from the store.
+        Returns the steps that were retried and their outcomes.
+        """
+        steps: dict[str, str] = {}
+        failed_steps: dict[str, str] = {}
+
+        try:
+            self._purge_db_graph(case_id, tenant_id)
+            steps["db_graph"] = "purged"
+        except Exception as e:
+            steps["db_graph"] = "failed"
+            failed_steps["db_graph"] = str(e)[:200]
+
+        try:
+            self._purge_exports_for_case(case_id)
+            steps["exports"] = "cleaned"
+        except Exception as e:
+            steps["exports"] = "failed"
+            failed_steps["exports"] = str(e)[:200]
+
+        if failed_steps:
+            return {
+                "case_id": case_id, "retried": True, "ok": False,
+                "failed_steps": failed_steps, "steps": steps,
+                "retry_required": True,
+            }
+
+        self._write_audit(tenant_id, "system", case_id, "case.purge", "success")
+        return {
+            "case_id": case_id, "retried": True, "ok": True, "steps": steps,
         }
 
     # ── filesystem safety ──────────────────────────────────────────────

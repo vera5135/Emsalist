@@ -524,7 +524,7 @@ class DeletionLifecycleTests(unittest.TestCase):
         self.addCleanup(patcher_docs.stop)
 
         self._cascade_patcher = patch.object(
-            self.svc, "_purge_case_cascade", return_value=None
+            self.svc, "_purge_case_cascade", return_value={"ok": True, "steps": {}}
         )
         self._cascade_patcher.start()
         self.addCleanup(self._cascade_patcher.stop)
