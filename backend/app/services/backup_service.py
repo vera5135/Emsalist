@@ -63,7 +63,8 @@ class BackupRepository:
         from app.db.models import BackupRun
         from sqlalchemy import select, text
         run_id = _new_id()
-        run = BackupRun(id=run_id, started_at=datetime.now(UTC), **kwargs)
+        kwargs.setdefault("started_at", datetime.now(UTC))
+        run = BackupRun(id=run_id, **kwargs)
         db.add(run)
         await db.flush()
         return _run_to_dict(run)
