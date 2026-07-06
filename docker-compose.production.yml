@@ -20,4 +20,3 @@ services:
       - upload_data:/data/uploads:rw
       - export_data:/data/exports:rw
       - backup_data:/data/backups:rw
-      - /tmp:/tmp:rw

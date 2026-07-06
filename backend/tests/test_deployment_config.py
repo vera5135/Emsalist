@@ -230,7 +230,7 @@ class DatabaseUrlConfigTests(unittest.TestCase):
 
 
 class ProductionDatabaseValidationTests(unittest.TestCase):
-    """P1.14 — Production database URL validation."""
+    """P1.14 — Production database URL validation via make_url()."""
 
     def test_production_rejects_empty_database_url(self):
         with self.assertRaises(ProductionConfigError) as ctx:
@@ -250,9 +250,29 @@ class ProductionDatabaseValidationTests(unittest.TestCase):
                 cors_allow_origins="https://x.com", allowed_hosts="x.com",
                 database_url="sqlite:///./case_store/db",
             ))
-        self.assertIn("SQLite", str(ctx.exception))
+        self.assertIn("PostgreSQL", str(ctx.exception))
 
-    def test_production_accepts_postgresql_database(self):
+    def test_production_rejects_mysql_database(self):
+        with self.assertRaises(ProductionConfigError) as ctx:
+            validate_production_config(Settings(
+                environment="production", auth_mode="jwt",
+                jwt_secret_key="s" * MIN_JWT_SECRET_LENGTH,
+                cors_allow_origins="https://x.com", allowed_hosts="x.com",
+                database_url="mysql://postgres-host/db",
+            ))
+        self.assertIn("PostgreSQL", str(ctx.exception))
+
+    def test_production_rejects_malformed_url(self):
+        with self.assertRaises(ProductionConfigError) as ctx:
+            validate_production_config(Settings(
+                environment="production", auth_mode="jwt",
+                jwt_secret_key="s" * MIN_JWT_SECRET_LENGTH,
+                cors_allow_origins="https://x.com", allowed_hosts="x.com",
+                database_url="not_a_valid_url!!!",
+            ))
+        self.assertIn("parse", str(ctx.exception))
+
+    def test_production_accepts_postgresql_asyncpg(self):
         try:
             validate_production_config(Settings(
                 environment="production", auth_mode="jwt",
@@ -261,7 +281,18 @@ class ProductionDatabaseValidationTests(unittest.TestCase):
                 database_url="postgresql+asyncpg://h:5432/db",
             ))
         except ProductionConfigError as e:
-            self.fail(f"PostgreSQL config should pass: {e}")
+            self.fail(f"postgresql+asyncpg config should pass: {e}")
+
+    def test_production_accepts_postgresql_psycopg(self):
+        try:
+            validate_production_config(Settings(
+                environment="production", auth_mode="jwt",
+                jwt_secret_key="s" * MIN_JWT_SECRET_LENGTH,
+                cors_allow_origins="https://x.com", allowed_hosts="x.com",
+                database_url="postgresql+psycopg://h:5432/db",
+            ))
+        except ProductionConfigError as e:
+            self.fail(f"postgresql+psycopg config should pass: {e}")
 
     def test_development_allows_sqlite(self):
         issues = validate_production_config(Settings(

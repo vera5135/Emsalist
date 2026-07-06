@@ -26,16 +26,18 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        cls._saved_db_url = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./case_store/emsalist_test.db"
+
         import app.config
         app.config.get_settings.cache_clear()
-        os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./case_store/emsalist_test.db")
-        cls._setup_sync()
+
+        import app.db.session
+        app.db.session._engine = None
+        app.db.session._sessionmaker = None
+
         import asyncio
         asyncio.run(cls._setup())
-
-    @classmethod
-    def _setup_sync(cls):
-        pass
 
     @classmethod
     async def _setup(cls) -> None:
@@ -46,8 +48,25 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
+        import asyncio
+
+        async def _dispose():
+            engine = get_engine()
+            await engine.dispose()
+
+        asyncio.run(_dispose())
+
+        import app.db.session
+        app.db.session._engine = None
+        app.db.session._sessionmaker = None
+
         import app.config
         app.config.get_settings.cache_clear()
+
+        if cls._saved_db_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = cls._saved_db_url
 
     async def test_tenant_creation(self) -> None:
         sm = get_sessionmaker()
@@ -214,6 +233,56 @@ class AlembicUrlConversionTests(unittest.TestCase):
         self.assertIn("p%40ss", converted)
         self.assertIn("db%5Ftest", converted)
         self.assertNotIn("+asyncpg", converted)
+
+
+class AlembicConfigUrlTests(unittest.TestCase):
+    """P1.14 — Alembic ConfigParser compatibility with percent-encoded URLs."""
+
+    def test_config_set_main_option_percent_encoded_password(self):
+        from app.db.migration_utils import to_alembic_config_url
+        from alembic.config import Config
+
+        url = "postgresql+asyncpg://user:p%40ss%21@localhost:5432/db"
+        escaped = to_alembic_config_url(url)
+        self.assertNotIn("%", escaped.replace("%%", ""),
+                         "All bare % must be escaped to %%")
+        self.assertIn("%%", escaped)
+
+        cfg = Config()
+        cfg.set_main_option("sqlalchemy.url", escaped)
+
+        read_back = cfg.get_main_option("sqlalchemy.url")
+        self.assertIn("+psycopg", read_back)
+        self.assertNotIn("+asyncpg", read_back)
+        self.assertIn("p%40ss%21", read_back,
+                      "ConfigParser must decode %% back to literal %")
+
+    def test_config_url_semantic_preservation(self):
+        from app.db.migration_utils import to_alembic_config_url, to_sync_migration_url
+        from alembic.config import Config
+
+        url = "postgresql+asyncpg://user:secret@host:5432/db%5Fname"
+        escaped = to_alembic_config_url(url)
+
+        cfg = Config()
+        cfg.set_main_option("sqlalchemy.url", escaped)
+        read_back = cfg.get_main_option("sqlalchemy.url")
+
+        self.assertEqual(read_back, to_sync_migration_url(url),
+                         "Round-trip through ConfigParser must preserve URL semantics")
+
+    def test_config_url_no_percent_chars_unchanged(self):
+        from app.db.migration_utils import to_alembic_config_url, to_sync_migration_url
+        from alembic.config import Config
+
+        url = "postgresql+asyncpg://user:pass@localhost:5432/db"
+        escaped = to_alembic_config_url(url)
+
+        cfg = Config()
+        cfg.set_main_option("sqlalchemy.url", escaped)
+        read_back = cfg.get_main_option("sqlalchemy.url")
+
+        self.assertEqual(read_back, to_sync_migration_url(url))
 
 
 if __name__ == "__main__":

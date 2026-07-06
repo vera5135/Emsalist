@@ -5,20 +5,23 @@ which requires a sync dialect driver. The application uses async drivers
 (asyncpg, aiosqlite) for production. This module converts async URLs to
 their sync equivalents so that `alembic upgrade head` works without a
 separate database URL.
+
+Alembic's ConfigParser interprets bare `%` characters as interpolation
+tokens, which corrupts percent-encoded passwords and hostnames. Pass
+every URL through `to_alembic_config_url()` before calling
+`config.set_main_option()`.
 """
 
 from __future__ import annotations
 
 
 def to_sync_migration_url(url: str) -> str:
-    """Convert an async database URL to its sync equivalent for Alembic.
+    """Convert an async database URL to its sync equivalent.
 
     Rules:
       postgresql+asyncpg  → postgresql+psycopg
       sqlite+aiosqlite    → sqlite
       Other URLs pass through unchanged.
-
-    Percent-encoded characters in the URL are preserved.
     """
     if not url:
         return url
@@ -33,3 +36,19 @@ def to_sync_migration_url(url: str) -> str:
             return url.replace(async_driver, sync_driver, 1)
 
     return url
+
+
+def to_alembic_config_url(url: str) -> str:
+    """Convert to sync URL and escape % for Alembic ConfigParser.
+
+    Alembic's underlying configparser.ConfigParser interprets `%` as
+    an interpolation marker.  Percent-encoded characters in database
+    URLs (e.g. `p%40ss`) must be doubled (`p%%40ss`) so that the
+    parser passes the literal value through to SQLAlchemy.
+
+    This function is the canonical entry-point for env.py:
+        _alembic_url = to_alembic_config_url(db_url)
+        config.set_main_option("sqlalchemy.url", _alembic_url)
+    """
+    url = to_sync_migration_url(url)
+    return url.replace("%", "%%")

@@ -467,6 +467,12 @@ jobs:
             --build-arg BUILD_TIMESTAMP=${{ steps.args.outputs.timestamp }} \
             -t emsalist-api:latest .
 
+      - name: Validate compose config
+        run: |
+          set -e
+          docker compose -f docker-compose.yml -f docker-compose.production.yml config
+          echo "PASS: Compose config is valid"
+
       - name: Start compose stack
         run: |
           docker compose -f docker-compose.yml -f docker-compose.production.yml up --build -d
@@ -599,15 +605,18 @@ jobs:
       - name: Verify security scheme
         run: |
           python -c "
-          import json
+          import json, sys
           with open('docs/api/openapi-v1.json') as f:
               schema = json.load(f)
-          if 'components' in schema and 'securitySchemes' in schema['components']:
+          components = schema.get('components', {})
+          sec = components.get('securitySchemes', {})
+          if sec:
               print('PASS: Security schemes defined')
           elif 'security' in schema:
               print('PASS: Global security defined')
           else:
-              print('NOTE: No explicit security scheme in repo schema')
+              print('FAIL: No security scheme in OpenAPI schema')
+              sys.exit(1)
           "
 
   acceptance-summary:
