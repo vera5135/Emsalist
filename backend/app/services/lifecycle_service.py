@@ -766,6 +766,17 @@ class DataLifecycleService:
             resolved.unlink()
             return {"deleted": True}
         except OSError as e:
+            try:
+                import errno
+                from app.core.degraded_state import update_component_state, ComponentStatus
+                if getattr(e, "errno", None) == errno.ENOSPC:
+                    update_component_state("storage", ComponentStatus.UNHEALTHY,
+                                           error_code="insufficient_disk_space")
+                else:
+                    update_component_state("storage", ComponentStatus.DEGRADED,
+                                           error_code="filesystem_error")
+            except Exception:
+                pass
             return {"error": str(e)[:100]}
 
     # ── audit hash chain ───────────────────────────────────────────────

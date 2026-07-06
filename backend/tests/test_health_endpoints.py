@@ -15,6 +15,14 @@ from app.main import app
 client = TestClient(app)
 
 
+def _normalize_health(data: dict) -> dict:
+    """Strip timestamps and volatile fields from health response for comparison."""
+    if "components" in data:
+        for comp in data["components"].values():
+            comp.pop("checked_at", None)
+    return data
+
+
 class TestHealthEndpoints:
 
     def test_live_returns_200(self):
@@ -128,7 +136,9 @@ class TestHealthEndpoints:
             }
             r1 = client.get("/health")
             r2 = client.get("/system-health")
-            assert r1.json() == r2.json()
+            d1 = _normalize_health(r1.json())
+            d2 = _normalize_health(r2.json())
+            assert d1 == d2
 
 
 class TestHealthEndpointSecurity:

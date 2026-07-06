@@ -32,7 +32,13 @@ class JsonFormatter(logging.Formatter):
 
         if record.exc_info and record.exc_info[1]:
             log_entry["exception_type"] = type(record.exc_info[1]).__name__
-            log_entry["exception_message"] = str(record.exc_info[1])[:500]
+            from app.core.redaction import redact_exception
+            log_entry["exception_message"] = redact_exception(record.exc_info[1])
+
+        for key, value in list(log_entry.items()):
+            if isinstance(value, str) and len(value) > 0:
+                from app.core.redaction import redact_value
+                log_entry[key] = redact_value(value)
 
         return json.dumps(log_entry, ensure_ascii=False, default=str)
 

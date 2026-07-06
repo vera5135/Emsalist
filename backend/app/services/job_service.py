@@ -126,6 +126,12 @@ class JobRepository:
         db.add(job)
         await db.flush()
         await db.commit()
+
+        if job_type in KNOWN_JOB_TYPES:
+            from app.core.metrics import record_job_enqueued, record_job_pending
+            record_job_enqueued(job_type)
+            record_job_pending(job_type, 1)
+
         return _job_to_dict(job)
 
     @staticmethod

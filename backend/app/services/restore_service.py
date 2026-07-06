@@ -232,6 +232,15 @@ class RestoreService:
                 schema_revision_after=s.app_version or "unknown",
                 safe_summary={"database_restored": db_ok, "files_restored": file_ok,
                               "target": target})
+
+            try:
+                from app.core.metrics import record_restore
+                from app.core.degraded_state import update_component_state, ComponentStatus
+                record_restore("restore", "succeeded")
+                update_component_state("restore", ComponentStatus.HEALTHY)
+            except Exception:
+                pass
+
             return await self.repo.get_run(db, run_id)
 
         except Exception as e:
@@ -239,6 +248,15 @@ class RestoreService:
             await self.repo.update_run(db, run_id, status="failed",
                 failed_item_count=1,
                 safe_summary={"error": str(e)[:200]})
+
+            try:
+                from app.core.metrics import record_restore
+                from app.core.degraded_state import update_component_state, ComponentStatus
+                record_restore("restore", "failed")
+                update_component_state("restore", ComponentStatus.DEGRADED, error_code="restore_failed")
+            except Exception:
+                pass
+
             return await self.repo.get_run(db, run_id)
 
     async def _restore_database(self, backup_run_id: str, archive_data: bytes) -> bool:

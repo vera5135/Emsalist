@@ -320,7 +320,7 @@ class BackupService:
                               "encryption": encryption_meta})
 
             if should_verify:
-                verify_result = await self._verify_backup(db, run_id)
+                verify_result = await self._verify_backup_and_record(db, run_id)
                 if not verify_result["valid"]:
                     verrors = verify_result.get("issues", ["unknown"])
                     await self.repo.update_run(db, run_id, status="failed",
@@ -334,6 +334,14 @@ class BackupService:
                 completed_at=datetime.now(UTC),
                 retention_until=datetime.now(UTC) + timedelta(days=retention))
 
+            try:
+                from app.core.metrics import record_backup
+                from app.core.degraded_state import update_component_state, ComponentStatus
+                record_backup("succeeded", final_size)
+                update_component_state("backup", ComponentStatus.HEALTHY)
+            except Exception:
+                pass
+
             await self.locks.release(db, lock_name, self._owner_hash)
             return await self.repo.get_run(db, run_id)
 
@@ -346,13 +354,22 @@ class BackupService:
             await self.repo.update_run(db, run_id, status="failed",
                 failure_count=1,
                 safe_summary={"error": str(e)[:200]})
+
+            try:
+                from app.core.metrics import record_backup
+                from app.core.degraded_state import update_component_state, ComponentStatus
+                record_backup("failed")
+                update_component_state("backup", ComponentStatus.DEGRADED, error_code="backup_failed")
+            except Exception:
+                pass
+
             return await self.repo.get_run(db, run_id)
 
     async def verify(self, db, backup_run_id: str) -> dict:
         run = await self.repo.get_run(db, backup_run_id)
         if not run:
             raise KeyError(f"Backup not found: {backup_run_id}")
-        return await self._verify_backup(db, backup_run_id)
+        return await self._verify_backup_and_record(db, backup_run_id)
 
     async def prune(self, db, dry_run: bool = True) -> dict:
         runs = await self.repo.list_runs(db, status="succeeded", limit=200)
@@ -534,6 +551,15 @@ class BackupService:
         return {"valid": len(issues) == 0, "issues": issues, "archive_sha256": archive_sha,
                 "item_count": len(items), "has_database": has_db, "has_manifest": has_manifest,
                 "archive_size": len(archive_data)}
+
+    async def _verify_backup_and_record(self, db, backup_run_id: str) -> dict:
+        result = await self._verify_backup(db, backup_run_id)
+        try:
+            from app.core.metrics import record_backup_verify
+            record_backup_verify("succeeded" if result["valid"] else "failed")
+        except Exception:
+            pass
+        return result
 
     @staticmethod
     def _get_schema_revision() -> str:

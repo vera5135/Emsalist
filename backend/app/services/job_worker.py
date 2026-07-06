@@ -13,7 +13,7 @@ from typing import Any
 
 from app.services.job_context import JobContext, CancellationRequested
 from app.services.job_handlers import handler_registry
-from app.services.job_service import JobRepository, job_service
+from app.services.job_service import JobRepository, job_service, KNOWN_JOB_TYPES
 from app.db.session import get_sessionmaker
 from app.core.correlation import (
     get_correlation_id,
@@ -110,6 +110,13 @@ class JobWorker:
                 if job is None:
                     return 0
 
+                job_type = job["job_type"]
+                try:
+                    from app.core.metrics import record_job_pending_decrement
+                    record_job_pending_decrement(job_type)
+                except Exception:
+                    pass
+
                 handler_def = handler_registry.get(job["job_type"])
                 if handler_def is None:
                     await job_service.repo.update_status(db, job["id"], "failed", safe_error_code="UNSUPPORTED_TYPE")
@@ -181,16 +188,26 @@ class JobWorker:
                     await db.commit()
                 finally:
                     duration_ms = int(time.time() * 1000) - start_ms
+                    job_type = job.get("job_type", "")
+                    status = job.get("status", "unknown")
                     job_logger.info(
                         "job_completed job_id=%s job_type=%s duration_ms=%d",
-                        job["id"], job["job_type"], duration_ms,
+                        job["id"], job_type, duration_ms,
                         extra={
                             "job_id": job["id"],
-                            "queue_name": job["job_type"],
+                            "queue_name": job_type,
                             "correlation_id": get_correlation_id(),
                             "duration_ms": duration_ms,
                         },
                     )
+                    if job_type in KNOWN_JOB_TYPES:
+                        try:
+                            from app.core.metrics import record_job_completed
+                            from app.core.degraded_state import update_component_state, ComponentStatus
+                            record_job_completed(job_type, status, duration_ms / 1000.0)
+                            update_component_state("queue", ComponentStatus.HEALTHY)
+                        except Exception:
+                            pass
                     clear_correlation_id()
                 return 1
         except Exception:

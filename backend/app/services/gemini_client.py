@@ -14,6 +14,22 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+def _mark_ai_degraded(reason: str = "api_error") -> None:
+    try:
+        from app.core.degraded_state import update_component_state, ComponentStatus
+        update_component_state("ai_provider", ComponentStatus.DEGRADED, error_code=reason)
+    except Exception:
+        pass
+
+
+def _mark_ai_healthy() -> None:
+    try:
+        from app.core.degraded_state import update_component_state, ComponentStatus
+        update_component_state("ai_provider", ComponentStatus.HEALTHY)
+    except Exception:
+        pass
+
+
 @dataclass(frozen=True)
 class GeminiJSONResult:
     ai_used: bool
@@ -80,8 +96,10 @@ class GeminiClient:
                     warnings=["Gemini JSON nesnesi döndürmedi; fallback kullanıldı."],
                     failure_reason="validation_failed",
                 )
+            _mark_ai_healthy()
             return GeminiJSONResult(ai_used=True, data=parsed, warnings=[], failure_reason="")
         except TimeoutError:
+            _mark_ai_degraded("timeout")
             return GeminiJSONResult(
                 ai_used=False,
                 data=fallback,
@@ -103,6 +121,7 @@ class GeminiClient:
                 reason = "blocked_response"
             elif re.search(r"timeout|zaman aşımı", message, flags=re.IGNORECASE):
                 reason = "timeout"
+            _mark_ai_degraded(reason)
             return GeminiJSONResult(
                 ai_used=False,
                 data=fallback,

@@ -6,7 +6,10 @@ import time
 from pathlib import Path
 
 if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except Exception:
+        pass
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,6 +54,7 @@ from app.routes.ai_run_routes import router as ai_run_router
 from app.routes.yargitay_health_routes import router as yargitay_health_router
 from app.routes.legal_issue_graph_routes import router as legal_issue_graph_router
 from app.routes.job_routes import router as job_router
+from app.routes.metrics_routes import router as metrics_router
 
 logger = logging.getLogger(__name__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -73,12 +77,61 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Correlation-ID"],
 )
 
-HEALTH_LIKE_PATHS = frozenset({"/health", "/live", "/ready", "/styles.css", "/app.js", "/", "/docs", "/openapi.json"})
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    from fastapi.exceptions import HTTPException as _HTTPExc
+    from starlette.responses import JSONResponse as _JSONResp
+
+    if isinstance(exc, _HTTPExc):
+        return _JSONResp(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None),
+        )
+
+    from app.core.error_classification import classify_exception, build_error_response
+    from app.core.correlation import get_correlation_id
+
+    try:
+        from app.core.degraded_state import update_component_state, ComponentStatus
+        cat = classify_exception(exc)
+        if cat.value == "database_unavailable":
+            update_component_state("database", ComponentStatus.UNHEALTHY, error_code="database_unavailable")
+        elif cat.value == "filesystem_error":
+            update_component_state("storage", ComponentStatus.DEGRADED, error_code="filesystem_error")
+        elif cat.value == "insufficient_disk_space":
+            update_component_state("storage", ComponentStatus.UNHEALTHY, error_code="insufficient_disk_space")
+    except Exception:
+        pass
+
+    category = classify_exception(exc)
+    resp = build_error_response(exc)
+    http_status = resp["error"].pop("_http_status", 500)
+    cid = resp["error"]["correlation_id"]
+
+    logger.error(
+        "unhandled_exception category=%s exception_type=%s correlation_id=%s",
+        category.value, type(exc).__name__, cid,
+        extra={"correlation_id": cid, "exception_type": type(exc).__name__},
+    )
+
+    return JSONResponse(
+        status_code=http_status,
+        content=resp,
+    )
+
+HEALTH_LIKE_PATHS = frozenset({"/health", "/live", "/ready", "/metrics",
+                              "/styles.css", "/app.js", "/", "/docs", "/openapi.json"})
 
 @app.middleware("http")
 async def observability_middleware(request: Request, call_next):
     cid = extract_or_create_correlation_id(request.headers.get("X-Correlation-ID"))
     start_ms = int(time.time() * 1000)
+
+    if is_metrics_enabled():
+        from app.core.metrics import http_requests_in_flight
+        http_requests_in_flight.inc()
 
     response = await call_next(request)
 
@@ -98,6 +151,11 @@ async def observability_middleware(request: Request, call_next):
         logger.warning("http_access %s %s %s %dms", request.method, request.url.path, status_code, duration_ms, extra=log_extra)
     else:
         logger.info("http_access %s %s %s %dms", request.method, request.url.path, status_code, duration_ms, extra=log_extra)
+
+    if is_metrics_enabled():
+        from app.core.metrics import http_requests_in_flight, record_http_request
+        http_requests_in_flight.inc(-1)
+        record_http_request(request.method, request.url.path, status_code, duration_ms / 1000.0)
 
     response.headers["X-Correlation-ID"] = cid
     clear_correlation_id()
@@ -158,6 +216,22 @@ app.include_router(ai_run_router)
 app.include_router(yargitay_health_router)
 app.include_router(legal_issue_graph_router)
 app.include_router(job_router)
+app.include_router(metrics_router)
+
+from app.core.metrics import register_route_pattern, set_metrics_enabled, is_metrics_enabled # noqa: E402
+from app.core.degraded_state import (  # noqa: E402
+    get_registry, update_component_state, ComponentStatus, ComponentState, # noqa: F811
+)
+
+set_metrics_enabled(settings.metrics_enabled)
+
+for _route in app.routes:
+    if hasattr(_route, "path") and hasattr(_route, "methods"):
+        _path: str = _route.path
+        _methods = _route.methods or set()
+        if not _path:
+            continue
+        register_route_pattern(_path, _path)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -177,15 +251,26 @@ def web_script() -> FileResponse:
 
 @app.get("/health", tags=["System"])
 async def health_check() -> JSONResponse:
-    checks: dict[str, dict[str, str]] = {}
+    checks: dict[str, dict[str, object]] = {}
     critical_failed = False
+    registry = get_registry()
 
     try:
+        t0 = time.time()
         db_health = await check_db_health()
+        t1 = time.time()
         if db_health.get("connected"):
             checks["database"] = {"status": "ok"}
+            update_component_state("database", ComponentStatus.HEALTHY)
+            if is_metrics_enabled():
+                from app.core.metrics import record_db_health
+                record_db_health(True, t1 - t0)
         else:
             checks["database"] = {"status": "failed", "code": "database_unavailable"}
+            update_component_state("database", ComponentStatus.UNHEALTHY, error_code="database_unavailable")
+            if is_metrics_enabled():
+                from app.core.metrics import record_db_health
+                record_db_health(False, t1 - t0)
             critical_failed = True
     except Exception:
         logger.error(
@@ -194,6 +279,7 @@ async def health_check() -> JSONResponse:
             extra={"correlation_id": get_correlation_id()},
         )
         checks["database"] = {"status": "failed", "code": "database_unavailable"}
+        update_component_state("database", ComponentStatus.UNHEALTHY, error_code="database_unavailable")
         critical_failed = True
 
     try:
@@ -203,16 +289,36 @@ async def health_check() -> JSONResponse:
         checks["configuration"] = {"status": "failed", "code": "configuration_error"}
         critical_failed = True
 
-    if critical_failed:
+    _all_states = registry.get_all()
+    components: dict[str, dict[str, object]] = {}
+    for name, state in sorted(_all_states.items()):
+        components[name] = {
+            "status": state.status.value,
+            "checked_at": state.checked_at,
+            "message_code": state.message_code,
+            "last_error_code": state.last_error_code,
+            "consecutive_failures": state.consecutive_failures,
+        }
+
+    overall_registry = registry.get_overall_status()
+    if critical_failed or overall_registry == ComponentStatus.UNHEALTHY:
         overall = "unhealthy"
         status_code = 503
+    elif overall_registry == ComponentStatus.DEGRADED:
+        overall = "degraded"
+        status_code = 200
     else:
         overall = "healthy"
         status_code = 200
 
     return JSONResponse(
         status_code=status_code,
-        content={"status": overall, "service": settings.log_service_name, "checks": checks},
+        content={
+            "status": overall,
+            "service": settings.log_service_name,
+            "checks": checks,
+            "components": components,
+        },
     )
 
 

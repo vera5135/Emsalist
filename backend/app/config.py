@@ -46,6 +46,7 @@ class Settings(BaseModel):
     backup_maintenance_mode: bool = False
     backup_include_json_projection: bool = True
     backup_include_rebuildable_indexes: bool = False
+    metrics_enabled: bool = True
 
 
 def _load_env_file() -> None:

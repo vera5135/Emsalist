@@ -53,7 +53,7 @@ class JWTValidationTests(unittest.TestCase):
     def test_wrong_signature(self):
         import jwt as j; from datetime import UTC, datetime, timedelta
         n = datetime.now(UTC)
-        t = j.encode({"sub":"u","tenant_id":"t","role":"l","token_type":"access","iss":"emsalist","aud":"emsalist-api","nbf":n,"iat":n,"exp":n+timedelta(minutes=30)},"wrong-secret-key-xxx", algorithm="HS256")
+        t = j.encode({"sub":"u","tenant_id":"t","role":"l","token_type":"access","iss":"emsalist","aud":"emsalist-api","nbf":n,"iat":n,"exp":n+timedelta(minutes=30)},"wrong-secret-key-xxxxxx--should-be-32-bytes", algorithm="HS256")
         from fastapi import HTTPException
         with self.assertRaises(Exception): decode_token(t)
 

@@ -178,6 +178,17 @@ class LegalSourceIngestService:
             self._update_index()
 
         self._save_registry()
+
+        try:
+            from app.core.degraded_state import update_component_state, ComponentStatus
+            if result.get("files_failed", 0) > 0:
+                update_component_state("legal_source_ingest", ComponentStatus.DEGRADED,
+                                       error_code="ingest_partial_failure")
+            else:
+                update_component_state("legal_source_ingest", ComponentStatus.HEALTHY)
+        except Exception:
+            pass
+
         return result
 
     def _extract_text(self, file_path: Path) -> str:

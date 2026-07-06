@@ -95,6 +95,11 @@ def circuit_success() -> None:
     _circuit_failures = 0
     _circuit_state = "closed"
     _last_success_at = datetime.now(UTC).isoformat()
+    try:
+        from app.core.degraded_state import update_component_state, ComponentStatus
+        update_component_state("yargitay", ComponentStatus.HEALTHY)
+    except Exception:
+        pass
 
 
 def circuit_failure(error_code: str = "") -> None:
@@ -104,6 +109,11 @@ def circuit_failure(error_code: str = "") -> None:
     if _circuit_failures >= CIRCUIT_THRESHOLD:
         _circuit_state = "open"
         _circuit_opened_at = time.time()
+        try:
+            from app.core.degraded_state import update_component_state, ComponentStatus
+            update_component_state("yargitay", ComponentStatus.DEGRADED, error_code=error_code or "circuit_open")
+        except Exception:
+            pass
 
 
 def circuit_allow() -> bool:
