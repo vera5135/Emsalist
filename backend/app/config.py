@@ -173,6 +173,8 @@ def get_settings() -> Settings:
         gemini_api_key=gemini_api_key,
         gemini_model=getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         gemini_timeout_seconds=int(getenv("GEMINI_TIMEOUT_SECONDS", "30")),
+        database_url=_env("DATABASE_URL", ""),
+        storage_backend=_env("STORAGE_BACKEND", "json"),
         jwt_secret_key=getenv("JWT_SECRET_KEY", ""),
         auth_mode=getenv("AUTH_MODE", "local"),
         backup_encryption_enabled=getenv("BACKUP_ENCRYPTION_ENABLED", "").lower() in {"1", "true", "yes"},

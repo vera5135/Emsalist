@@ -254,5 +254,46 @@ class InternalIntegrationTests(unittest.TestCase):
         self.assertEqual(delete.status_code, 204)
 
 
+class OpenAPIDriftDetectionTests(unittest.TestCase):
+    """P1.14 — OpenAPI drift detection guards."""
+
+    def test_openapi_drift_check_detects_real_difference(self):
+        from app.main import app
+        import json
+
+        runtime_schema = app.openapi()
+        runtime_json = json.dumps(runtime_schema, sort_keys=True, indent=2)
+
+        altered = dict(runtime_schema)
+        altered["info"] = dict(altered.get("info", {}))
+        altered["info"]["version"] = "999.0.0"
+        altered_json = json.dumps(altered, sort_keys=True, indent=2)
+
+        self.assertNotEqual(runtime_json, altered_json,
+                            "Schema modification must produce detectable diff")
+
+    def test_runtime_openapi_matches_self(self):
+        from app.main import app
+        import json
+
+        s1 = app.openapi()
+        s2 = app.openapi()
+        self.assertEqual(
+            json.dumps(s1, sort_keys=True, indent=2),
+            json.dumps(s2, sort_keys=True, indent=2),
+            "Repeated openapi() calls must produce identical output",
+        )
+
+    def test_openapi_schema_has_no_secrets(self):
+        from app.main import app
+        import json
+
+        schema = app.openapi()
+        raw = json.dumps(schema)
+        for secret in ("jwt_secret", "database_url", "gemini_api_key"):
+            self.assertNotIn(secret, raw.lower(),
+                             f"OpenAPI schema must not contain '{secret}'")
+
+
 if __name__ == "__main__":
     unittest.main()

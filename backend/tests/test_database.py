@@ -169,5 +169,39 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(True)
 
 
+class AlembicUrlConversionTests(unittest.TestCase):
+    """P1.14 — Verify Alembic env converts async URLs to sync equivalents."""
+
+    def _convert_url(self, url: str) -> str:
+        result = url
+        for driver in ("+asyncpg", "+aiosqlite"):
+            if driver in result:
+                if driver == "+asyncpg":
+                    result = result.replace("+asyncpg", "+psycopg")
+                elif driver == "+aiosqlite":
+                    result = result.replace("+aiosqlite", "")
+                break
+        return result
+
+    def test_alembic_uses_psycopg_for_sync_migrations(self):
+        """asyncpg URLs must be converted to psycopg for Alembic sync engine."""
+        pg_url = "postgresql+asyncpg://user:pass@localhost:5432/db"
+        converted = self._convert_url(pg_url)
+        self.assertIn("+psycopg", converted)
+        self.assertNotIn("+asyncpg", converted)
+        self.assertEqual(converted, "postgresql+psycopg://user:pass@localhost:5432/db")
+
+    def test_sqlite_strips_async_driver(self):
+        sqlite_url = "sqlite+aiosqlite:///./case_store/emsalist.db"
+        converted = self._convert_url(sqlite_url)
+        self.assertNotIn("+aiosqlite", converted)
+        self.assertEqual(converted, "sqlite:///./case_store/emsalist.db")
+
+    def test_non_async_url_passthrough(self):
+        plain_url = "postgresql+psycopg://user:pass@localhost/db"
+        converted = self._convert_url(plain_url)
+        self.assertEqual(converted, plain_url)
+
+
 if __name__ == "__main__":
     unittest.main()

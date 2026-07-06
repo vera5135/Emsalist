@@ -30,7 +30,6 @@ jobs:
           sys.path.insert(0, '.')
           os.environ['EMSALIST_ENVIRONMENT'] = 'production'
           from app.config import validate_production_config, Settings, ProductionConfigError
-          # Should raise ProductionConfigError with default settings
           try:
               validate_production_config(Settings(environment='production'))
               print('FAIL: production config with defaults did not raise')
@@ -55,9 +54,25 @@ jobs:
           "
 
   migration-check:
-    name: Migration config validation
+    name: Migration and PostgreSQL validation
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_audit_pwd
+          POSTGRES_DB: emsalist_audit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_audit_pwd@localhost:5432/emsalist_audit
     steps:
       - uses: actions/checkout@v4
 
@@ -65,8 +80,63 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install alembic
-        run: pip install alembic sqlalchemy
+      - name: Install system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5432 -U emsalist -d emsalist_audit; then
+              echo "PostgreSQL ready after ${i}s"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "FAIL: PostgreSQL did not become ready"
+              exit 1
+            fi
+            sleep 2
+          done
 
       - name: Verify alembic.ini exists
-        run: test -f backend/alembic.ini && echo "alembic.ini found" || (echo "alembic.ini missing" && exit 1)
+        run: test -f backend/alembic.ini && echo "alembic.ini found" || { echo "alembic.ini missing"; exit 1; }
+
+      - name: Alembic heads check
+        working-directory: backend
+        run: |
+          set -e
+          HEADS=$(python -m alembic heads 2>&1)
+          echo "$HEADS"
+          HEAD_COUNT=$(echo "$HEADS" | wc -l)
+          if [ "$HEAD_COUNT" -ne 1 ]; then
+            echo "FAIL: Multiple alembic heads: $HEAD_COUNT"
+            exit 1
+          fi
+          echo "PASS: Single alembic head"
+
+      - name: Alembic upgrade head
+        working-directory: backend
+        run: |
+          set -e
+          python -m alembic upgrade head
+          echo "PASS: Upgrade head succeeded"
+
+      - name: Alembic current
+        working-directory: backend
+        run: |
+          set -e
+          python -m alembic current
+          echo "PASS: Current revision shown"
+
+      - name: Alembic check
+        working-directory: backend
+        run: |
+          set -e
+          python -m alembic check 2>&1
+          echo "PASS: Migration check complete"

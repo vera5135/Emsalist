@@ -207,10 +207,36 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements-test.txt
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5432 -U emsalist -d emsalist_test; then
+              echo "PostgreSQL ready after ${i}s"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "FAIL: PostgreSQL did not become ready"
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Run migrations
+        working-directory: backend
+        run: |
+          set -e
+          python -m alembic upgrade head
+          echo "PASS: Migrations applied"
 
       - name: Run purge tests individually
         working-directory: backend
@@ -219,6 +245,11 @@ jobs:
           python -m pytest tests/test_lifecycle.py::PurgeTests::test_apply_purges_eligible -v --tb=long
           python -m pytest tests/test_lifecycle.py::PurgeTests::test_purge_is_idempotent -v --tb=long
           python -m pytest tests/test_lifecycle.py::StoreLifecycleTests::test_json_purge_removes -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_purge_db_failure_does_not_report_success -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_partial_purge_creates_audit_event -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_partial_purge_is_retried -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_retry_cleans_remaining_db_graph -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_retry_after_json_removal_is_idempotent -v --tb=long
           echo "PASS: Purge tests passed"
 
       - name: Run all purge-related tests
@@ -290,64 +321,7 @@ jobs:
         run: |
           set -e
           python -m pytest -ra --strict-markers --durations=30 -v --tb=short \
-            --ignore=tests/test_backup_restore_postgres.py \
-            --ignore=tests/test_background_jobs.py \
-            --ignore=tests/test_background_jobs_integration.py \
-            --ignore=tests/test_observability.py \
-            --ignore=tests/test_e2e_smoke.py \
-            --ignore=tests/test_yargitay_resilience.py \
-            --ignore=tests/test_yargitay_live_source_labeling.py \
-            --ignore=tests/test_yargitay_infra.py \
-            --ignore=tests/test_yargitay_query_builder.py \
-            --ignore=tests/test_dr_integration.py \
-            --ignore=tests/test_legal_source_pilot.py \
-            --ignore=tests/test_multi_case_regression.py \
-            --ignore=tests/test_no_hardcoded_production_examples.py \
-            --ignore=tests/test_precedent_benchmark.py \
-            --ignore=tests/test_ai_runs.py \
-            --ignore=tests/test_final_petition_writer.py \
-            --ignore=tests/test_dynamic_legal_reasoner_service.py \
-            --ignore=tests/test_legal_issue_graph_routes.py \
-            --ignore=tests/test_legal_issue_graph_service.py \
-            --ignore=tests/test_legal_issue_graph_db.py \
-            --ignore=tests/test_precedent_analysis_service.py \
-            --ignore=tests/test_precedent_authority.py \
-            --ignore=tests/test_precedent_evaluation.py \
-            --ignore=tests/test_precedent_regression.py \
-            --ignore=tests/test_case_state_service.py \
-            --ignore=tests/test_legal_ground_validator.py \
-            --ignore=tests/test_workflow_review.py \
-            --ignore=tests/test_structured_logging.py \
-            --ignore=tests/test_correlation_id.py \
             -p no:cacheprovider
-
-      - name: Run observability tests (requires DB)
-        working-directory: backend
-        run: |
-          python -m pytest tests/test_observability.py -v --tb=short -k "not test_enqueue_then_count_one and not test_same_idempotency_key_still_one and not test_claim_reduces_pending and not test_retry_wait_counts_as_pending and not test_scheduled_counts_as_pending and not test_cancel_not_pending and not test_completed_not_pending and not test_dead_lettered_not_pending and not test_multiple_job_types_separate and not test_double_refresh_idempotent and not test_no_negative_after_all_cleared" || echo "Observability tests complete"
-
-      - name: Run background job tests
-        working-directory: backend
-        run: |
-          python -m pytest tests/test_background_jobs.py tests/test_background_jobs_integration.py -v --tb=short || echo "Background job tests complete"
-
-      - name: Run E2E smoke tests
-        working-directory: backend
-        run: |
-          python -m pytest tests/test_e2e_smoke.py -v --tb=short || echo "E2E smoke tests complete"
-
-      - name: Run backup/restore PostgreSQL tests
-        working-directory: backend
-        env:
-          SOURCE_DATABASE_URL: ${{ env.DATABASE_URL }}
-          TARGET_DATABASE_URL: ${{ env.DATABASE_URL }}
-          PG_SOURCE_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
-          PG_TARGET_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
-          BACKUP_ENCRYPTION_ENABLED: "true"
-          BACKUP_ENCRYPTION_KEY: "ci-test-key-32-bytes-long-minimum!!"
-          BACKUP_ROOT: /tmp/backup-storage
-        run: |
-          python -m pytest tests/test_backup_restore_postgres.py -v --tb=long || echo "Backup/restore tests complete"
 
       - name: Test summary
         if: always()
@@ -430,36 +404,32 @@ jobs:
 
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@master
-        continue-on-error: true
         with:
           image-ref: emsalist:p1.14
           format: table
-          exit-code: 0
+          exit-code: 1
           severity: CRITICAL,HIGH
 
       - name: Trivy config scan
         uses: aquasecurity/trivy-action@master
-        continue-on-error: true
         with:
           scan-type: config
           scan-ref: .
           format: table
-          exit-code: 0
+          exit-code: 1
           severity: CRITICAL,HIGH
 
       - name: Pip audit
         working-directory: backend
-        continue-on-error: true
         run: |
           pip install pip-audit
-          pip-audit -r requirements.txt --desc on --no-deps || echo "pip-audit found issues"
+          pip-audit -r requirements.txt --desc on --fail-on-known-vulnerability --no-deps
 
       - name: Bandit scan
         working-directory: backend
-        continue-on-error: true
         run: |
           pip install bandit
-          bandit -r app/ -f json -o bandit-report.json --severity-level high -x app/web || echo "Bandit found issues"
+          bandit -r app/ -f json -o bandit-report.json --severity-level high -x app/web
 
       - name: Upload Bandit report
         uses: actions/upload-artifact@v4
@@ -531,10 +501,10 @@ jobs:
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ready)
           if [ "$STATUS" != "200" ]; then
-            echo "WARN: /ready returned $STATUS (may not be ready yet)"
-          else
-            echo "PASS: /ready returns $STATUS"
+            echo "FAIL: /ready returned $STATUS"
+            exit 1
           fi
+          echo "PASS: /ready returns $STATUS"
 
       - name: Verify health endpoint
         run: |
@@ -591,13 +561,8 @@ jobs:
 
       - name: Compare OpenAPI schemas
         run: |
-          RUNTIME_SIZE=$(stat -c%s /tmp/runtime-openapi.json)
-          REPO_SIZE=$(stat -c%s docs/api/openapi-v1.json 2>/dev/null || echo 0)
-          echo "Runtime OpenAPI size: $RUNTIME_SIZE bytes"
-          echo "Repo OpenAPI size: $REPO_SIZE bytes"
-          if [ "$REPO_SIZE" != "0" ] && [ "$RUNTIME_SIZE" != "$REPO_SIZE" ]; then
-            echo "WARN: OpenAPI sizes differ (runtime=$RUNTIME_SIZE repo=$REPO_SIZE)"
-          fi
+          set -e
+          diff -u docs/api/openapi-v1.json /tmp/runtime-openapi.json && echo "PASS: OpenAPI schema matches repo" || { echo "FAIL: OpenAPI drift detected"; exit 1; }
 
       - name: Count operation IDs
         working-directory: backend
@@ -605,7 +570,7 @@ jobs:
           python -c "
           from app.main import app
           schema = app.openapi()
-          ops = set()
+          ops = []
           for path, methods in schema.get('paths', {}).items():
               if not path.startswith('/api/v1'):
                   continue
@@ -613,10 +578,10 @@ jobs:
                   if method in ('get','post','put','delete','patch'):
                       opid = methods[method].get('operationId', '')
                       if opid:
-                          ops.add(opid)
+                          ops.append(opid)
           print(f'V1 operation IDs: {len(ops)}')
-          assert len(ops) == len(set(ops)), 'Duplicate operation IDs'
-          print('PASS: All operation IDs unique')
+          assert len(ops) == len(set(ops)), f'Duplicate operation IDs found'
+          print('PASS: All {0} operation IDs unique'.format(len(ops)))
           "
 
       - name: Verify security scheme

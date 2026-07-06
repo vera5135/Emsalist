@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -175,6 +176,44 @@ class OpenAPIConsistencyTests(unittest.TestCase):
         paths = schema.get("paths", {})
         meta = [p for p in paths if "/api/v1/meta/" in p]
         self.assertGreaterEqual(len(meta), 2, "Need /meta/version and /meta/capabilities")
+
+
+class DatabaseUrlConfigTests(unittest.TestCase):
+    """P1.14 — DATABASE_URL and EMSALIST_DATABASE_URL env loading."""
+
+    def setUp(self):
+        import app.config
+        app.config.get_settings.cache_clear()
+
+    def tearDown(self):
+        import app.config
+        app.config.get_settings.cache_clear()
+
+    def test_database_url_loaded_from_environment(self):
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql+asyncpg://h:5432/db",
+                                      "EMSALIST_SKIP_PRODUCTION_VALIDATION": "1"}, clear=False):
+            from app.config import get_settings
+            settings = get_settings()
+        self.assertEqual(settings.database_url, "postgresql+asyncpg://h:5432/db")
+
+    def test_emsalist_database_url_precedence(self):
+        with patch.dict(os.environ, {
+            "DATABASE_URL": "postgresql+asyncpg://plain:5432/db",
+            "EMSALIST_DATABASE_URL": "postgresql+asyncpg://prefixed:5432/db",
+            "EMSALIST_SKIP_PRODUCTION_VALIDATION": "1",
+        }, clear=False):
+            from app.config import get_settings
+            settings = get_settings()
+        self.assertEqual(settings.database_url, "postgresql+asyncpg://prefixed:5432/db")
+
+    def test_postgres_configuration_does_not_fall_back_to_sqlite(self):
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql+asyncpg://pg:5432/db",
+                                      "EMSALIST_SKIP_PRODUCTION_VALIDATION": "1"}, clear=False):
+            from app.config import get_settings
+            settings = get_settings()
+        self.assertNotEqual(settings.database_url, "")
+        self.assertNotIn("sqlite", settings.database_url.lower())
+        self.assertIn("postgresql", settings.database_url)
 
 
 if __name__ == "__main__":

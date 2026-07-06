@@ -12,7 +12,16 @@ config = context.config
 from app.config import get_settings
 settings = get_settings()
 db_url = settings.database_url or "sqlite:///./case_store/emsalist.db"
-config.set_main_option("sqlalchemy.url", db_url)
+
+_alembic_url = db_url
+for _driver in ("+asyncpg", "+aiosqlite"):
+    if _driver in _alembic_url:
+        if _driver == "+asyncpg":
+            _alembic_url = _alembic_url.replace("+asyncpg", "+psycopg")
+        elif _driver == "+aiosqlite":
+            _alembic_url = _alembic_url.replace("+aiosqlite", "")
+        break
+config.set_main_option("sqlalchemy.url", _alembic_url)
 
 from app.db.models import Base
 target_metadata = Base.metadata
