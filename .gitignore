@@ -35,3 +35,9 @@ backend/app/legal_brain/sources/
 legal_sources/resmi_gazete/
 legal_sources/pdf/
 legal_sources/hukuk_sozlugu/
+backend/backups/
+backend/case_store/
+backend/export_store/
+backend/collection-errors.txt
+legal_sources/**/ingested/
+legal_sources/**/reports/

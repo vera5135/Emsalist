@@ -1,6 +1,11 @@
 fastapi>=0.115,<1.0
 pydantic>=2.9,<3.0
 uvicorn[standard]>=0.30,<1.0
+sqlalchemy>=2.0,<3.0
+alembic>=1.18,<2.0
+aiosqlite>=0.22,<1.0
+argon2-cffi>=23.1,<26
+PyJWT>=2.13,<3.0
 playwright>=1.49,<2.0
 beautifulsoup4>=4.12,<5.0
 lxml>=5.0,<7.0
@@ -9,6 +14,12 @@ pdfplumber>=0.11,<1.0
 pypdf>=5.0,<7.0
 python-multipart>=0.0.9,<1.0
 google-genai>=2.0,<3.0
+cryptography>=49.0,<50.0
+python-docx>=1.0
+
+# Optional packages — imported inline with fallback behaviour:
+# nest-asyncio>=1.0
+#   (monkey-patches asyncio; breaks anyio TestClient + Python 3.14)
 
 # Optional Legal Brain acceleration packages:
 # chromadb>=0.5,<1.0
