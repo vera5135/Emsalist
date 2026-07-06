@@ -98,11 +98,15 @@ class BackupLockManager:
         from app.db.models import BackupLock
         from sqlalchemy import select, delete
         now = datetime.now(UTC)
-        await db.execute(delete(BackupLock).where(
-            BackupLock.lock_name == lock_name,
-            BackupLock.lease_expires_at < now,
-            BackupLock.released_at.is_(None),
-        ))
+        try:
+            await db.execute(delete(BackupLock).where(
+                BackupLock.lock_name == lock_name,
+                BackupLock.lease_expires_at < now,
+                BackupLock.released_at.is_(None),
+            ))
+            await db.flush()
+        except Exception:
+            await db.rollback()
         existing = await db.execute(
             select(BackupLock).where(
                 BackupLock.lock_name == lock_name,
@@ -111,13 +115,17 @@ class BackupLockManager:
         )
         if existing.scalar() is not None:
             return False
-        lock = BackupLock(
-            id=_new_id(), lock_name=lock_name, owner_id_hash=owner_hash,
-            acquired_at=now, lease_expires_at=now + timedelta(seconds=lease_seconds),
-        )
-        db.add(lock)
-        await db.flush()
-        return True
+        try:
+            lock = BackupLock(
+                id=_new_id(), lock_name=lock_name, owner_id_hash=owner_hash,
+                acquired_at=now, lease_expires_at=now + timedelta(seconds=lease_seconds),
+            )
+            db.add(lock)
+            await db.flush()
+            return True
+        except Exception:
+            await db.rollback()
+            return False
 
     @staticmethod
     async def release(db, lock_name: str, owner_hash: str) -> bool:

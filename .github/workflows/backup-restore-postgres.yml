@@ -1,0 +1,144 @@
+name: Backup Restore PostgreSQL
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  backup-restore-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres_source:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_test_pwd
+          POSTGRES_DB: emsalist_source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      postgres_target:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_target_pwd
+          POSTGRES_DB: emsalist_restore_target
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SOURCE_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_source
+      TARGET_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_target_pwd@localhost:5433/emsalist_restore_target
+      BACKUP_ENCRYPTION_ENABLED: 'true'
+      BACKUP_ENCRYPTION_KEY: 'ci-test-key-32-bytes-long-minimum!!'
+      BACKUP_ROOT: /tmp/backup-storage
+      PG_SOURCE_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_source
+      PG_TARGET_URL: postgresql://emsalist:emsalist_target_pwd@localhost:5433/emsalist_restore_target
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install asyncpg
+
+      - name: Alembic upgrade head (source)
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.SOURCE_DATABASE_URL }}
+        run: python -m alembic upgrade head
+
+      - name: Create synthetic seed data
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.SOURCE_DATABASE_URL }}
+        run: |
+          python -c "
+          import asyncio
+          from app.db.session import get_sessionmaker
+          from app.db.models import Tenant, User, Case, CaseMember, Document, AuditEvent, new_uuid
+          from datetime import UTC, datetime
+          import os
+          os.environ['DATABASE_URL'] = '${SOURCE_DATABASE_URL}'
+
+          async def seed():
+              maker = get_sessionmaker()
+              async with maker() as db:
+                  t = Tenant(id='t-s1', name='Source1', slug='t-s1', status='active')
+                  db.add(t)
+                  db.add(User(id='u-s1', tenant_id='t-s1', email_normalized='s1@t.com', display_name='S1', status='active', role='tenant_admin'))
+                  c = Case(id='c-s1', tenant_id='t-s1', owner_user_id='u-s1', title='SourceCase', legal_topic='test', profile_id='def', event_text='test', status='active', version=1)
+                  db.add(c)
+                  db.add(CaseMember(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', membership_role='owner'))
+                  db.add(Document(id='d-s1', case_id='c-s1', tenant_id='t-s1', original_filename='test.txt', storage_key='uploads/test.txt', size_bytes=100, sha256='abcdef01', document_type='text', status='active'))
+                  db.add(AuditEvent(tenant_id='t-s1', actor_id='u-s1', case_id='c-s1', action='test.created', outcome='success', safe_metadata={'info': 'test'}))
+                  await db.commit()
+                  print('SEED_OK')
+          asyncio.run(seed())
+          "
+
+      - name: Create canonical document file
+        run: |
+          mkdir -p backend/document_store/uploads
+          echo "test document content for backup" > backend/document_store/uploads/test.txt
+
+      - name: Alembic upgrade head (target)
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
+        run: python -m alembic upgrade head
+
+      - name: Run PostgreSQL backup/restore integration tests
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.SOURCE_DATABASE_URL }}
+          SOURCE_DATABASE_URL: ${{ env.SOURCE_DATABASE_URL }}
+          TARGET_DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
+          PG_SOURCE_URL: ${{ env.PG_SOURCE_URL }}
+          PG_TARGET_URL: ${{ env.PG_TARGET_URL }}
+          BACKUP_ENCRYPTION_ENABLED: 'true'
+          BACKUP_ENCRYPTION_KEY: 'ci-test-key-32-bytes-long-minimum!!'
+          BACKUP_ROOT: /tmp/backup-storage
+        run: python -m pytest tests/test_backup_restore_postgres.py -v --tb=long -x
+
+      - name: Cleanup target database
+        if: always()
+        env:
+          DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
+        run: |
+          python -c "
+          import asyncio
+          from app.db.session import get_sessionmaker
+          async def clean():
+              maker = get_sessionmaker()
+              async with maker() as db:
+                  from sqlalchemy import text
+                  await db.execute(text('DROP SCHEMA public CASCADE; CREATE SCHEMA public;'))
+                  await db.commit()
+          asyncio.run(clean())
+          " || echo "Cleanup skipped"
+
+      - name: Backup restore summary
+        if: always()
+        run: echo "PostgreSQL backup/restore CI completed."
