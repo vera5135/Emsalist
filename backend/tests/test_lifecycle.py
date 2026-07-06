@@ -325,13 +325,17 @@ class PurgeTests(unittest.TestCase):
         self.svc = DataLifecycleService()
         self.tenant_id = "tenant-purge"
 
-        patcher_cases = patch(    "app.services.case_session_service.case_session_service", self.cases)
+        patcher_cases = patch("app.services.case_session_service.case_session_service", self.cases)
         patcher_cases.start()
         self.addCleanup(patcher_cases.stop)
 
-        patcher_docs = patch(    "app.services.document_intake_service.document_intake_service", self.docs)
+        patcher_docs = patch("app.services.document_intake_service.document_intake_service", self.docs)
         patcher_docs.start()
         self.addCleanup(patcher_docs.stop)
+
+        self._db_graph_patcher = patch.object(self.svc, "_purge_db_graph", return_value=None)
+        self._db_graph_patcher.start()
+        self.addCleanup(self._db_graph_patcher.stop)
 
     def tearDown(self):
         self.temporary.cleanup()

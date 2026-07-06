@@ -226,8 +226,17 @@ def upgrade() -> None:
     op.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_lge_source ON legal_issue_edges (source_node_id)"))
     op.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_lge_target ON legal_issue_edges (target_node_id)"))
 
+    # 3f.  Drop redundant standalone unique index on backup_locks.lock_name.
+    #       The unique constraint (from unique=True on the column) remains.
+    #       ix_backup_locks_name is a separate duplicate unique index that
+    #       Alembic's autogenerate flags as drift.
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_backup_locks_name"))
+
 
 def downgrade() -> None:
+    # ── 3f.  Restore redundant backup_locks unique index ──────────
+    op.create_index("ix_backup_locks_name", "backup_locks", ["lock_name"], unique=True)
+
     # ── 3e.  Remove new legal issue edge indexes ──────────────────
     op.execute(sa.text("DROP INDEX IF EXISTS ix_lge_target"))
     op.execute(sa.text("DROP INDEX IF EXISTS ix_lge_source"))

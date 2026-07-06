@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import unittest
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.db.models import (
     Base,
@@ -283,6 +284,55 @@ class AlembicConfigUrlTests(unittest.TestCase):
         read_back = cfg.get_main_option("sqlalchemy.url")
 
         self.assertEqual(read_back, to_sync_migration_url(url))
+
+
+class FreshDatabaseMigrationTests(unittest.TestCase):
+    """P1.14 — Full migration chain produces zero drift on a clean database."""
+
+    def test_fresh_sqlite_migration_chain_zero_drift(self):
+        from alembic.config import Config as AlcConfig
+        from alembic import command
+        from alembic.runtime.migration import MigrationContext
+        from alembic.autogenerate import compare_metadata
+        from sqlalchemy import create_engine
+        import app.db.models  # noqa: ensure all models registered
+        import app.config as app_config
+        import app.db.session as db_session
+
+        saved_url = os.environ.get("DATABASE_URL")
+        db_url = "sqlite+aiosqlite:///./case_store/_p1.14_fresh_migration_test.db"
+        os.environ["DATABASE_URL"] = db_url
+        app_config.get_settings.cache_clear()
+        db_session._engine = None
+        db_session._sessionmaker = None
+
+        cleanup_path = Path("case_store") / "_p1.14_fresh_migration_test.db"
+
+        try:
+            migrations_dir = str(Path(__file__).resolve().parents[1] / "app" / "db" / "migrations")
+            alc_cfg = AlcConfig()
+            alc_cfg.set_main_option("script_location", migrations_dir)
+            command.upgrade(alc_cfg, "head")
+
+            engine = create_engine("sqlite:///./case_store/_p1.14_fresh_migration_test.db", echo=False)
+            with engine.connect() as conn:
+                ctx = MigrationContext.configure(conn)
+                diffs = compare_metadata(ctx, app.db.models.Base.metadata)
+                self.assertEqual(
+                    diffs, [],
+                    f"Fresh database has unresolved migration operations: {diffs}"
+                )
+            engine.dispose()
+        finally:
+            if saved_url is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = saved_url
+            app_config.get_settings.cache_clear()
+            db_session._engine = None
+            db_session._sessionmaker = None
+            if cleanup_path.exists():
+                cleanup_path.unlink()
 
 
 if __name__ == "__main__":
