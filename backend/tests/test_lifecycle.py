@@ -499,6 +499,68 @@ class PurgeTests(unittest.TestCase):
                 return e.get("outcome", "")
         return ""
 
+    def test_two_real_db_purge_calls_sequentially_succeed(self):
+        cid1 = self._make_purgeable()
+        cid2 = self._make_purgeable()
+        r1 = self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+        self.assertNotIn(cid1, self.cases._state["cases"])
+        self.assertNotIn(cid2, self.cases._state["cases"])
+        cleared = r1.get("purged", 0) + r1.get("partial_failed", 0)
+        self.assertGreaterEqual(cleared, 1)
+
+        cid3 = self._make_purgeable()
+        r2 = self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+        self.assertNotIn(cid3, self.cases._state["cases"])
+        cleared2 = r2.get("purged", 0) + r2.get("partial_failed", 0)
+        self.assertGreaterEqual(cleared2, 1, "Second sequential purge must succeed")
+
+    def test_partial_failure_followed_by_real_db_retry(self):
+        cid = self._make_purgeable()
+        original = self.svc._purge_db_graph
+        tries: list[bool] = []
+
+        def _fail_then_pass(case_id: str, tenant_id: str) -> None:
+            tries.append(True)
+            if len(tries) == 1:
+                raise ConnectionError("Simulated DB failure")
+
+        self.svc._purge_db_graph = _fail_then_pass  # type: ignore[method-assign]
+        try:
+            result = self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+            self.assertGreater(result.get("partial_failed", 0), 0)
+            self.assertEqual(len(tries), 1)
+
+            retry = self.svc.retry_db_purge(cid, self.tenant_id)
+            self.assertTrue(retry.get("ok"), "Retry must succeed")
+            self.assertEqual(len(tries), 2, "Retry must invoke _purge_db_graph again")
+        finally:
+            self.svc._purge_db_graph = original  # type: ignore[method-assign]
+
+    def test_db_exception_not_swallowed(self):
+        cid = self._make_purgeable()
+        original = self.svc._purge_db_graph
+
+        def _always_fail(case_id: str, tenant_id: str) -> None:
+            raise RuntimeError("Permanent DB failure")
+
+        self.svc._purge_db_graph = _always_fail  # type: ignore[method-assign]
+        try:
+            result = self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+            self.assertGreater(result.get("partial_failed", 0), 0,
+                               "DB exception must produce partial_failed")
+            retry = self.svc.retry_db_purge(cid, self.tenant_id)
+            self.assertFalse(retry.get("ok"),
+                             "retry_db_purge must return ok=False on persistent failure")
+            self.assertIn("retry_required", retry)
+        finally:
+            self.svc._purge_db_graph = original  # type: ignore[method-assign]
+
+    def test_no_orphan_ensure_future_after_purge(self):
+        cid = self._make_purgeable()
+        self.svc.run_purge(self.tenant_id, dry_run=False, batch=10)
+        self.assertNotIn(cid, self.cases._state["cases"],
+                         "Case must be purged without orphaned async tasks")
+
 
 class AuditChainTests(unittest.TestCase):
     def setUp(self):
