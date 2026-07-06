@@ -8,7 +8,7 @@ import re
 import sys
 from unittest.mock import patch
 
-from app.core.logging import JsonFormatter, SafeTextFormatter, setup_logging, _configured
+from app.core.logging import JsonFormatter, SafeTextFormatter, setup_logging, _configured, _resolve_env
 
 
 class TestJsonFormatter:
@@ -108,7 +108,7 @@ class TestSetupLogging:
     def test_setup_logging_text_format(self):
         import app.core.logging as mod
         mod._configured = False
-        with patch.dict("os.environ", {"ENVIRONMENT": "development", "LOG_FORMAT": "text", "LOG_LEVEL": "DEBUG"}, clear=False):
+        with patch.dict("os.environ", {"EMSALIST_ENVIRONMENT": "development", "EMSALIST_LOG_FORMAT": "text", "EMSALIST_LOG_LEVEL": "DEBUG"}, clear=False):
             setup_logging()
         root = logging.getLogger()
         assert root.level == logging.DEBUG
@@ -117,7 +117,7 @@ class TestSetupLogging:
     def test_setup_logging_does_not_add_duplicate_handlers(self):
         import app.core.logging as mod
         mod._configured = False
-        with patch.dict("os.environ", {"ENVIRONMENT": "development", "LOG_FORMAT": "text"}, clear=False):
+        with patch.dict("os.environ", {"EMSALIST_ENVIRONMENT": "development", "EMSALIST_LOG_FORMAT": "text"}, clear=False):
             setup_logging()
         handler_count_before = len(logging.getLogger().handlers)
         setup_logging()
@@ -126,7 +126,7 @@ class TestSetupLogging:
     def test_setup_logging_sets_env_vars(self):
         import app.core.logging as mod
         mod._configured = False
-        with patch.dict("os.environ", {"ENVIRONMENT": "development", "LOG_FORMAT": "text"}, clear=False):
+        with patch.dict("os.environ", {"EMSALIST_ENVIRONMENT": "development", "EMSALIST_LOG_FORMAT": "text"}, clear=False):
             setup_logging()
         root_logger = logging.getLogger()
         found_filter = any(
@@ -137,7 +137,7 @@ class TestSetupLogging:
     def test_logging_can_produce_info_message(self):
         import app.core.logging as mod
         mod._configured = False
-        with patch.dict("os.environ", {"ENVIRONMENT": "development", "LOG_FORMAT": "text"}, clear=False):
+        with patch.dict("os.environ", {"EMSALIST_ENVIRONMENT": "development", "EMSALIST_LOG_FORMAT": "text"}, clear=False):
             setup_logging()
         stream = io.StringIO()
         handler = logging.StreamHandler(stream)
@@ -148,6 +148,26 @@ class TestSetupLogging:
         logger.info("unit test log")
         output = stream.getvalue()
         assert "unit test log" in output
+
+    def test_emsalist_prefix_has_priority(self):
+        with patch.dict("os.environ", {
+            "EMSALIST_ENVIRONMENT": "production",
+            "ENVIRONMENT": "development",
+        }, clear=True):
+            result = _resolve_env("ENVIRONMENT", "fallback")
+            assert result == "production"
+
+    def test_fallback_when_no_prefix(self):
+        with patch.dict("os.environ", {
+            "ENVIRONMENT": "staging",
+        }, clear=True):
+            result = _resolve_env("ENVIRONMENT", "fallback")
+            assert result == "staging"
+
+    def test_default_when_no_var_set(self):
+        with patch.dict("os.environ", {}, clear=True):
+            result = _resolve_env("ENVIRONMENT", "development")
+            assert result == "development"
 
 
 class TestAccessLogSecurity:

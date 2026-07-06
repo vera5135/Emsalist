@@ -62,9 +62,16 @@ class ContextFilter(logging.Filter):
 _configured = False
 
 
+def _resolve_env(key: str, default: str) -> str:
+    prefixed = os.environ.get(f"EMSALIST_{key}", "")
+    if prefixed:
+        return prefixed
+    return os.environ.get(key, default)
+
+
 def _is_test_environment() -> bool:
     return (
-        os.environ.get("ENVIRONMENT", "").lower() == "test"
+        _resolve_env("ENVIRONMENT", "").lower() == "test"
         or "PYTEST_CURRENT_TEST" in os.environ
     )
 
@@ -75,10 +82,10 @@ def setup_logging() -> None:
         return
     _configured = True
 
-    env = os.environ.get("ENVIRONMENT", "development").lower()
-    log_level_name = os.environ.get("LOG_LEVEL", "INFO" if env == "production" else "DEBUG").upper()
-    log_format = os.environ.get("LOG_FORMAT", "json" if env == "production" else "text").lower()
-    service_name = os.environ.get("LOG_SERVICE_NAME", "emsalist-api")
+    env = _resolve_env("ENVIRONMENT", "development").lower()
+    log_level_name = _resolve_env("LOG_LEVEL", "INFO" if env == "production" else "DEBUG").upper()
+    log_format = _resolve_env("LOG_FORMAT", "json" if env == "production" else "text").lower()
+    service_name = _resolve_env("LOG_SERVICE_NAME", "emsalist-api")
 
     root_logger = logging.getLogger()
     root_logger.handlers.clear()

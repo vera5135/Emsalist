@@ -57,6 +57,15 @@ class TestCorrelationIdSanitization:
         result = sanitize_correlation_id(val)
         assert result == val
 
+    def test_128_char_limit_boundary(self):
+        assert MAX_CORRELATION_ID_LENGTH == 128
+        val_128 = "a" * 128
+        result = sanitize_correlation_id(val_128)
+        assert len(result) == 128
+        val_129 = "a" * 129
+        result = sanitize_correlation_id(val_129)
+        assert len(result) == 32
+
 
 class TestCorrelationIdContext:
 

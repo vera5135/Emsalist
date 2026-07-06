@@ -19,10 +19,10 @@ from app.db.session import check_db_health
 
 settings = get_settings()
 
-os.environ.setdefault("ENVIRONMENT", settings.environment)
-os.environ.setdefault("LOG_LEVEL", settings.log_level)
-os.environ.setdefault("LOG_FORMAT", settings.log_format)
-os.environ.setdefault("LOG_SERVICE_NAME", settings.log_service_name)
+os.environ.setdefault("EMSALIST_ENVIRONMENT", settings.environment)
+os.environ.setdefault("EMSALIST_LOG_LEVEL", settings.log_level)
+os.environ.setdefault("EMSALIST_LOG_FORMAT", settings.log_format)
+os.environ.setdefault("EMSALIST_LOG_SERVICE_NAME", settings.log_service_name)
 setup_logging()
 
 from app.core.correlation import (
@@ -176,8 +176,44 @@ def web_script() -> FileResponse:
 
 
 @app.get("/health", tags=["System"])
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+async def health_check() -> JSONResponse:
+    checks: dict[str, dict[str, str]] = {}
+    critical_failed = False
+
+    try:
+        db_health = await check_db_health()
+        if db_health.get("connected"):
+            checks["database"] = {"status": "ok"}
+        else:
+            checks["database"] = {"status": "failed", "code": "database_unavailable"}
+            critical_failed = True
+    except Exception:
+        logger.error(
+            "health_db_check_failed correlation_id=%s",
+            get_correlation_id(),
+            extra={"correlation_id": get_correlation_id()},
+        )
+        checks["database"] = {"status": "failed", "code": "database_unavailable"}
+        critical_failed = True
+
+    try:
+        get_settings()
+        checks["configuration"] = {"status": "ok"}
+    except Exception:
+        checks["configuration"] = {"status": "failed", "code": "configuration_error"}
+        critical_failed = True
+
+    if critical_failed:
+        overall = "unhealthy"
+        status_code = 503
+    else:
+        overall = "healthy"
+        status_code = 200
+
+    return JSONResponse(
+        status_code=status_code,
+        content={"status": overall, "service": settings.log_service_name, "checks": checks},
+    )
 
 
 @app.get("/live", tags=["System"])
@@ -194,15 +230,20 @@ async def readiness_check() -> JSONResponse:
         if db_health.get("connected"):
             checks["database"] = {"status": "ok"}
         else:
-            checks["database"] = {"status": "failed", "detail": (db_health.get("error", "unknown") or "")[:100]}
-    except Exception as e:
-        checks["database"] = {"status": "failed", "detail": str(e)[:100]}
+            checks["database"] = {"status": "failed", "code": "database_unavailable"}
+    except Exception:
+        logger.error(
+            "ready_db_check_failed correlation_id=%s",
+            get_correlation_id(),
+            extra={"correlation_id": get_correlation_id()},
+        )
+        checks["database"] = {"status": "failed", "code": "database_unavailable"}
 
     try:
-        settings = get_settings()
+        get_settings()
         checks["configuration"] = {"status": "ok"}
-    except Exception as e:
-        checks["configuration"] = {"status": "failed", "detail": str(e)[:100]}
+    except Exception:
+        checks["configuration"] = {"status": "failed", "code": "configuration_error"}
 
     all_ok = all(c.get("status") == "ok" for c in checks.values())
     status = "ready" if all_ok else "not_ready"
@@ -214,37 +255,6 @@ async def readiness_check() -> JSONResponse:
     )
 
 
-@app.get("/system-health", tags=["System"])
-async def system_health() -> JSONResponse:
-    checks: dict[str, dict[str, str]] = {}
-    critical_failed = False
-
-    try:
-        db_health = await check_db_health()
-        if db_health.get("connected"):
-            checks["database"] = {"status": "ok"}
-        else:
-            checks["database"] = {"status": "failed"}
-            critical_failed = True
-    except Exception:
-        checks["database"] = {"status": "failed"}
-        critical_failed = True
-
-    try:
-        get_settings()
-        checks["configuration"] = {"status": "ok"}
-    except Exception:
-        checks["configuration"] = {"status": "failed"}
-        critical_failed = True
-
-    if critical_failed:
-        overall = "unhealthy"
-        status_code = 503
-    else:
-        overall = "healthy"
-        status_code = 200
-
-    return JSONResponse(
-        status_code=status_code,
-        content={"status": overall, "service": settings.log_service_name, "checks": checks},
-    )
+@app.get("/system-health", tags=["System"], include_in_schema=False)
+async def system_health_alias() -> JSONResponse:
+    return await health_check()

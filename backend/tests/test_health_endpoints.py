@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -62,6 +63,7 @@ class TestHealthEndpoints:
             data = response.json()
             assert data["status"] == "not_ready"
             assert data["checks"]["database"]["status"] == "failed"
+            assert data["checks"]["database"]["code"] == "database_unavailable"
 
     def test_ready_with_db_exception_returns_503(self):
         with patch("app.main.check_db_health", new_callable=AsyncMock) as mock_health:
@@ -71,6 +73,7 @@ class TestHealthEndpoints:
             data = response.json()
             assert data["status"] == "not_ready"
             assert data["checks"]["database"]["status"] == "failed"
+            assert data["checks"]["database"]["code"] == "database_unavailable"
 
     def test_health_returns_200_when_healthy(self):
         with patch("app.main.check_db_health", new_callable=AsyncMock) as mock_health:
@@ -80,7 +83,7 @@ class TestHealthEndpoints:
                 "latency_ms": 3,
                 "migration_head": "abc",
             }
-            response = client.get("/system-health")
+            response = client.get("/health")
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "healthy"
@@ -92,16 +95,40 @@ class TestHealthEndpoints:
                 "connected": False,
                 "error": "down",
             }
-            response = client.get("/system-health")
+            response = client.get("/health")
             assert response.status_code == 503
             data = response.json()
             assert data["status"] == "unhealthy"
 
-    def test_legacy_health_returns_200(self):
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
+    def test_health_comprehensive_response(self):
+        with patch("app.main.check_db_health", new_callable=AsyncMock) as mock_health:
+            mock_health.return_value = {
+                "backend": "sqlalchemy",
+                "connected": True,
+                "latency_ms": 5,
+                "migration_head": "abc123",
+            }
+            response = client.get("/health")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "healthy"
+            assert "checks" in data
+            assert "database" in data["checks"]
+            assert "configuration" in data["checks"]
+            assert data["checks"]["database"]["status"] == "ok"
+            assert data["checks"]["configuration"]["status"] == "ok"
+
+    def test_system_health_aliases_health(self):
+        with patch("app.main.check_db_health", new_callable=AsyncMock) as mock_health:
+            mock_health.return_value = {
+                "backend": "sqlalchemy",
+                "connected": True,
+                "latency_ms": 3,
+                "migration_head": "abc",
+            }
+            r1 = client.get("/health")
+            r2 = client.get("/system-health")
+            assert r1.json() == r2.json()
 
 
 class TestHealthEndpointSecurity:
@@ -136,23 +163,33 @@ class TestHealthEndpointSecurity:
                 "latency_ms": 2,
                 "migration_head": "abc",
             }
-            response = client.get("/system-health")
+            response = client.get("/health")
             data = response.json()
             body = json.dumps(data)
             assert "password" not in body.lower()
             assert "secret" not in body.lower()
 
-    def test_db_error_detail_is_truncated(self):
+    def test_no_db_exception_text_in_ready_response(self):
         with patch("app.main.check_db_health", new_callable=AsyncMock) as mock_health:
-            mock_health.return_value = {
-                "backend": "sqlalchemy",
-                "connected": False,
-                "error": "a" * 200,
-            }
+            mock_health.side_effect = Exception("OperationalError: connection refused at 127.0.0.1:5432")
             response = client.get("/ready")
             data = response.json()
-            detail = data["checks"]["database"].get("detail", "")
-            assert len(detail) <= 100
+            body = json.dumps(data)
+            assert "OperationalError" not in body
+            assert "connection refused" not in body
+            assert "127.0.0.1" not in body
+            assert "5432" not in body
+            assert data["checks"]["database"]["code"] == "database_unavailable"
+
+    def test_no_db_exception_text_in_health_response(self):
+        with patch("app.main.check_db_health", new_callable=AsyncMock) as mock_health:
+            mock_health.side_effect = Exception("OperationalError: connection timeout")
+            response = client.get("/health")
+            data = response.json()
+            body = json.dumps(data)
+            assert "OperationalError" not in body
+            assert "connection timeout" not in body
+            assert data["checks"]["database"]["code"] == "database_unavailable"
 
     def test_readiness_does_not_modify_data(self):
         with patch("app.main.check_db_health", new_callable=AsyncMock) as mock_health:
@@ -197,5 +234,5 @@ class TestHealthEndpointsBypassRateLimit:
                 "migration_head": "abc",
             }
             for _ in range(10):
-                response = client.get("/system-health")
+                response = client.get("/health")
                 assert response.status_code == 200

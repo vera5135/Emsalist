@@ -11,10 +11,10 @@ def main():
 
     settings = get_settings()
     import os as _os
-    _os.environ.setdefault("ENVIRONMENT", settings.environment)
-    _os.environ.setdefault("LOG_LEVEL", settings.log_level)
-    _os.environ.setdefault("LOG_FORMAT", settings.log_format)
-    _os.environ.setdefault("LOG_SERVICE_NAME", settings.log_service_name)
+    _os.environ.setdefault("EMSALIST_ENVIRONMENT", settings.environment)
+    _os.environ.setdefault("EMSALIST_LOG_LEVEL", settings.log_level)
+    _os.environ.setdefault("EMSALIST_LOG_FORMAT", settings.log_format)
+    _os.environ.setdefault("EMSALIST_LOG_SERVICE_NAME", settings.log_service_name)
     setup_logging()
 
     parser = argparse.ArgumentParser(description="Emsalist background job worker")

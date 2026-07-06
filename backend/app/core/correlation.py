@@ -5,7 +5,7 @@ import re
 import uuid
 from contextvars import ContextVar
 
-MAX_CORRELATION_ID_LENGTH = 256
+MAX_CORRELATION_ID_LENGTH = 128
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 _correlation_id: ContextVar[str] = ContextVar("correlation_id", default="")
