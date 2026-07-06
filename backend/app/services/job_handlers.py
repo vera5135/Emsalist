@@ -183,16 +183,40 @@ async def _handle_legal_brain_ingest(ctx: JobContext, payload: dict, job_meta: d
         result = service.ingest(book_id)
         ctx.check_cancelled()
     else:
+        pilot_source_id = (payload.get("source_id") or "").strip()
         source_path = payload.get("source_path", "")
-        content = payload.get("content", "")
-        if not content and not source_path:
-            raise ValueError("LEGAL_BRAIN_INGEST_REQUIRES_BOOK_ID_OR_CONTENT")
-        await ctx.set_progress(15, "ingesting_source")
-        ctx.check_cancelled()
-        from app.services.legal_source_ingest_service import LegalSourceIngestService
-        svc = LegalSourceIngestService()
-        result = svc.ingest_uploads()
-        ctx.check_cancelled()
+        if pilot_source_id and source_path:
+            await ctx.set_progress(15, "pilot_ingesting")
+            ctx.check_cancelled()
+            from app.services.legal_source_pilot_service import pilot_service
+            from pathlib import Path
+            result = pilot_service.ingest_single_source(
+                source_dir=Path(source_path).parent,
+                source_id=pilot_source_id,
+                source_path_rel=Path(source_path).name,
+                source_def={
+                    "source_id": pilot_source_id,
+                    "title": payload.get("title", pilot_source_id),
+                    "source_type": payload.get("source_type", "other"),
+                    "authority": payload.get("authority", "unknown"),
+                    "file": Path(source_path).name,
+                    "file_sha256": payload.get("file_sha256", ""),
+                },
+                ingest_version=payload.get("ingest_version", "pilot-v1"),
+                dry_run=False,
+                force=payload.get("force", False),
+            )
+            ctx.check_cancelled()
+        else:
+            content = payload.get("content", "")
+            if not content and not source_path:
+                raise ValueError("LEGAL_BRAIN_INGEST_REQUIRES_BOOK_ID_OR_CONTENT")
+            await ctx.set_progress(15, "ingesting_source")
+            ctx.check_cancelled()
+            from app.services.legal_source_ingest_service import LegalSourceIngestService
+            svc = LegalSourceIngestService()
+            result = svc.ingest_uploads()
+            ctx.check_cancelled()
 
     await ctx.set_progress(85, "chunking")
     await ctx.set_progress(100, "completed")
