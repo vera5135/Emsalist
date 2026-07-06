@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from starlette.responses import PlainTextResponse
 
-from app.core.metrics import collect_metrics, is_metrics_enabled
+from app.core.metrics import collect_metrics_refreshed, is_metrics_enabled
 
 router = APIRouter(tags=["System"])
 
@@ -13,5 +13,5 @@ router = APIRouter(tags=["System"])
 async def metrics_endpoint() -> PlainTextResponse:
     if not is_metrics_enabled():
         return PlainTextResponse("metrics disabled", status_code=200, media_type="text/plain")
-    text = collect_metrics()
+    text = await collect_metrics_refreshed()
     return PlainTextResponse(text, media_type="text/plain; version=0.0.4")

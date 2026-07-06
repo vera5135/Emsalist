@@ -1,9 +1,13 @@
 """P1.10.4 — Prometheus metrics registry with no external dependency."""
 from __future__ import annotations
 
+import asyncio
+import logging
 import threading
 import time
 from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 _HISTOGRAM_BUCKETS = (
     0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
@@ -313,10 +317,12 @@ def record_job_completed(job_type: str, status: str, duration_s: float | None = 
 
 
 def record_job_pending(job_type: str, count: int) -> None:
+    """Process-local helper signal. DB is the source of truth for jobs_pending."""
     jobs_pending.inc(float(count), labels={"job_type": job_type})
 
 
 def record_job_pending_decrement(job_type: str) -> None:
+    """Process-local helper signal. DB is the source of truth for jobs_pending."""
     jobs_pending.inc(-1.0, labels={"job_type": job_type})
 
 
@@ -339,6 +345,76 @@ def record_db_health(healthy: bool, duration_s: float) -> None:
     db_check_duration_seconds.set(duration_s)
 
 
+_PENDING_STATUSES = frozenset({"queued", "scheduled", "retry_wait"})
+_pending_last_refresh: float = 0.0
+_pending_refresh_ttl: float = 15.0
+
+
+async def _refresh_jobs_pending_from_db() -> None:
+    global _pending_last_refresh
+    try:
+        from app.db.session import get_sessionmaker
+        from sqlalchemy import select, func
+        from app.db.models import BackgroundJob
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            stmt = (
+                select(BackgroundJob.job_type, func.count(BackgroundJob.id))
+                .where(BackgroundJob.status.in_(_PENDING_STATUSES))
+                .group_by(BackgroundJob.job_type)
+            )
+            result = await db.execute(stmt)
+            rows = result.all()
+
+        counts: dict[str, int] = {}
+        for job_type, count in rows:
+            counts[job_type] = count
+
+        for key in list(jobs_pending._data.keys()):
+            labels_dict = dict(zip(jobs_pending.labelnames, key))
+            new_val = float(counts.get(key[0], 0))
+            jobs_pending.set(new_val, labels=labels_dict)
+
+        for job_type, count in counts.items():
+            jobs_pending.set(float(count), labels={"job_type": job_type})
+
+        _pending_last_refresh = time.time()
+        try:
+            from app.core.degraded_state import update_component_state, ComponentStatus
+            update_component_state("queue", ComponentStatus.HEALTHY)
+        except Exception:
+            pass
+
+    except Exception as e:
+        logger.warning("jobs_pending_refresh_failed: %s", str(e)[:100])
+        _pending_last_refresh = 0.0
+        try:
+            from app.core.degraded_state import update_component_state, ComponentStatus
+            update_component_state("queue", ComponentStatus.DEGRADED, error_code="pending_query_failed")
+        except Exception:
+            pass
+
+
+async def collect_metrics_refreshed() -> str:
+    if time.time() - _pending_last_refresh > _pending_refresh_ttl:
+        await _refresh_jobs_pending_from_db()
+    return _collect_metrics_text()
+
+
+def collect_metrics() -> str:
+    return _collect_metrics_text()
+
+
+def _collect_metrics_text() -> str:
+    lines: list[str] = []
+    with _LOCK:
+        for collector in sorted(_REGISTRY.values(), key=lambda c: c.name):
+            lines.extend(collector.collect())
+    lines.append("")
+    return "\n".join(lines)
+
+
 _metrics_enabled = True
 
 
@@ -349,16 +425,6 @@ def set_metrics_enabled(enabled: bool) -> None:
 
 def is_metrics_enabled() -> bool:
     return _metrics_enabled
-
-
-def collect_metrics() -> str:
-    """Generate Prometheus text exposition format."""
-    lines: list[str] = []
-    with _LOCK:
-        for collector in sorted(_REGISTRY.values(), key=lambda c: c.name):
-            lines.extend(collector.collect())
-    lines.append("")
-    return "\n".join(lines)
 
 
 def _register(collector: _Collector) -> None:

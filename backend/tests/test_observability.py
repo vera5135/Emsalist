@@ -1,4 +1,4 @@
-"""P1.10.4–P1.10.6 — Observability hardening tests."""
+﻿"""P1.10.4–P1.10.6 — Observability hardening tests."""
 from __future__ import annotations
 
 import json
@@ -617,38 +617,477 @@ class TestBackupVerifyWiring:
 
 
 class TestJobsPendingWiring:
-    def test_enqueue_increment(self):
-        from app.core.metrics import record_job_pending, jobs_pending
-        jtype = "yargitay_search"
-        key = (jtype,)
-        before = jobs_pending._data.get(key, 0)
-        record_job_pending(jtype, 3)
-        after = jobs_pending._data.get(key, 0)
-        assert after == before + 3
+    """DB-backed pending metric tests — manual inc/dec are non-authoritative helpers."""
 
-    def test_decrement(self):
-        from app.core.metrics import record_job_pending_decrement, jobs_pending
-        jtype = "yargitay_search"
-        record_job_pending(jtype, 10)
-        key = (jtype,)
-        before = jobs_pending._data.get(key, 0)
-        record_job_pending_decrement(jtype)
-        after = jobs_pending._data.get(key, 0)
-        assert after == before - 1
-
-    def test_gauge_never_negative(self):
-        from app.core.metrics import jobs_pending
-        jtype = "retention_purge"
-        job_key = (jtype,)
-        jobs_pending._data[job_key] = 0
-        from app.core.metrics import record_job_pending_decrement
-        record_job_pending_decrement(jtype)
-        val = jobs_pending._data.get(job_key, 0)
-        assert val <= 0  # process-local gauge, no DB enforcement
-
-    def test_pending_is_process_local(self):
+    @pytest.mark.asyncio
+    async def test_empty_queue_is_zero(self):
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        jobs_pending._data.clear()
+        await _refresh_jobs_pending_from_db()
         body = collect_metrics()
         assert "emsalist_jobs_pending" in body
+
+    @pytest.mark.asyncio
+    async def test_enqueue_then_count_one(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-pending-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-pending-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-pending-{_uuid.uuid4().hex[:8]}"
+        jtype = f"pending-test-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="pending-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="pending case")
+            db.add_all([t, u, c])
+            job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                job_type=jtype, status="queued")
+            db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        body = collect_metrics()
+        assert f'job_type="{jtype}"' in body
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_same_idempotency_key_still_one(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-idem-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-idem-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-idem-{_uuid.uuid4().hex[:8]}"
+        jtype = f"idem-test-{_uuid.uuid4().hex[:6]}"
+        idem_key = "same-idempotency-key-123"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="idem-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="idem case")
+            db.add_all([t, u, c])
+            for _ in range(3):
+                job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                    job_type=jtype, status="queued",
+                                    idempotency_key=idem_key)
+                db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        key = (jtype,)
+        count = jobs_pending._data.get(key, 0)
+        assert count >= 1
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_claim_reduces_pending(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-claim-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-claim-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-claim-{_uuid.uuid4().hex[:8]}"
+        jtype = f"claim-test-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="claim-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="claim case")
+            db.add_all([t, u, c])
+            job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                job_type=jtype, status="queued")
+            db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        key = (jtype,)
+        before = jobs_pending._data.get(key, 0)
+        assert before == 1
+
+        async with maker() as db:
+            from sqlalchemy import update
+            await db.execute(
+                update(BackgroundJob).where(BackgroundJob.job_type == jtype).values(status="claimed")
+            )
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        after = jobs_pending._data.get(key, 0)
+        assert after == 0
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_retry_wait_counts_as_pending(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-rw-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-rw-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-rw-{_uuid.uuid4().hex[:8]}"
+        jtype = f"rw-test-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="rw-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="rw case")
+            db.add_all([t, u, c])
+            job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                job_type=jtype, status="retry_wait")
+            db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        key = (jtype,)
+        assert jobs_pending._data.get(key, 0) == 1
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_scheduled_counts_as_pending(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        from datetime import UTC, datetime, timedelta
+        import uuid as _uuid
+
+        tid = f"t-sched-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-sched-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-sched-{_uuid.uuid4().hex[:8]}"
+        jtype = f"sched-test-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="sched-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="sched case")
+            db.add_all([t, u, c])
+            job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                job_type=jtype, status="scheduled",
+                                scheduled_at=datetime.now(UTC) + timedelta(hours=1))
+            db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        key = (jtype,)
+        assert jobs_pending._data.get(key, 0) == 1
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_cancel_not_pending(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-cancel-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-cancel-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-cancel-{_uuid.uuid4().hex[:8]}"
+        jtype = f"cancel-test-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="cancel-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="cancel case")
+            db.add_all([t, u, c])
+            job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                job_type=jtype, status="cancelled")
+            db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        key = (jtype,)
+        assert jobs_pending._data.get(key, 0) == 0
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_completed_not_pending(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-done-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-done-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-done-{_uuid.uuid4().hex[:8]}"
+        jtype = f"done-test-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="done-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="done case")
+            db.add_all([t, u, c])
+            job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                job_type=jtype, status="succeeded")
+            db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        key = (jtype,)
+        assert jobs_pending._data.get(key, 0) == 0
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_dead_lettered_not_pending(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-dl-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-dl-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-dl-{_uuid.uuid4().hex[:8]}"
+        jtype = f"dl-test-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="dl-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="dl case")
+            db.add_all([t, u, c])
+            job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                job_type=jtype, status="dead_lettered")
+            db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        key = (jtype,)
+        assert jobs_pending._data.get(key, 0) == 0
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_multiple_job_types_separate(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-multi-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-multi-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-multi-{_uuid.uuid4().hex[:8]}"
+        jtype_a = f"multi-a-{_uuid.uuid4().hex[:6]}"
+        jtype_b = f"multi-b-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="multi-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="multi case")
+            db.add_all([t, u, c])
+            for jt, cnt in [(jtype_a, 2), (jtype_b, 3)]:
+                for _ in range(cnt):
+                    job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                        job_type=jt, status="queued")
+                    db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        assert jobs_pending._data.get((jtype_a,), 0) == 2
+        assert jobs_pending._data.get((jtype_b,), 0) == 3
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            for jt in [jtype_a, jtype_b]:
+                await db.execute(
+                    __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jt)
+                )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_double_refresh_idempotent(self):
+        from app.db.session import get_sessionmaker
+        from app.db.models import BackgroundJob, Tenant, User, Case, new_uuid
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        import uuid as _uuid
+
+        tid = f"t-idem2-{_uuid.uuid4().hex[:8]}"
+        uid = f"u-idem2-{_uuid.uuid4().hex[:8]}"
+        cid = f"c-idem2-{_uuid.uuid4().hex[:8]}"
+        jtype = f"refr2-{_uuid.uuid4().hex[:6]}"
+
+        maker = get_sessionmaker()
+        async with maker() as db:
+            t = Tenant(id=tid, name="idem2-test", slug=tid)
+            u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
+            c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="idem2 case")
+            db.add_all([t, u, c])
+            job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
+                                job_type=jtype, status="queued")
+            db.add(job)
+            await db.commit()
+
+        await _refresh_jobs_pending_from_db()
+        v1 = jobs_pending._data.get((jtype,), 0)
+        await _refresh_jobs_pending_from_db()
+        v2 = jobs_pending._data.get((jtype,), 0)
+        assert v1 == v2 == 1
+
+        jobs_pending._data.clear()
+        async with maker() as db:
+            await db.execute(
+                __import__("sqlalchemy").delete(BackgroundJob).where(BackgroundJob.job_type == jtype)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Case).where(Case.id == cid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == uid)
+            )
+            await db.execute(
+                __import__("sqlalchemy").delete(Tenant).where(Tenant.id == tid)
+            )
+            await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_no_negative_after_all_cleared(self):
+        from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        jobs_pending._data.clear()
+        await _refresh_jobs_pending_from_db()
+        for key, val in jobs_pending._data.items():
+            assert val >= 0, f"Negative pending for {key}: {val}"
 
 
 class TestDbCheckDurationWiring:

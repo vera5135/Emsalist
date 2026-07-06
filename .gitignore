@@ -41,3 +41,6 @@ backend/export_store/
 backend/collection-errors.txt
 legal_sources/**/ingested/
 legal_sources/**/reports/
+
+# Tooling
+opencode.json

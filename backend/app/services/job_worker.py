@@ -111,11 +111,6 @@ class JobWorker:
                     return 0
 
                 job_type = job["job_type"]
-                try:
-                    from app.core.metrics import record_job_pending_decrement
-                    record_job_pending_decrement(job_type)
-                except Exception:
-                    pass
 
                 handler_def = handler_registry.get(job["job_type"])
                 if handler_def is None:
