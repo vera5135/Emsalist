@@ -172,11 +172,19 @@ class RestoreService:
 
         pre_restore_id = ""
         if target == "production":
+            from app.services.backup_orchestration import backup_service
             if s.backup_require_pre_restore_backup:
-                pre_run = await _create_pre_restore_backup(db, backup_run_id)
-                if not pre_run or pre_run["status"] != "succeeded":
-                    raise RuntimeError("Pre-restore backup failed")
-                pre_restore_id = pre_run["id"]
+                logger.info("Creating pre-restore backup for production restore")
+                try:
+                    pre_run = await backup_service.create(db, backup_type="pre_restore",
+                                                           scope="full",
+                                                           created_by=initiated_by or "system",
+                                                           verify=True)
+                    if pre_run["status"] != "succeeded":
+                        raise RuntimeError(f"Pre-restore backup failed: {pre_run.get('safe_summary', {}).get('error')}")
+                    pre_restore_id = pre_run["id"]
+                except Exception as e:
+                    raise RuntimeError(f"Pre-restore backup required but failed: {str(e)[:200]}")
 
         run = await self.repo.create_run(db, backup_run_id,
             target_environment=target, initiated_by=initiated_by,
