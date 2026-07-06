@@ -11,6 +11,27 @@ from app.models.api_models import CapabilitiesResponse
 api_v1_router = APIRouter(prefix="/api/v1")
 
 
+@api_v1_router.get(
+    "/meta/version",
+    response_model=dict,
+    tags=["Meta"],
+    operation_id="get_version",
+    summary="Application version and build metadata",
+)
+def get_version() -> dict:
+    import os as _os
+    from app.config import get_settings
+    settings = get_settings()
+    return {
+        "application": "emsalist",
+        "version": settings.app_version,
+        "api_version": "v1",
+        "commit": _os.environ.get("EMSALIST_COMMIT", "unknown"),
+        "build_timestamp": _os.environ.get("EMSALIST_BUILD_TIMESTAMP", ""),
+        "environment": settings.environment,
+    }
+
+
 # ── Sub-routers mounted under /api/v1 ───────────────────────────
 from app.routes.case_routes import router as _case_router
 from app.routes.document_routes import router as _document_router

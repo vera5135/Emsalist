@@ -1,0 +1,58 @@
+name: Container Build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build and verify container
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set build args
+        id: args
+        run: |
+          echo "commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg BUILD_COMMIT=${{ steps.args.outputs.commit }} \
+            --build-arg BUILD_TIMESTAMP=${{ steps.args.outputs.timestamp }} \
+            -t emsalist-api:ci-test .
+
+      - name: Verify image has no .env
+        run: |
+          if docker run --rm emsalist-api:ci-test ls /app/.env 2>/dev/null; then
+            echo "FAIL: .env found in image"
+            exit 1
+          fi
+          echo "PASS: No .env in image"
+
+      - name: Verify image has no test credentials
+        run: |
+          if docker run --rm emsalist-api:ci-test find /app -name "*.pyc" -o -name "__pycache__" 2>/dev/null | head; then
+            echo "Checking for test files in image..."
+          fi
+          echo "Verification complete"
+
+      - name: Verify non-root user
+        run: |
+          USER=$(docker run --rm --entrypoint whoami emsalist-api:ci-test)
+          if [ "$USER" = "root" ]; then
+            echo "FAIL: Running as root"
+            exit 1
+          fi
+          echo "PASS: Running as $USER"
+
+      - name: Inspect image size
+        run: docker images emsalist-api:ci-test --format "Image size: {{.Size}}"

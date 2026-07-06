@@ -1,0 +1,93 @@
+# P1.13 — Production-like Docker Compose stack
+# Usage: docker compose up --build
+
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: emsalist-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: emsalist
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-emsalist_dev_pwd}
+      POSTGRES_DB: emsalist
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emsalist -d emsalist"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  migration:
+    image: emsalist-api:latest
+    container_name: emsalist-migration
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      EMSALIST_ENVIRONMENT: production
+      EMSALIST_SKIP_PRODUCTION_VALIDATION: "1"
+      DATABASE_URL: postgresql+asyncpg://emsalist:${DB_PASSWORD:-emsalist_dev_pwd}@postgres:5432/emsalist
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    volumes:
+      - ${PWD}/backend/alembic.ini:/app/alembic.ini:ro
+      - ${PWD}/backend/app/db/migrations:/app/app/db/migrations:ro
+
+  api:
+    image: emsalist-api:latest
+    container_name: emsalist-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    environment:
+      EMSALIST_ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://emsalist:${DB_PASSWORD:-emsalist_dev_pwd}@postgres:5432/emsalist
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-min-32-chars-long}
+      AUTH_MODE: ${AUTH_MODE:-jwt}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,api}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:8000}
+      EMSALIST_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      EMSALIST_LOG_FORMAT: json
+      EMSALIST_STORAGE_ROOT: /data
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      BACKUP_ENCRYPTION_ENABLED: ${BACKUP_ENCRYPTION_ENABLED:-false}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - upload_data:/data/uploads
+      - export_data:/data/exports
+      - backup_data:/data/backups
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/live')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+        reservations:
+          cpus: "0.25"
+          memory: "256M"
+
+volumes:
+  pgdata:
+    name: emsalist_pgdata
+  upload_data:
+    name: emsalist_uploads
+  export_data:
+    name: emsalist_exports
+  backup_data:
+    name: emsalist_backups

@@ -1,0 +1,108 @@
+name: Release Candidate Validation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Full test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_test_pwd
+          POSTGRES_DB: emsalist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install -r backend/requirements-dev.txt
+          pip install asyncpg
+
+      - name: Run migrations
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      - name: Run core tests
+        working-directory: backend
+        run: python -m pytest tests/test_security.py tests/test_auth.py tests/test_security_hardening.py tests/test_api_contract.py tests/test_case_isolation.py tests/test_document_intake.py -v --tb=short
+
+      - name: Run lifecycle tests
+        working-directory: backend
+        run: python -m pytest tests/test_lifecycle.py -v --tb=short
+
+      - name: Run background job tests
+        working-directory: backend
+        run: python -m pytest tests/test_background_jobs.py -v --tb=short
+
+      - name: Run PostgreSQL tests
+        working-directory: backend
+        run: python -m pytest tests/test_postgresql_claim.py -v --tb=long
+
+      - name: Verify migration state
+        working-directory: backend
+        run: python scripts/check_migration_state.py
+
+      - name: Check OpenAPI schema consistency
+        working-directory: backend
+        run: |
+          python -c "
+          from app.main import app
+          import json
+          schema = app.openapi()
+          paths = schema.get('paths', {})
+          v1 = [p for p in paths if p.startswith('/api/v1')]
+          assert len(v1) > 0, 'No v1 paths'
+          print(f'OpenAPI: {len(paths)} paths, {len(v1)} v1 paths')
+          "
+
+  production-config:
+    name: Production config safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify production fails unsafe
+        working-directory: backend
+        run: |
+          python -c "
+          import os, sys
+          sys.path.insert(0, '.')
+          os.environ['EMSALIST_ENVIRONMENT'] = 'production'
+          from app.config import validate_production_config, Settings, ProductionConfigError
+          try:
+              validate_production_config(Settings(environment='production'))
+              print('FAIL: production with defaults did not raise')
+              sys.exit(1)
+          except ProductionConfigError as e:
+              print(f'PASS: {e}')
+          "

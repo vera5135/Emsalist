@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environment
+.venv/
+
+# Environment (never copy to image)
+.env
+backend/.env
+**/.env
+
+# Git
+.git/
+.gitattributes
+.gitignore
+
+# Runtime data (mounted as volumes)
+backend/app/document_store/
+backend/app/case_store/
+backend/backups/
+backend/export_store/
+backend/app/legal_brain/uploads/
+backend/app/legal_brain/indexes/
+
+# Tests
+backend/tests/
+
+# Development
+*.md
+!README.md
+!SECURITY.md
+open.code.json
+*.ps1
+*.bat
+*.bak
+
+# CI
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build context
+Dockerfile
+.dockerignore
+docker-compose*
