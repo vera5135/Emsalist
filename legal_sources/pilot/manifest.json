@@ -1,0 +1,45 @@
+{
+  "pilot_version": "v1",
+  "description": "Emsalist Legal Brain Pilot Kaynak Manifesti",
+  "sources": [
+    {
+      "file": "fixtures/test_statute.txt",
+      "source_id": "pilot-tbk-ayip-001",
+      "title": "TBK Ayıplı Mal Hükümleri (Madde 219-227)",
+      "source_type": "legislation",
+      "authority": "TBMM",
+      "jurisdiction": "TR",
+      "legislation_number": "6098",
+      "article_numbers": "219,223,227",
+      "status": "active",
+      "language": "tr",
+      "publication_date": "2011-01-11",
+      "effective_date": "2012-07-01"
+    },
+    {
+      "file": "fixtures/test_decision.txt",
+      "source_id": "pilot-yargitay-arac-001",
+      "title": "Yargıtay 13. HD - Ayıplı Araç Satışı Bedel İadesi",
+      "source_type": "court_decision",
+      "authority": "Yargıtay 13. Hukuk Dairesi",
+      "jurisdiction": "TR",
+      "decision_date": "2023-06-15",
+      "decision_number": "2023/67890",
+      "chamber": "13. Hukuk Dairesi",
+      "status": "active",
+      "language": "tr"
+    },
+    {
+      "file": "fixtures/test_duplicate.txt",
+      "source_id": "pilot-tbk-ayip-001",
+      "title": "TBK Ayıplı Mal Hükümleri (Duplicate)",
+      "source_type": "legislation",
+      "authority": "TBMM",
+      "jurisdiction": "TR",
+      "legislation_number": "6098",
+      "article_numbers": "219,223,227",
+      "status": "active",
+      "language": "tr"
+    }
+  ]
+}
