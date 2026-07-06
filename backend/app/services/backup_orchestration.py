@@ -448,18 +448,23 @@ class BackupService:
                             "storage_key": rel, "size_bytes": len(data),
                             "sha256": _safe_hash(data), "status": "collected",
                         })
+                    except OSError:
+                        logger.warning("skipping file during backup collection: %s", f.name)
                     except Exception:
                         pass
         case_dir = Path(__file__).resolve().parents[1] / "case_store"
         if (case_dir / "sessions.json").exists():
-            data = (case_dir / "sessions.json").read_bytes()
-            rel = f"{run_id}/files/sessions.json"
-            self.storage.write(rel, data)
-            items.append({
-                "item_type": "json_projection", "logical_name": "projection/sessions.json",
-                "storage_key": rel, "size_bytes": len(data),
-                "sha256": _safe_hash(data), "status": "collected",
-            })
+            try:
+                data = (case_dir / "sessions.json").read_bytes()
+                rel = f"{run_id}/files/sessions.json"
+                self.storage.write(rel, data)
+                items.append({
+                    "item_type": "json_projection", "logical_name": "projection/sessions.json",
+                    "storage_key": rel, "size_bytes": len(data),
+                    "sha256": _safe_hash(data), "status": "collected",
+                })
+            except OSError:
+                logger.warning("skipping sessions.json during backup collection")
         return items
 
     def _build_archive(self, run_id: str, items: list[dict], manifest_data: dict) -> str:

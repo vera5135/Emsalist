@@ -1,0 +1,21 @@
+{
+  "source_id": "rs-tbk-ayip-001",
+  "title": "Türk Borçlar Kanunu — Ayıplı Satış Hükümleri (m.219-231)",
+  "source_type": "legislation",
+  "authority": "TBMM",
+  "file": "sources/tbk_ayipli_mal_219_231.txt",
+  "jurisdiction": "TR",
+  "publication_date": "2011-02-04",
+  "effective_date": "2012-07-01",
+  "decision_date": "",
+  "decision_number": "",
+  "chamber": "",
+  "legislation_number": "6098",
+  "article_numbers": "219,223,225,227,231",
+  "status": "active",
+  "language": "tr",
+  "ingest_version": "real-source-v1",
+  "ingested_at": "2026-07-06T10:37:13.131505+00:00",
+  "chunk_count": 3,
+  "file_sha256": "17f556b0115717f7963255cd3057d677efbefad165de19e72690068c922c0828"
+}

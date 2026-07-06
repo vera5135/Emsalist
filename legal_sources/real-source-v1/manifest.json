@@ -1,0 +1,70 @@
+{
+  "pilot_version": "real-source-v1",
+  "description": "Emsalist Legal Brain — Gerçek Kaynak Paketi V1: Ayıplı Araç ve Satış Uyuşmazlıkları",
+  "sources": [
+    {
+      "file": "sources/tbk_ayipli_mal_219_231.txt",
+      "source_id": "rs-tbk-ayip-001",
+      "title": "Türk Borçlar Kanunu — Ayıplı Satış Hükümleri (m.219-231)",
+      "source_type": "legislation",
+      "authority": "TBMM",
+      "jurisdiction": "TR",
+      "legislation_number": "6098",
+      "article_numbers": "219,223,225,227,231",
+      "status": "active",
+      "language": "tr",
+      "publication_date": "2011-02-04",
+      "effective_date": "2012-07-01"
+    },
+    {
+      "file": "sources/tkhk_ayipli_mal_8_13.txt",
+      "source_id": "rs-tkhk-ayip-001",
+      "title": "Tüketicinin Korunması Hakkında Kanun — Ayıplı Mal Hükümleri (m.8-13)",
+      "source_type": "legislation",
+      "authority": "TBMM",
+      "jurisdiction": "TR",
+      "legislation_number": "6502",
+      "article_numbers": "8,9,11,12,13",
+      "status": "active",
+      "language": "tr",
+      "publication_date": "2013-11-28",
+      "effective_date": "2014-05-28"
+    },
+    {
+      "file": "sources/ttk_tacir_satisi_ayip.txt",
+      "source_id": "rs-ttk-tacir-001",
+      "title": "Türk Ticaret Kanunu — Tacir Satışında Ayıp İhbarı (m.23)",
+      "source_type": "legislation",
+      "authority": "TBMM",
+      "jurisdiction": "TR",
+      "legislation_number": "6102",
+      "article_numbers": "18,23,1530",
+      "status": "active",
+      "language": "tr",
+      "publication_date": "2011-02-14",
+      "effective_date": "2012-07-01"
+    },
+    {
+      "file": "sources/arac_ayibi_hukuki_rehber.txt",
+      "source_id": "rs-rehber-arac-001",
+      "title": "İkinci El Araç Satışında Ayıp İncelemesi — Hukuki Rehber",
+      "source_type": "internal_guidance",
+      "authority": "Emsalist Hukuk Editörü",
+      "jurisdiction": "TR",
+      "status": "active",
+      "language": "tr",
+      "publication_date": "2026-07-06"
+    },
+    {
+      "file": "sources/arac_ayibi_kontrol_listesi.txt",
+      "source_id": "rs-checklist-arac-001",
+      "title": "Araç Ayıbı Dava Hazırlık Kontrol Listesi",
+      "source_type": "legal_checklist",
+      "authority": "Emsalist Hukuk Editörü",
+      "jurisdiction": "TR",
+      "status": "active",
+      "language": "tr",
+      "publication_date": "2026-07-06"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "source_id": "rs-tkhk-ayip-001",
+  "title": "Tüketicinin Korunması Hakkında Kanun — Ayıplı Mal Hükümleri (m.8-13)",
+  "source_type": "legislation",
+  "authority": "TBMM",
+  "file": "sources/tkhk_ayipli_mal_8_13.txt",
+  "jurisdiction": "TR",
+  "publication_date": "2013-11-28",
+  "effective_date": "2014-05-28",
+  "decision_date": "",
+  "decision_number": "",
+  "chamber": "",
+  "legislation_number": "6502",
+  "article_numbers": "8,9,11,12,13",
+  "status": "active",
+  "language": "tr",
+  "ingest_version": "real-source-v1",
+  "ingested_at": "2026-07-06T10:37:13.150213+00:00",
+  "chunk_count": 3,
+  "file_sha256": "9795b3513aa5d46083ab8f690da358de5cc8308446e9653cfbf913535642f014"
+}

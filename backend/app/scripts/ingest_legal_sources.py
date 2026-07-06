@@ -23,6 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description="Emsalist Legal Source Pilot Ingest")
     parser.add_argument("--source-dir", required=True, help="Pilot kaynak dizini")
     parser.add_argument("--manifest", required=True, help="manifest.json dosya yolu")
+    parser.add_argument("--output-dir", type=str, default="", help="Cikti dizini (varsayilan: <source_dir>/ingested)")
     parser.add_argument("--dry-run", action="store_true", help="Veri degistirmeden dogrula")
     parser.add_argument("--execute", action="store_true", help="Gercek ingest islemini calistir")
     parser.add_argument("--source-id", type=str, default="", help="Yalniz belirtilen source_id islensin")
@@ -40,6 +41,12 @@ def main():
     os.environ.setdefault("EMSALIST_LOG_FORMAT", settings.log_format)
     os.environ.setdefault("EMSALIST_LOG_SERVICE_NAME", settings.log_service_name)
     setup_logging()
+
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
     if args.dry_run and args.execute:
         print("HATA: --dry-run ve --execute ayni anda kullanilamaz.", file=sys.stderr)
@@ -65,10 +72,19 @@ def main():
         report_path = Path(args.report_path)
     else:
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        reports_dir = source_dir.parent / "reports"
+        reports_dir = source_dir / "reports"
         report_path = reports_dir / f"ingest-report-{ts}.json"
 
-    from app.services.legal_source_pilot_service import pilot_service
+    from app.services.legal_source_pilot_service import LegalSourcePilotService
+
+    output_dir = None
+    if args.output_dir:
+        output_dir = Path(args.output_dir).resolve()
+        if not str(output_dir).startswith(str(source_dir)):
+            print(f"HATA: --output-dir ({output_dir}) source_dir disina cikamaz", file=sys.stderr)
+            sys.exit(1)
+
+    pilot_service = LegalSourcePilotService(data_dir=output_dir)
 
     dry_run = args.dry_run
     source_id_filter = args.source_id.strip() or None

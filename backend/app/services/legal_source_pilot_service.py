@@ -72,10 +72,20 @@ def _compute_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _read_text_utf8(path: Path) -> str:
+    raw_bytes = path.read_bytes()
+    if raw_bytes.startswith(b"\xef\xbb\xbf"):
+        return raw_bytes.decode("utf-8-sig")
+    try:
+        return raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError(f"encoding_error: file is not valid UTF-8: {path.name}")
+
+
 def _extract_text(path: Path) -> tuple[str, list[str]]:
     suffix = path.suffix.lower()
     if suffix == ".txt":
-        return path.read_text(encoding="utf-8"), []
+        return _read_text_utf8(path), []
     if suffix == ".pdf":
         return _extract_pdf(path)
     raise ValueError(f"unsupported_file_type: {suffix}")
@@ -300,11 +310,15 @@ def _atomic_write_jsonl(path: Path, chunks: list[dict]) -> None:
 class LegalSourcePilotService:
 
     def __init__(self, data_dir: Path | None = None):
-        if data_dir is None:
-            data_dir = Path(__file__).resolve().parents[3] / "legal_sources" / "pilot"
         self.data_dir = data_dir
-        self.ingested_dir = data_dir / "ingested"
-        self.reports_dir = data_dir.parent / "reports"
+        self.ingested_dir = None
+        self.reports_dir = None
+
+    def _resolve_output_dirs(self, source_dir: Path) -> None:
+        if self.ingested_dir is None:
+            self.ingested_dir = source_dir / "ingested"
+        if self.reports_dir is None:
+            self.reports_dir = source_dir / "reports"
 
     def ingest_single_source(
         self,
@@ -316,6 +330,7 @@ class LegalSourcePilotService:
         dry_run: bool = False,
         force: bool = False,
     ) -> dict:
+        self._resolve_output_dirs(source_dir)
         index = self._load_index()
         file_rel = source_path_rel
         source_path = _safe_path(source_dir, file_rel)
@@ -385,6 +400,7 @@ class LegalSourcePilotService:
         report_path: Path | None = None,
         ingest_version: str = "pilot-v1",
     ) -> dict:
+        self._resolve_output_dirs(source_dir)
         started_at = datetime.now(UTC).isoformat()
         warnings: list[str] = []
         errors: list[str] = []
@@ -464,6 +480,11 @@ class LegalSourcePilotService:
         if report_path:
             report_path.parent.mkdir(parents=True, exist_ok=True)
             report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        else:
+            self.reports_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+            (self.reports_dir / f"ingest-report-{ts}.json").write_text(
+                json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         return report
 
     def load_manifest(self, manifest_path: Path) -> dict:

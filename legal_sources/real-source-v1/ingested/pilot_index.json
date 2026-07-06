@@ -1,0 +1,37 @@
+{
+  "rs-tbk-ayip-001": {
+    "sha256": "17f556b0115717f7963255cd3057d677efbefad165de19e72690068c922c0828",
+    "ingest_version": "real-source-v1",
+    "ingested_at": "2026-07-06T10:37:13.131505+00:00",
+    "chunk_count": 3,
+    "title": "Türk Borçlar Kanunu — Ayıplı Satış Hükümleri (m.219-231)"
+  },
+  "rs-tkhk-ayip-001": {
+    "sha256": "9795b3513aa5d46083ab8f690da358de5cc8308446e9653cfbf913535642f014",
+    "ingest_version": "real-source-v1",
+    "ingested_at": "2026-07-06T10:37:13.150213+00:00",
+    "chunk_count": 3,
+    "title": "Tüketicinin Korunması Hakkında Kanun — Ayıplı Mal Hükümleri (m.8-13)"
+  },
+  "rs-ttk-tacir-001": {
+    "sha256": "5b2a9f130e289dc51b5b350b2fadbb4daab56d8c41f02bf4e0c3133c3fc2faf3",
+    "ingest_version": "real-source-v1",
+    "ingested_at": "2026-07-06T10:37:13.167021+00:00",
+    "chunk_count": 1,
+    "title": "Türk Ticaret Kanunu — Tacir Satışında Ayıp İhbarı (m.23)"
+  },
+  "rs-rehber-arac-001": {
+    "sha256": "79f0553d8b1ddb8d00b1d661986b6c86b200c372086709d25799531c330c5834",
+    "ingest_version": "real-source-v1",
+    "ingested_at": "2026-07-06T10:37:13.194189+00:00",
+    "chunk_count": 1,
+    "title": "İkinci El Araç Satışında Ayıp İncelemesi — Hukuki Rehber"
+  },
+  "rs-checklist-arac-001": {
+    "sha256": "373e11818fc95d7f0a3844c113a2d16e082d0a43822f5f539ad28590cd8b25ed",
+    "ingest_version": "real-source-v1",
+    "ingested_at": "2026-07-06T10:37:13.212496+00:00",
+    "chunk_count": 1,
+    "title": "Araç Ayıbı Dava Hazırlık Kontrol Listesi"
+  }
+}

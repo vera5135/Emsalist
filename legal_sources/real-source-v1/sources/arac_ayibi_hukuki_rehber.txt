@@ -1,0 +1,50 @@
+İKİNCİ EL ARAÇ SATIŞINDA AYIP İNCELEMESİ — HUKUKİ REHBER
+
+1. UYGULANACAK MEVZUAT
+
+İkinci el araç satışında ayıp hükümleri öncelikle aşağıdaki mevzuat çerçevesinde değerlendirilir:
+
+a) 6098 sayılı Türk Borçlar Kanunu m.219-231 — Satış sözleşmesinde ayıptan sorumluluk
+b) 6502 sayılı Tüketicinin Korunması Hakkında Kanun m.8-13 — Tüketici satışlarında ayıp
+c) 6102 sayılı Türk Ticaret Kanunu m.23 — Tacirler arası satışta ayıp ihbarı
+
+Satıcının sıfatı (tacir, tüketici, galeri) uygulanacak kanunun belirlenmesinde kritiktir.
+
+2. AYIP TÜRLERİ
+
+Araç satışında karşılaşılan başlıca ayıp türleri:
+
+- Motor arızası (gizli ayıp)
+- Şanzıman arızası (gizli ayıp)
+- Boya/kaporta kusuru (açık ayıp)
+- Kilometre sahteciliği (hile)
+- Hasar/pert kaydı gizlenmesi (ağır kusur)
+- Ekspertiz raporuyla tespit edilen mekanik arızalar
+
+3. İSPAT YÜKÜ
+
+Teslimden itibaren 6 ay içinde ortaya çıkan ayıpların, teslim anında var olduğu karine olarak kabul edilir (TBK 222/3 ve TKHK 10/3). Bu süreden sonra ayıbın teslim anında var olduğunu alıcı ispat etmelidir.
+
+4. SEÇİMLİK HAKLARIN KULLANIMI
+
+Alıcı TBK 227 uyarınca dört seçimlik haktan birini kullanabilir:
+- Sözleşmeden dönme (bedel iadesi)
+- Bedel indirimi
+- Ücretsiz onarım
+- Ayıpsız misli ile değiştirme
+
+Seçilen hak, ayıbın niteliğine ve orantılılık ilkesine uygun olmalıdır. Aşırı masraf gerektiren onarım talebi reddedilebilir.
+
+5. ZAMANAŞIMI
+
+- TBK uyarınca: Devirden itibaren 2 yıl
+- TKHK uyarınca: Teslimden itibaren 2 yıl
+- Satıcının ağır kusuru veya hilesinde zamanaşımı işlemez (TBK 225, 231/2)
+
+6. YARGITAY UYGULAMASI
+
+Yargıtay 13. Hukuk Dairesi, ikinci el araç satışında:
+- Motor arızasını gizli ayıp olarak değerlendirmektedir.
+- Ekspertiz raporunu takdiri delil saymaktadır.
+- Ayıp ihbar süresini olayın özelliklerine göre belirlemektedir.
+- Galeri satışlarında basiretli tacir ilkesini uygulamaktadır.

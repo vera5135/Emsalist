@@ -1,0 +1,21 @@
+{
+  "source_id": "rs-ttk-tacir-001",
+  "title": "Türk Ticaret Kanunu — Tacir Satışında Ayıp İhbarı (m.23)",
+  "source_type": "legislation",
+  "authority": "TBMM",
+  "file": "sources/ttk_tacir_satisi_ayip.txt",
+  "jurisdiction": "TR",
+  "publication_date": "2011-02-14",
+  "effective_date": "2012-07-01",
+  "decision_date": "",
+  "decision_number": "",
+  "chamber": "",
+  "legislation_number": "6102",
+  "article_numbers": "18,23,1530",
+  "status": "active",
+  "language": "tr",
+  "ingest_version": "real-source-v1",
+  "ingested_at": "2026-07-06T10:37:13.167021+00:00",
+  "chunk_count": 1,
+  "file_sha256": "5b2a9f130e289dc51b5b350b2fadbb4daab56d8c41f02bf4e0c3133c3fc2faf3"
+}

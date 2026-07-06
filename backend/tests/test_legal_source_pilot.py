@@ -23,6 +23,7 @@ from app.services.legal_source_pilot_service import (
     _chunk_by_window,
     _is_statute,
     _is_court_decision,
+    _read_text_utf8,
     pilot_service,
 )
 
@@ -429,3 +430,146 @@ class TestQueueIntegration:
             return await _handle_legal_brain_ingest(ctx, {}, {"id": "j-empty"})
         with pytest.raises(ValueError, match="BOOK_ID_OR_CONTENT"):
             asyncio.run(run())
+
+
+class TestTurkishEncoding:
+
+    TURKISH_TEXT = (
+        "Satıcı, alıcıya karşı ayıplı maldan sorumludur. "
+        "Seçimlik haklar kullanılabilir."
+    )
+
+    TURKISH_CHARS = ["ç", "ğ", "ı", "İ", "ö", "ş", "ü"]
+
+    def test_extract_preserves_turkish_utf8(self, temp_source_dir):
+        (temp_source_dir / "tr.txt").write_text(self.TURKISH_TEXT, encoding="utf-8")
+        text, warnings = _extract_text(temp_source_dir / "tr.txt")
+        assert text == self.TURKISH_TEXT
+        assert not warnings
+
+    def test_extract_preserves_turkish_utf8_with_bom(self, temp_source_dir):
+        (temp_source_dir / "tr_bom.txt").write_bytes(
+            b"\xef\xbb\xbf" + self.TURKISH_TEXT.encode("utf-8")
+        )
+        text, warnings = _extract_text(temp_source_dir / "tr_bom.txt")
+        assert text == self.TURKISH_TEXT
+
+    def test_persisted_chunks_preserve_turkish_roundtrip(self, temp_source_dir):
+        content = f"MADDE 219 {self.TURKISH_TEXT} " + "extra " * 50
+        (temp_source_dir / "src.txt").write_text(content, encoding="utf-8")
+        manifest = {"sources": [{
+            "file": "src.txt", "source_id": "src-tr-001", "title": "Türkçe Test",
+            "source_type": "legislation", "authority": "TBMM",
+        }]}
+        mp = temp_source_dir / "manifest.json"
+        mp.write_text(json.dumps(manifest), encoding="utf-8")
+        svc = LegalSourcePilotService(data_dir=temp_source_dir)
+        svc.run_ingest(temp_source_dir, mp, dry_run=False)
+        chunks_path = temp_source_dir / "ingested" / "src-tr-001" / "chunks.jsonl"
+        assert chunks_path.exists()
+        chunks_text = chunks_path.read_text(encoding="utf-8")
+        assert self.TURKISH_TEXT in chunks_text
+        for line in chunks_text.strip().split("\n"):
+            chunk = json.loads(line)
+            assert "\\u" not in json.dumps(chunk, ensure_ascii=False)
+            assert self.TURKISH_TEXT[:20] in json.dumps(chunk, ensure_ascii=False)
+
+    def test_turkish_chars_individually_preserved(self, temp_source_dir):
+        for char in self.TURKISH_CHARS:
+            text = f"MADDE 1 Bu bir {char} testidir. " + "extra " * 50
+            (temp_source_dir / "src.txt").write_text(text, encoding="utf-8")
+            manifest = {"sources": [{
+                "file": "src.txt", "source_id": f"src-char-{ord(char)}",
+                "title": f"Char {char}",
+                "source_type": "legislation", "authority": "TBMM",
+            }]}
+            mp = temp_source_dir / "manifest.json"
+            mp.write_text(json.dumps(manifest), encoding="utf-8")
+            svc = LegalSourcePilotService(data_dir=temp_source_dir)
+            svc.run_ingest(temp_source_dir, mp, dry_run=False)
+            chunks_path = temp_source_dir / "ingested" / f"src-char-{ord(char)}" / "chunks.jsonl"
+            chunks_text = chunks_path.read_text(encoding="utf-8")
+            assert char in chunks_text
+
+    def test_invalid_utf8_rejected(self, temp_source_dir):
+        (temp_source_dir / "bad.txt").write_bytes(b"Madde 1 \xff\xfe invalid")
+        with pytest.raises(ValueError, match="encoding_error"):
+            _extract_text(temp_source_dir / "bad.txt")
+
+    def test_ascii_no_loss(self, temp_source_dir):
+        text = "Madde 1 ASCII only content " + "extra " * 50
+        (temp_source_dir / "src.txt").write_text(text, encoding="utf-8")
+        extracted, _ = _extract_text(temp_source_dir / "src.txt")
+        assert extracted == text
+
+
+class TestOutputIsolation:
+
+    def test_output_goes_to_source_dir_ingested(self, temp_source_dir):
+        content = "MADDE 219 test " + "extra " * 50
+        (temp_source_dir / "src.txt").write_text(content, encoding="utf-8")
+        manifest = {"sources": [{
+            "file": "src.txt", "source_id": "src-out-001", "title": "O",
+            "source_type": "legislation", "authority": "TBMM",
+        }]}
+        mp = temp_source_dir / "manifest.json"
+        mp.write_text(json.dumps(manifest), encoding="utf-8")
+        svc = LegalSourcePilotService()
+        svc.run_ingest(temp_source_dir, mp, dry_run=False)
+        ingested = temp_source_dir / "ingested"
+        assert ingested.exists()
+        assert (ingested / "pilot_index.json").exists()
+        assert (ingested / "src-out-001" / "chunks.jsonl").exists()
+
+    def test_output_never_goes_outside_source_dir(self, temp_source_dir):
+        outside = temp_source_dir.parent
+        content = "MADDE 219 test " + "extra " * 50
+        (temp_source_dir / "src.txt").write_text(content, encoding="utf-8")
+        manifest = {"sources": [{
+            "file": "src.txt", "source_id": "src-iso-001", "title": "I",
+            "source_type": "legislation", "authority": "TBMM",
+        }]}
+        mp = temp_source_dir / "manifest.json"
+        mp.write_text(json.dumps(manifest), encoding="utf-8")
+        svc = LegalSourcePilotService()
+        svc.run_ingest(temp_source_dir, mp, dry_run=False)
+        out_ingested = outside / "ingested"
+        assert not out_ingested.exists()
+
+    def test_reports_go_to_source_dir_reports(self, temp_source_dir):
+        content = "MADDE 219 test " + "extra " * 50
+        (temp_source_dir / "src.txt").write_text(content, encoding="utf-8")
+        manifest = {"sources": [{
+            "file": "src.txt", "source_id": "src-rpt-001", "title": "R",
+            "source_type": "legislation", "authority": "TBMM",
+        }]}
+        mp = temp_source_dir / "manifest.json"
+        mp.write_text(json.dumps(manifest), encoding="utf-8")
+        svc = LegalSourcePilotService()
+        svc.run_ingest(temp_source_dir, mp, dry_run=False)
+        reports = temp_source_dir / "reports"
+        assert reports.exists()
+
+    def test_explicit_output_dir_respected(self, temp_source_dir):
+        content = "MADDE 219 test " + "extra " * 50
+        (temp_source_dir / "src.txt").write_text(content, encoding="utf-8")
+        custom_out = temp_source_dir / "custom_ingested"
+        manifest = {"sources": [{
+            "file": "src.txt", "source_id": "src-cust-001", "title": "C",
+            "source_type": "legislation", "authority": "TBMM",
+        }]}
+        mp = temp_source_dir / "manifest.json"
+        mp.write_text(json.dumps(manifest), encoding="utf-8")
+        svc = LegalSourcePilotService(data_dir=temp_source_dir)
+        svc.ingested_dir = custom_out
+        svc.ingest_single_source(
+            source_dir=temp_source_dir,
+            source_id="src-cust-001",
+            source_path_rel="src.txt",
+            source_def={"source_id": "src-cust-001", "title": "C",
+                         "source_type": "legislation", "authority": "TBMM", "file": "src.txt"},
+            ingest_version="v1",
+            dry_run=False,
+        )
+        assert custom_out.exists()
+        assert (custom_out / "src-cust-001" / "chunks.jsonl").exists()

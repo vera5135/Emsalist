@@ -1,0 +1,53 @@
+{
+  "started_at": "2026-07-06T10:37:13.126375+00:00",
+  "completed_at": "2026-07-06T10:37:13.219401+00:00",
+  "mode": "execute",
+  "ingest_version": "real-source-v1",
+  "total_files": 5,
+  "registered_sources": 5,
+  "successful_sources": 5,
+  "skipped_sources": 0,
+  "duplicate_sources": 0,
+  "conflicted_sources": 0,
+  "failed_sources": 0,
+  "total_chunks": 9,
+  "warnings": [],
+  "errors": [],
+  "sources": [
+    {
+      "source_id": "rs-tbk-ayip-001",
+      "file": "sources/tbk_ayipli_mal_219_231.txt",
+      "sha256": "17f556b0115717f7963255cd3057d677efbefad165de19e72690068c922c0828",
+      "status": "success",
+      "chunk_count": 3
+    },
+    {
+      "source_id": "rs-tkhk-ayip-001",
+      "file": "sources/tkhk_ayipli_mal_8_13.txt",
+      "sha256": "9795b3513aa5d46083ab8f690da358de5cc8308446e9653cfbf913535642f014",
+      "status": "success",
+      "chunk_count": 3
+    },
+    {
+      "source_id": "rs-ttk-tacir-001",
+      "file": "sources/ttk_tacir_satisi_ayip.txt",
+      "sha256": "5b2a9f130e289dc51b5b350b2fadbb4daab56d8c41f02bf4e0c3133c3fc2faf3",
+      "status": "success",
+      "chunk_count": 1
+    },
+    {
+      "source_id": "rs-rehber-arac-001",
+      "file": "sources/arac_ayibi_hukuki_rehber.txt",
+      "sha256": "79f0553d8b1ddb8d00b1d661986b6c86b200c372086709d25799531c330c5834",
+      "status": "success",
+      "chunk_count": 1
+    },
+    {
+      "source_id": "rs-checklist-arac-001",
+      "file": "sources/arac_ayibi_kontrol_listesi.txt",
+      "sha256": "373e11818fc95d7f0a3844c113a2d16e082d0a43822f5f539ad28590cd8b25ed",
+      "status": "success",
+      "chunk_count": 1
+    }
+  ]
+}

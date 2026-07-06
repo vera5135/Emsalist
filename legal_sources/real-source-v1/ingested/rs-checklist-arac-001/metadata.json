@@ -1,0 +1,21 @@
+{
+  "source_id": "rs-checklist-arac-001",
+  "title": "Araç Ayıbı Dava Hazırlık Kontrol Listesi",
+  "source_type": "legal_checklist",
+  "authority": "Emsalist Hukuk Editörü",
+  "file": "sources/arac_ayibi_kontrol_listesi.txt",
+  "jurisdiction": "TR",
+  "publication_date": "2026-07-06",
+  "effective_date": "",
+  "decision_date": "",
+  "decision_number": "",
+  "chamber": "",
+  "legislation_number": "",
+  "article_numbers": "",
+  "status": "active",
+  "language": "tr",
+  "ingest_version": "real-source-v1",
+  "ingested_at": "2026-07-06T10:37:13.212496+00:00",
+  "chunk_count": 1,
+  "file_sha256": "373e11818fc95d7f0a3844c113a2d16e082d0a43822f5f539ad28590cd8b25ed"
+}
