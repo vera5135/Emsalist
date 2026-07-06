@@ -552,6 +552,49 @@ handler_registry.register(JobHandlerDef(
     required_permission="tenant_admin",
 ))
 
+from app.services.backup_job_handlers import (
+    _handle_backup_create, _handle_backup_verify, _handle_backup_prune,
+    _handle_restore_validate, _handle_restore_execute,
+)
+
+handler_registry.register(JobHandlerDef(
+    job_type="backup_create", handler=_handle_backup_create,
+    timeout_seconds=600, max_attempts=2,
+    retryable_codes={"DB_TEMP_ERROR"},
+    non_retryable_codes={"VALIDATION_ERROR", "AUTHORIZATION_ERROR"},
+    required_permission="tenant_admin",
+))
+
+handler_registry.register(JobHandlerDef(
+    job_type="backup_verify", handler=_handle_backup_verify,
+    timeout_seconds=300, max_attempts=2,
+    retryable_codes={"DB_TEMP_ERROR"},
+    non_retryable_codes={"VALIDATION_ERROR"},
+))
+
+handler_registry.register(JobHandlerDef(
+    job_type="backup_prune", handler=_handle_backup_prune,
+    timeout_seconds=300, max_attempts=1,
+    retryable_codes={"DB_TEMP_ERROR"},
+    non_retryable_codes={"VALIDATION_ERROR"},
+    required_permission="tenant_admin",
+))
+
+handler_registry.register(JobHandlerDef(
+    job_type="restore_validate", handler=_handle_restore_validate,
+    timeout_seconds=300, max_attempts=2,
+    retryable_codes={"DB_TEMP_ERROR"},
+    non_retryable_codes={"VALIDATION_ERROR"},
+))
+
+handler_registry.register(JobHandlerDef(
+    job_type="restore_execute", handler=_handle_restore_execute,
+    timeout_seconds=1200, max_attempts=1,
+    retryable_codes={"DB_TEMP_ERROR"},
+    non_retryable_codes={"VALIDATION_ERROR", "AUTHORIZATION_ERROR"},
+    required_permission="tenant_admin",
+))
+
 # Validate all known types are registered
 for jt in [
     "yargitay_search", "document_extract", "document_analyze",
@@ -559,6 +602,8 @@ for jt in [
     "legal_ground_validate", "precedent_evaluate", "claim_grounding",
     "petition_generate", "petition_refine", "export_generate",
     "retention_purge",
+    "backup_create", "backup_verify", "backup_prune",
+    "restore_validate", "restore_execute",
 ]:
     if handler_registry.get(jt) is None:
         raise RuntimeError(f"PRODUCTION_HANDLER_MISSING: {jt}")

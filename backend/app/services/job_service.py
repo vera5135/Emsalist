@@ -44,6 +44,8 @@ KNOWN_JOB_TYPES = frozenset({
     "legal_ground_validate", "precedent_evaluate", "claim_grounding",
     "petition_generate", "petition_refine", "export_generate",
     "retention_purge",
+    "backup_create", "backup_verify", "backup_prune",
+    "restore_validate", "restore_execute",
 })
 
 RETRYABLE_CODES = frozenset({

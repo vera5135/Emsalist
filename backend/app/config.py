@@ -29,6 +29,19 @@ class Settings(BaseModel):
     jwt_access_token_minutes: int = 30
     jwt_refresh_token_days: int = 7
     jwt_audience: str = "emsalist-api"
+    backup_root: str = ""
+    backup_retention_days: int = 30
+    backup_encryption_enabled: bool = False
+    backup_encryption_key: str = ""
+    backup_compression: str = "gzip"
+    backup_database_timeout_seconds: int = 300
+    backup_file_timeout_seconds: int = 120
+    backup_max_size_bytes: int = 1073741824
+    backup_require_pre_restore_backup: bool = True
+    backup_verify_after_create: bool = True
+    backup_maintenance_mode: bool = False
+    backup_include_json_projection: bool = True
+    backup_include_rebuildable_indexes: bool = False
 
 
 def _load_env_file() -> None:

@@ -296,10 +296,12 @@ class TestE2EDeletionLifecycle:
         expected = ["yargitay_search", "document_extract", "document_analyze",
                      "legal_brain_ingest", "workflow_review", "legal_issue_graph_build",
                      "legal_ground_validate", "precedent_evaluate", "claim_grounding",
-                     "petition_generate", "petition_refine", "export_generate", "retention_purge"]
+                     "petition_generate", "petition_refine", "export_generate", "retention_purge",
+                     "backup_create", "backup_verify", "backup_prune",
+                     "restore_validate", "restore_execute"]
         for jt in expected:
             assert jt in types, f"Missing production handler: {jt}"
-        assert len(types) == 13, f"Expected exactly 13 handler types, got {len(types)}"
+        assert len(types) == 18, f"Expected exactly 18 handler types, got {len(types)}"
 
     async def test_19_deletion_request_idempotent(self, e2e_db):
         """Duplicate deletion request for same resource is not created."""

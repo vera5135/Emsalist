@@ -480,3 +480,105 @@ class BackgroundJobArtifact(Base):
         Index("ix_bg_artifacts_job", "job_id"),
         Index("ix_bg_artifacts_tenant", "tenant_id", "case_id"),
     )
+
+
+# -- P1.9: Backup & Restore --
+class BackupRun(Base):
+    __tablename__ = "backup_runs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    backup_type: Mapped[str] = mapped_column(String(30), default="full")
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    scope: Mapped[str] = mapped_column(String(20), default="full")
+    storage_backend: Mapped[str] = mapped_column(String(30), default="local")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(32), default="")
+    schema_revision: Mapped[str] = mapped_column(String(32), default="")
+    application_version: Mapped[str] = mapped_column(String(20), default="")
+    encrypted: Mapped[bool] = mapped_column(Boolean, default=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), default="")
+    total_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    item_count: Mapped[int] = mapped_column(Integer, default=0)
+    warning_count: Mapped[int] = mapped_column(Integer, default=0)
+    failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    safe_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    __table_args__ = (
+        Index("ix_backup_runs_status_time", "status", "created_at"),
+        Index("ix_backup_runs_retention", "retention_until"),
+    )
+
+
+class BackupItem(Base):
+    __tablename__ = "backup_items"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    backup_run_id: Mapped[str] = mapped_column(String(32), ForeignKey("backup_runs.id"), nullable=False)
+    item_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    logical_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    encrypted_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    failure_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    safe_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (
+        Index("ix_backup_items_run_type", "backup_run_id", "item_type"),
+    )
+
+
+class RestoreRun(Base):
+    __tablename__ = "restore_runs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    backup_run_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    target_environment: Mapped[str] = mapped_column(String(20), default="test")
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=False)
+    validation_only: Mapped[bool] = mapped_column(Boolean, default=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    initiated_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    pre_restore_backup_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    schema_revision_before: Mapped[str] = mapped_column(String(32), default="")
+    schema_revision_after: Mapped[str] = mapped_column(String(32), default="")
+    restored_item_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_item_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_item_count: Mapped[int] = mapped_column(Integer, default=0)
+    safe_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    __table_args__ = (
+        Index("ix_restore_runs_backup", "backup_run_id"),
+    )
+
+
+class RestoreItem(Base):
+    __tablename__ = "restore_items"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    restore_run_id: Mapped[str] = mapped_column(String(32), ForeignKey("restore_runs.id"), nullable=False)
+    backup_item_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    failure_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    safe_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (
+        Index("ix_restore_items_run", "restore_run_id"),
+    )
+
+
+class BackupLock(Base):
+    __tablename__ = "backup_locks"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    lock_name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    owner_id_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
