@@ -356,7 +356,7 @@ jobs:
                   db.add(Case(id='c-s1', tenant_id='t-s1', owner_user_id='u-s1', title='Seed Case', legal_topic='Borc', profile_id='def', event_text='seed', status='active', version=1))
                   await db.flush()
                   db.add(CaseMember(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', membership_role='owner'))
-                  db.add(Document(id='d-s1', case_id='c-s1', tenant_id='t-s1', filename='seed.txt', storage_path='seed.txt', status='active', file_size_bytes=10, sha256_hex='a'*64))
+                  db.add(Document(id='d-s1', case_id='c-s1', tenant_id='t-s1', original_filename='seed.txt', storage_key='seed.txt', size_bytes=10, sha256='a'*64, status='active'))
                   db.add(AuditEvent(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', event_type='case_created', version=1))
                   await db.commit()
                   print('Seed data inserted: t-s1, u-s1, c-s1, d-s1')
