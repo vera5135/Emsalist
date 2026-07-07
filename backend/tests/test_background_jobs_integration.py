@@ -34,8 +34,10 @@ async def db_session():
         s.add(Tenant(id=TID, name="Int", slug=TID, status="active"))
         s.add(User(id=UID_O, tenant_id=TID, email_normalized="o@i", display_name="Owner", status="active", role="lawyer"))
         s.add(User(id=UID_V, tenant_id=TID, email_normalized="v@i", display_name="Viewer", status="active", role="viewer"))
+        await s.flush()
         for cid in [CID_A, CID_B]:
             s.add(Case(id=cid, tenant_id=TID, owner_user_id=UID_O, title="Case", legal_topic="t", profile_id="def", event_text="", status="active", version=1))
+        await s.flush()
         s.add(CaseMember(id="mem-o-a", tenant_id=TID, case_id=CID_A, user_id=UID_O, membership_role="owner", permissions_override={}))
         s.add(CaseMember(id="mem-o-b", tenant_id=TID, case_id=CID_B, user_id=UID_O, membership_role="owner", permissions_override={}))
         s.add(CaseMember(id="mem-v-a", tenant_id=TID, case_id=CID_A, user_id=UID_V, membership_role="viewer", permissions_override={}))

@@ -69,6 +69,7 @@ async def e2e_db():
                      legal_topic="Borc", profile_id="defective_vehicle",
                      event_text="Muvekkil ikinci el araci galeriden satin aldi. Motor arizasi cikti.",
                      status="active", version=1))
+        await db.flush()
         db.add(CaseMember(id=new_uuid(), tenant_id=TID, case_id=CID, user_id=UID_O, membership_role="owner"))
         db.add(CaseMember(id=new_uuid(), tenant_id=TID, case_id=CID, user_id=UID_V, membership_role="viewer"))
         await db.commit()
