@@ -133,43 +133,48 @@ class DocumentDuplicateError(DocumentIntakeError):
 
 class DocumentIntakeService:
     def __init__(self, storage_dir: Path | None = None, max_file_size: int | None = None) -> None:
+        import os as _os
+
         root = storage_dir or Path(__file__).resolve().parents[1] / "document_store"
-        self._raw_storage_dir = Path(root).expanduser().absolute()
+        raw_root = Path(root).expanduser().absolute()
 
-        if self._raw_storage_dir.is_symlink():
+        if raw_root.is_symlink():
             raise DocumentIntakeError("Storage directory must not be a symlink.")
-        try:
-            if self._raw_storage_dir.exists():
-                resolved = self._raw_storage_dir.resolve()
-                if resolved != self._raw_storage_dir:
-                    raise DocumentIntakeError("Storage directory resolves to an unexpected path.")
-        except (OSError, RuntimeError):
-            pass
+        if _os.path.lexists(str(raw_root)) and not raw_root.exists() and raw_root.is_symlink():
+            raise DocumentIntakeError("Storage directory must not be a broken symlink.")
 
-        self.storage_dir = self._raw_storage_dir.resolve()
-        self._raw_upload_dir = self._raw_storage_dir / "uploads"
-
-        if self._raw_upload_dir.exists() and self._raw_upload_dir.is_symlink():
-            raise DocumentIntakeError("Upload directory must not be a symlink.")
-        try:
-            if self._raw_upload_dir.exists():
-                resolved = self._raw_upload_dir.resolve()
-                if not str(resolved).startswith(str(self.storage_dir)):
-                    raise DocumentIntakeError("Upload directory resolves outside storage root.")
-        except (OSError, RuntimeError):
-            pass
-
-        self.upload_dir = self._raw_upload_dir
+        self.storage_dir = raw_root
         self.storage_dir.mkdir(parents=True, exist_ok=True)
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.storage_dir = self.storage_dir.resolve()
 
-        resolved_upload = self.upload_dir.resolve()
+        raw_upload_dir = raw_root / "uploads"
+        if raw_upload_dir.is_symlink():
+            raise DocumentIntakeError("Upload directory must not be a symlink.")
+        if _os.path.lexists(str(raw_upload_dir)) and not raw_upload_dir.exists() and raw_upload_dir.is_symlink():
+            raise DocumentIntakeError("Upload directory must not be a broken symlink.")
+
+        if raw_upload_dir.exists():
+            try:
+                resolved_uploads = raw_upload_dir.resolve()
+                try:
+                    resolved_uploads.relative_to(self.storage_dir)
+                except ValueError:
+                    raise DocumentIntakeError("Upload directory resolves outside storage root.")
+            except (OSError, RuntimeError):
+                raise DocumentIntakeError("Cannot resolve upload directory path.")
+
         try:
-            resolved_upload.relative_to(self.storage_dir)
+            raw_upload_dir.mkdir(parents=True, exist_ok=True)
+        except FileExistsError:
+            if raw_upload_dir.is_symlink():
+                raise DocumentIntakeError("Upload directory must not be a symlink.")
+            raise
+
+        self.upload_dir = raw_upload_dir.resolve()
+        try:
+            self.upload_dir.relative_to(self.storage_dir)
         except ValueError:
             raise DocumentIntakeError("Upload directory is outside storage root.")
-
-        self.upload_dir = resolved_upload
 
         self.index_path = self.storage_dir / "documents.json"
         from app.config import get_settings
@@ -181,9 +186,8 @@ class DocumentIntakeService:
     def _validate_upload_dir(self) -> None:
         if self.upload_dir.is_symlink():
             raise DocumentIntakeError("Upload directory must not be a symlink.")
-        resolved = self.upload_dir.resolve()
         try:
-            resolved.relative_to(self.storage_dir)
+            self.upload_dir.relative_to(self.storage_dir)
         except ValueError:
             raise DocumentIntakeError("Upload directory resolves outside storage root.")
 

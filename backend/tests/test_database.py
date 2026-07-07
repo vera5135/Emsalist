@@ -1,11 +1,12 @@
 """P1.4 — Database layer tests."""
 from __future__ import annotations
 
-import os
 import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from app.db.models import (
     Base,
@@ -21,7 +22,7 @@ from app.db.models import (
     AuditEvent,
     CaseSession,
 )
-from app.db.session import get_engine, get_sessionmaker, check_db_health
+from app.db.session import check_db_health
 
 
 class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
@@ -29,63 +30,38 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls._tempdir = tempfile.TemporaryDirectory(prefix="emsalist-test-db-")
-        cls.addClassCleanup(cls._cleanup)
+        cls.addClassCleanup(cls._cleanup_g)
 
-        cls._saved_db_url = os.environ.get("DATABASE_URL")
         db_path = Path(cls._tempdir.name) / "emsalist_test.db"
-        cls._db_url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
-        os.environ["DATABASE_URL"] = cls._db_url
+        test_url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
 
-        import app.config
-        app.config.get_settings.cache_clear()
-
-        import app.db.session
-        app.db.session._engine = None
-        app.db.session._sessionmaker = None
+        cls.engine = create_async_engine(test_url)
+        cls.sessionmaker = async_sessionmaker(cls.engine, class_=AsyncSession, expire_on_commit=False)
 
         import asyncio
         asyncio.run(cls._setup())
 
     @classmethod
     async def _setup(cls) -> None:
-        engine = get_engine()
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+        async with cls.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
     @classmethod
-    def _cleanup(cls) -> None:
+    def _cleanup_g(cls) -> None:
         import asyncio
-        import app.db.session
-        import app.config
 
         async def _dispose():
-            try:
-                engine = get_engine()
-                await engine.dispose()
-            except Exception:
-                pass
+            await cls.engine.dispose()
 
         try:
             asyncio.run(_dispose())
         except Exception:
             pass
 
-        app.db.session._engine = None
-        app.db.session._sessionmaker = None
-
-        app.config.get_settings.cache_clear()
-
-        if cls._saved_db_url is None:
-            os.environ.pop("DATABASE_URL", None)
-        else:
-            os.environ["DATABASE_URL"] = cls._saved_db_url
-
         cls._tempdir.cleanup()
 
     async def test_tenant_creation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="loc", name="Local", slug="local")
             s.add(t)
             await s.commit()
@@ -93,8 +69,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(result)
 
     async def test_duplicate_tenant_slug_fails(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t1 = Tenant(id="t1", name="Test", slug="test")
             t2 = Tenant(id="t2", name="Test2", slug="test")
             s.add(t1)
@@ -105,8 +80,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.rollback()
 
     async def test_user_creation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="ut", name="U", slug="u")
             s.add(t)
             await s.commit()
@@ -117,8 +91,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(result)
 
     async def test_case_creation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="ct", name="C", slug="c")
             u = User(id="cu", tenant_id="ct", email_normalized="c@d.com")
             s.add_all([t, u])
@@ -130,8 +103,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(result)
 
     async def test_case_session(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="st", name="S", slug="s")
             u = User(id="su", tenant_id="st", email_normalized="e@f.com")
             c = Case(id="sc", tenant_id="st", owner_user_id="su")
@@ -142,8 +114,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.commit()
 
     async def test_precedent_unique_constraint(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="pt", name="P", slug="p")
             u = User(id="pu", tenant_id="pt", email_normalized="g@h.com")
             c = Case(id="pc", tenant_id="pt", owner_user_id="pu")
@@ -157,8 +128,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.rollback()
 
     async def test_workflow_run_unique(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="wt", name="W", slug="w")
             u = User(id="wu", tenant_id="wt", email_normalized="i@j.com")
             c = Case(id="wc", tenant_id="wt", owner_user_id="wu")
@@ -172,8 +142,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.rollback()
 
     async def test_cross_case_isolation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="xt", name="X", slug="x")
             u = User(id="xu", tenant_id="xt", email_normalized="k@l.com")
             c1 = Case(id="xc1", tenant_id="xt", owner_user_id="xu")
@@ -190,8 +159,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotEqual(r1.case_id, r2.case_id)
 
     async def test_ai_run_creation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="at", name="A", slug="a")
             u = User(id="au", tenant_id="at", email_normalized="m@n.com")
             c = Case(id="ac", tenant_id="at", owner_user_id="au")
@@ -202,7 +170,16 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.commit()
 
     async def test_db_health(self) -> None:
-        result = await check_db_health()
+        from unittest.mock import patch, AsyncMock
+        from app.db.session import get_engine
+
+        async def mock_check():
+            return {"backend": "sqlalchemy", "connected": True, "latency_ms": 0, "migration_head": "test"}
+
+        with patch.object(get_engine, '__call__', side_effect=[self.engine]) if False else patch(
+            'app.db.session.get_engine', return_value=self.engine
+        ):
+            result = await check_db_health()
         self.assertIsNotNone(result)
 
 
@@ -297,31 +274,26 @@ class FreshDatabaseMigrationTests(unittest.TestCase):
     """P1.14 — Full migration chain produces zero drift on a clean database."""
 
     def test_fresh_sqlite_migration_chain_zero_drift(self):
+        import tempfile as _tempfile
         from alembic.config import Config as AlcConfig
         from alembic import command
         from alembic.runtime.migration import MigrationContext
         from alembic.autogenerate import compare_metadata
         from sqlalchemy import create_engine
         import app.db.models  # noqa: ensure all models registered
-        import app.config as app_config
-        import app.db.session as db_session
 
-        saved_url = os.environ.get("DATABASE_URL")
-        db_url = "sqlite+aiosqlite:///./case_store/_p1.14_fresh_migration_test.db"
-        os.environ["DATABASE_URL"] = db_url
-        app_config.get_settings.cache_clear()
-        db_session._engine = None
-        db_session._sessionmaker = None
-
-        cleanup_path = Path("case_store") / "_p1.14_fresh_migration_test.db"
-
+        td = _tempfile.TemporaryDirectory(prefix="emsalist-fresh-mig-")
         try:
+            db_path = Path(td.name) / "fresh_test.db"
+            db_url = f"sqlite:///{db_path.as_posix()}"
+
             migrations_dir = str(Path(__file__).resolve().parents[1] / "app" / "db" / "migrations")
             alc_cfg = AlcConfig()
             alc_cfg.set_main_option("script_location", migrations_dir)
+            alc_cfg.set_main_option("sqlalchemy.url", db_url)
             command.upgrade(alc_cfg, "head")
 
-            engine = create_engine("sqlite:///./case_store/_p1.14_fresh_migration_test.db", echo=False)
+            engine = create_engine(db_url, echo=False)
             with engine.connect() as conn:
                 ctx = MigrationContext.configure(conn)
                 diffs = compare_metadata(ctx, app.db.models.Base.metadata)
@@ -331,71 +303,7 @@ class FreshDatabaseMigrationTests(unittest.TestCase):
                 )
             engine.dispose()
         finally:
-            if saved_url is None:
-                os.environ.pop("DATABASE_URL", None)
-            else:
-                os.environ["DATABASE_URL"] = saved_url
-            app_config.get_settings.cache_clear()
-            db_session._engine = None
-            db_session._sessionmaker = None
-            if cleanup_path.exists():
-                cleanup_path.unlink()
-
-
-class DatabaseTestIsolationRegressionTests(unittest.TestCase):
-    """P1.14 — Prove DatabaseModelTests does not pollute the global env."""
-
-    def test_tempdir_parent_is_created(self):
-        td = tempfile.TemporaryDirectory(prefix="probe-")
-        db_path = Path(td.name) / "sub" / "emsalist_test.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.assertTrue(db_path.parent.exists())
-        db_path.touch()
-        self.assertTrue(db_path.exists())
-        td.cleanup()
-
-    def test_ci_database_url_restored_after_isolation(self):
-        saved = os.environ.get("DATABASE_URL", "__MISSING__")
-        try:
-            td = tempfile.TemporaryDirectory()
-            db_path = Path(td.name) / "emsalist_test.db"
-            os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_path.as_posix()}"
-
-            import app.config
-            app.config.get_settings.cache_clear()
-            import app.db.session
-            app.db.session._engine = None
-            app.db.session._sessionmaker = None
-
-            os.environ["DATABASE_URL"] = saved if saved != "__MISSING__" else ""
-            app.config.get_settings.cache_clear()
-            app.db.session._engine = None
-            app.db.session._sessionmaker = None
-
-            restored = os.environ.get("DATABASE_URL")
-            if saved == "__MISSING__":
-                self.assertFalse(restored, "DATABASE_URL should be unset after cleanup")
-            else:
-                self.assertEqual(restored, saved, "DATABASE_URL should be restored")
-        finally:
-            if saved != "__MISSING__":
-                os.environ["DATABASE_URL"] = saved
             td.cleanup()
-
-    def test_engine_globals_reset_after_cleanup(self):
-        import app.db.session
-        saved_engine = app.db.session._engine
-        saved_maker = app.db.session._sessionmaker
-        try:
-            app.db.session._engine = object()
-            app.db.session._sessionmaker = object()
-            app.db.session._engine = None
-            app.db.session._sessionmaker = None
-            self.assertIsNone(app.db.session._engine)
-            self.assertIsNone(app.db.session._sessionmaker)
-        finally:
-            app.db.session._engine = saved_engine
-            app.db.session._sessionmaker = saved_maker
 
 
 if __name__ == "__main__":

@@ -302,7 +302,7 @@ class ProductionDatabaseValidationTests(unittest.TestCase):
         self.assertEqual(issues, [])
 
     def test_database_test_fixture_does_not_override_ci_database_url(self):
-        saved = os.environ.get("DATABASE_URL", "__MISSING__")
+        saved = os.environ.get("DATABASE_URL")
         try:
             os.environ["DATABASE_URL"] = "postgresql+asyncpg://ci-host:5432/ci-db"
             os.environ["EMSALIST_SKIP_PRODUCTION_VALIDATION"] = "1"
@@ -316,7 +316,7 @@ class ProductionDatabaseValidationTests(unittest.TestCase):
         finally:
             from app import config as app_config
             app_config.get_settings.cache_clear()
-            if saved == "__MISSING__":
+            if saved is None:
                 os.environ.pop("DATABASE_URL", None)
             else:
                 os.environ["DATABASE_URL"] = saved
