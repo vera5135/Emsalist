@@ -640,12 +640,19 @@ jobs:
 
       - name: Verify ready endpoint
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ready)
-          if [ "$STATUS" != "200" ]; then
-            echo "FAIL: /ready returned $STATUS"
-            exit 1
-          fi
-          echo "PASS: /ready returns $STATUS"
+          set -euo pipefail
+          curl --fail-with-body --show-error \
+            http://localhost:8000/ready \
+            | tee /tmp/ready-response.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/ready-response.json").read_text())
+          assert payload.get("status") == "ready", payload
+          assert payload["checks"]["database"]["status"] == "ok", payload
+          assert payload["checks"]["configuration"]["status"] == "ok", payload
+          print("PASS: /ready is ready")
+          PY
 
       - name: Verify health endpoint
         run: |
