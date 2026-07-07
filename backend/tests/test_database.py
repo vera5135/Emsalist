@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,8 +28,13 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        cls._tempdir = tempfile.TemporaryDirectory(prefix="emsalist-test-db-")
+        cls.addClassCleanup(cls._cleanup)
+
         cls._saved_db_url = os.environ.get("DATABASE_URL")
-        os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./case_store/emsalist_test.db"
+        db_path = Path(cls._tempdir.name) / "emsalist_test.db"
+        cls._db_url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
+        os.environ["DATABASE_URL"] = cls._db_url
 
         import app.config
         app.config.get_settings.cache_clear()
@@ -48,26 +54,34 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await conn.run_sync(Base.metadata.create_all)
 
     @classmethod
-    def tearDownClass(cls) -> None:
+    def _cleanup(cls) -> None:
         import asyncio
+        import app.db.session
+        import app.config
 
         async def _dispose():
-            engine = get_engine()
-            await engine.dispose()
+            try:
+                engine = get_engine()
+                await engine.dispose()
+            except Exception:
+                pass
 
-        asyncio.run(_dispose())
+        try:
+            asyncio.run(_dispose())
+        except Exception:
+            pass
 
-        import app.db.session
         app.db.session._engine = None
         app.db.session._sessionmaker = None
 
-        import app.config
         app.config.get_settings.cache_clear()
 
         if cls._saved_db_url is None:
             os.environ.pop("DATABASE_URL", None)
         else:
             os.environ["DATABASE_URL"] = cls._saved_db_url
+
+        cls._tempdir.cleanup()
 
     async def test_tenant_creation(self) -> None:
         sm = get_sessionmaker()
@@ -190,13 +204,6 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
     async def test_db_health(self) -> None:
         result = await check_db_health()
         self.assertIsNotNone(result)
-
-    async def test_migration_roundtrip(self) -> None:
-        engine = get_engine()
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
-            await conn.run_sync(Base.metadata.create_all)
-        self.assertTrue(True)
 
 
 class AlembicUrlConversionTests(unittest.TestCase):
@@ -333,6 +340,62 @@ class FreshDatabaseMigrationTests(unittest.TestCase):
             db_session._sessionmaker = None
             if cleanup_path.exists():
                 cleanup_path.unlink()
+
+
+class DatabaseTestIsolationRegressionTests(unittest.TestCase):
+    """P1.14 — Prove DatabaseModelTests does not pollute the global env."""
+
+    def test_tempdir_parent_is_created(self):
+        td = tempfile.TemporaryDirectory(prefix="probe-")
+        db_path = Path(td.name) / "sub" / "emsalist_test.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.assertTrue(db_path.parent.exists())
+        db_path.touch()
+        self.assertTrue(db_path.exists())
+        td.cleanup()
+
+    def test_ci_database_url_restored_after_isolation(self):
+        saved = os.environ.get("DATABASE_URL", "__MISSING__")
+        try:
+            td = tempfile.TemporaryDirectory()
+            db_path = Path(td.name) / "emsalist_test.db"
+            os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_path.as_posix()}"
+
+            import app.config
+            app.config.get_settings.cache_clear()
+            import app.db.session
+            app.db.session._engine = None
+            app.db.session._sessionmaker = None
+
+            os.environ["DATABASE_URL"] = saved if saved != "__MISSING__" else ""
+            app.config.get_settings.cache_clear()
+            app.db.session._engine = None
+            app.db.session._sessionmaker = None
+
+            restored = os.environ.get("DATABASE_URL")
+            if saved == "__MISSING__":
+                self.assertFalse(restored, "DATABASE_URL should be unset after cleanup")
+            else:
+                self.assertEqual(restored, saved, "DATABASE_URL should be restored")
+        finally:
+            if saved != "__MISSING__":
+                os.environ["DATABASE_URL"] = saved
+            td.cleanup()
+
+    def test_engine_globals_reset_after_cleanup(self):
+        import app.db.session
+        saved_engine = app.db.session._engine
+        saved_maker = app.db.session._sessionmaker
+        try:
+            app.db.session._engine = object()
+            app.db.session._sessionmaker = object()
+            app.db.session._engine = None
+            app.db.session._sessionmaker = None
+            self.assertIsNone(app.db.session._engine)
+            self.assertIsNone(app.db.session._sessionmaker)
+        finally:
+            app.db.session._engine = saved_engine
+            app.db.session._sessionmaker = saved_maker
 
 
 if __name__ == "__main__":

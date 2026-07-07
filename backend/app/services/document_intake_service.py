@@ -134,23 +134,58 @@ class DocumentDuplicateError(DocumentIntakeError):
 class DocumentIntakeService:
     def __init__(self, storage_dir: Path | None = None, max_file_size: int | None = None) -> None:
         root = storage_dir or Path(__file__).resolve().parents[1] / "document_store"
-        self.storage_dir = Path(root).resolve()
-        self.upload_dir = (self.storage_dir / "uploads").resolve()
+        self._raw_storage_dir = Path(root).expanduser().absolute()
+
+        if self._raw_storage_dir.is_symlink():
+            raise DocumentIntakeError("Storage directory must not be a symlink.")
+        try:
+            if self._raw_storage_dir.exists():
+                resolved = self._raw_storage_dir.resolve()
+                if resolved != self._raw_storage_dir:
+                    raise DocumentIntakeError("Storage directory resolves to an unexpected path.")
+        except (OSError, RuntimeError):
+            pass
+
+        self.storage_dir = self._raw_storage_dir.resolve()
+        self._raw_upload_dir = self._raw_storage_dir / "uploads"
+
+        if self._raw_upload_dir.exists() and self._raw_upload_dir.is_symlink():
+            raise DocumentIntakeError("Upload directory must not be a symlink.")
+        try:
+            if self._raw_upload_dir.exists():
+                resolved = self._raw_upload_dir.resolve()
+                if not str(resolved).startswith(str(self.storage_dir)):
+                    raise DocumentIntakeError("Upload directory resolves outside storage root.")
+        except (OSError, RuntimeError):
+            pass
+
+        self.upload_dir = self._raw_upload_dir
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
+
+        resolved_upload = self.upload_dir.resolve()
+        try:
+            resolved_upload.relative_to(self.storage_dir)
+        except ValueError:
+            raise DocumentIntakeError("Upload directory is outside storage root.")
+
+        self.upload_dir = resolved_upload
+
         self.index_path = self.storage_dir / "documents.json"
         from app.config import get_settings
         _settings = get_settings()
         self.max_file_size = max_file_size or _settings.max_upload_size_bytes
         self._lock = threading.RLock()
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
-        self._validate_upload_dir()
         self._records: dict[str, DocumentRecord] = self._load_records()
 
     def _validate_upload_dir(self) -> None:
         if self.upload_dir.is_symlink():
             raise DocumentIntakeError("Upload directory must not be a symlink.")
-        _safe = self.upload_dir.resolve()
-        if _safe != self.upload_dir:
-            raise DocumentIntakeError("Upload directory resolves to an unexpected path.")
+        resolved = self.upload_dir.resolve()
+        try:
+            resolved.relative_to(self.storage_dir)
+        except ValueError:
+            raise DocumentIntakeError("Upload directory resolves outside storage root.")
 
     def create_document(
         self,
