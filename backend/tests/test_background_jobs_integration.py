@@ -42,6 +42,7 @@ async def db_session():
         s.add(CaseMember(id="mem-o-b", tenant_id=TID, case_id=CID_B, user_id=UID_O, membership_role="owner", permissions_override={}))
         s.add(CaseMember(id="mem-v-a", tenant_id=TID, case_id=CID_A, user_id=UID_V, membership_role="viewer", permissions_override={}))
         await s.flush()
+        await s.commit()
         yield s
         await s.rollback()
 

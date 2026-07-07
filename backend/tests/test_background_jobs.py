@@ -34,6 +34,7 @@ async def db_session():
         session.add(CaseMember(id=new_uuid(), tenant_id="t-p8", case_id="c-p8-b", user_id="u-p8", membership_role="owner"))
         session.add(CaseMember(id=new_uuid(), tenant_id="t-p8", case_id="c-p8-a", user_id="u-p8-v", membership_role="viewer"))
         await session.flush()
+        await session.commit()
         yield session
         await session.rollback()
 
