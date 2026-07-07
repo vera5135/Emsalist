@@ -101,7 +101,7 @@ class CaseStateService:
     @staticmethod
     def _case_id(event_text: str, document_facts: list[str], answers: dict[str, str]) -> str:
         payload = "|".join([event_text, *document_facts, *[f"{k}:{v}" for k, v in answers.items()]])
-        return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
     @staticmethod
     def _clean_list(values: list[str]) -> list[str]:

@@ -622,8 +622,10 @@ class TestJobsPendingWiring:
     @pytest.mark.asyncio
     async def test_empty_queue_is_zero(self):
         from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        from app.db.session import get_sessionmaker
         jobs_pending._data.clear()
-        await _refresh_jobs_pending_from_db()
+        maker = get_sessionmaker()
+        await _refresh_jobs_pending_from_db(maker)
         body = collect_metrics()
         assert "emsalist_jobs_pending" in body
 
@@ -644,13 +646,17 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="pending-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="pending case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                 job_type=jtype, status="queued")
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         body = collect_metrics()
         assert f'job_type="{jtype}"' in body
 
@@ -688,7 +694,11 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="idem-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="idem case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             for _ in range(3):
                 job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                     job_type=jtype, status="queued",
@@ -696,7 +706,7 @@ class TestJobsPendingWiring:
                 db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         count = jobs_pending._data.get(key, 0)
         assert count >= 1
@@ -734,13 +744,17 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="claim-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="claim case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                 job_type=jtype, status="queued")
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         before = jobs_pending._data.get(key, 0)
         assert before == 1
@@ -752,7 +766,7 @@ class TestJobsPendingWiring:
             )
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         after = jobs_pending._data.get(key, 0)
         assert after == 0
 
@@ -789,13 +803,17 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="rw-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="rw case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                 job_type=jtype, status="retry_wait")
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 1
 
@@ -833,14 +851,18 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="sched-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="sched case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                 job_type=jtype, status="scheduled",
                                 scheduled_at=datetime.now(UTC) + timedelta(hours=1))
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 1
 
@@ -877,13 +899,17 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="cancel-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="cancel case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                 job_type=jtype, status="cancelled")
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 0
 
@@ -920,13 +946,17 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="done-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="done case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                 job_type=jtype, status="succeeded")
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 0
 
@@ -963,13 +993,17 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="dl-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="dl case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                 job_type=jtype, status="dead_lettered")
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 0
 
@@ -1007,7 +1041,11 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="multi-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="multi case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             for jt, cnt in [(jtype_a, 2), (jtype_b, 3)]:
                 for _ in range(cnt):
                     job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
@@ -1015,7 +1053,7 @@ class TestJobsPendingWiring:
                     db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         assert jobs_pending._data.get((jtype_a,), 0) == 2
         assert jobs_pending._data.get((jtype_b,), 0) == 3
 
@@ -1053,15 +1091,19 @@ class TestJobsPendingWiring:
             t = Tenant(id=tid, name="idem2-test", slug=tid)
             u = User(id=uid, tenant_id=tid, email_normalized=f"{uid}@test")
             c = Case(id=cid, tenant_id=tid, owner_user_id=uid, title="idem2 case")
-            db.add_all([t, u, c])
+            db.add(t)
+            db.add(u)
+            await db.flush()
+            db.add(c)
+            await db.flush()
             job = BackgroundJob(id=new_uuid(), tenant_id=tid, case_id=cid,
                                 job_type=jtype, status="queued")
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         v1 = jobs_pending._data.get((jtype,), 0)
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         v2 = jobs_pending._data.get((jtype,), 0)
         assert v1 == v2 == 1
 
@@ -1084,8 +1126,10 @@ class TestJobsPendingWiring:
     @pytest.mark.asyncio
     async def test_no_negative_after_all_cleared(self):
         from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        from app.db.session import get_sessionmaker
         jobs_pending._data.clear()
-        await _refresh_jobs_pending_from_db()
+        maker = get_sessionmaker()
+        await _refresh_jobs_pending_from_db(maker)
         for key, val in jobs_pending._data.items():
             assert val >= 0, f"Negative pending for {key}: {val}"
 

@@ -1,12 +1,12 @@
 """P1.4 — Database layer tests."""
-
 from __future__ import annotations
 
-import os
+import tempfile
 import unittest
 from datetime import UTC, datetime
+from pathlib import Path
 
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./case_store/emsalist_test.db"
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from app.db.models import (
     Base,
@@ -22,26 +22,46 @@ from app.db.models import (
     AuditEvent,
     CaseSession,
 )
-from app.db.session import get_engine, get_sessionmaker, check_db_health
+from app.db.session import check_db_health
 
 
 class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        cls._tempdir = tempfile.TemporaryDirectory(prefix="emsalist-test-db-")
+        cls.addClassCleanup(cls._cleanup_g)
+
+        db_path = Path(cls._tempdir.name) / "emsalist_test.db"
+        test_url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
+
+        cls.engine = create_async_engine(test_url)
+        cls.sessionmaker = async_sessionmaker(cls.engine, class_=AsyncSession, expire_on_commit=False)
+
         import asyncio
         asyncio.run(cls._setup())
 
     @classmethod
     async def _setup(cls) -> None:
-        engine = get_engine()
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+        async with cls.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+    @classmethod
+    def _cleanup_g(cls) -> None:
+        import asyncio
+
+        async def _dispose():
+            await cls.engine.dispose()
+
+        try:
+            asyncio.run(_dispose())
+        except Exception:
+            pass
+
+        cls._tempdir.cleanup()
+
     async def test_tenant_creation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="loc", name="Local", slug="local")
             s.add(t)
             await s.commit()
@@ -49,8 +69,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(result)
 
     async def test_duplicate_tenant_slug_fails(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t1 = Tenant(id="t1", name="Test", slug="test")
             t2 = Tenant(id="t2", name="Test2", slug="test")
             s.add(t1)
@@ -61,8 +80,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.rollback()
 
     async def test_user_creation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="ut", name="U", slug="u")
             s.add(t)
             await s.commit()
@@ -73,8 +91,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(result)
 
     async def test_case_creation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="ct", name="C", slug="c")
             u = User(id="cu", tenant_id="ct", email_normalized="c@d.com")
             s.add_all([t, u])
@@ -86,8 +103,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(result)
 
     async def test_case_session(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="st", name="S", slug="s")
             u = User(id="su", tenant_id="st", email_normalized="e@f.com")
             c = Case(id="sc", tenant_id="st", owner_user_id="su")
@@ -98,8 +114,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.commit()
 
     async def test_precedent_unique_constraint(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="pt", name="P", slug="p")
             u = User(id="pu", tenant_id="pt", email_normalized="g@h.com")
             c = Case(id="pc", tenant_id="pt", owner_user_id="pu")
@@ -113,8 +128,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.rollback()
 
     async def test_workflow_run_unique(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="wt", name="W", slug="w")
             u = User(id="wu", tenant_id="wt", email_normalized="i@j.com")
             c = Case(id="wc", tenant_id="wt", owner_user_id="wu")
@@ -128,8 +142,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.rollback()
 
     async def test_cross_case_isolation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="xt", name="X", slug="x")
             u = User(id="xu", tenant_id="xt", email_normalized="k@l.com")
             c1 = Case(id="xc1", tenant_id="xt", owner_user_id="xu")
@@ -146,8 +159,7 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotEqual(r1.case_id, r2.case_id)
 
     async def test_ai_run_creation(self) -> None:
-        sm = get_sessionmaker()
-        async with sm() as s:
+        async with self.sessionmaker() as s:
             t = Tenant(id="at", name="A", slug="a")
             u = User(id="au", tenant_id="at", email_normalized="m@n.com")
             c = Case(id="ac", tenant_id="at", owner_user_id="au")
@@ -158,15 +170,140 @@ class DatabaseModelTests(unittest.IsolatedAsyncioTestCase):
             await s.commit()
 
     async def test_db_health(self) -> None:
-        result = await check_db_health()
+        from unittest.mock import patch, AsyncMock
+        from app.db.session import get_engine
+
+        async def mock_check():
+            return {"backend": "sqlalchemy", "connected": True, "latency_ms": 0, "migration_head": "test"}
+
+        with patch.object(get_engine, '__call__', side_effect=[self.engine]) if False else patch(
+            'app.db.session.get_engine', return_value=self.engine
+        ):
+            result = await check_db_health()
         self.assertIsNotNone(result)
 
-    async def test_migration_roundtrip(self) -> None:
-        engine = get_engine()
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
-            await conn.run_sync(Base.metadata.create_all)
-        self.assertTrue(True)
+
+class AlembicUrlConversionTests(unittest.TestCase):
+    """P1.14 — Test production migration_utils.to_sync_migration_url()."""
+
+    def test_alembic_uses_psycopg_for_sync_migrations(self):
+        from app.db.migration_utils import to_sync_migration_url
+        pg_url = "postgresql+asyncpg://user:pass@localhost:5432/db"
+        converted = to_sync_migration_url(pg_url)
+        self.assertIn("+psycopg", converted)
+        self.assertNotIn("+asyncpg", converted)
+        self.assertEqual(converted, "postgresql+psycopg://user:pass@localhost:5432/db")
+
+    def test_sqlite_strips_async_driver(self):
+        from app.db.migration_utils import to_sync_migration_url
+        sqlite_url = "sqlite+aiosqlite:///./case_store/emsalist.db"
+        converted = to_sync_migration_url(sqlite_url)
+        self.assertNotIn("+aiosqlite", converted)
+        self.assertEqual(converted, "sqlite:///./case_store/emsalist.db")
+
+    def test_non_async_url_passthrough(self):
+        from app.db.migration_utils import to_sync_migration_url
+        plain_url = "postgresql+psycopg://user:pass@localhost/db"
+        converted = to_sync_migration_url(plain_url)
+        self.assertEqual(converted, plain_url)
+
+    def test_empty_url_passthrough(self):
+        from app.db.migration_utils import to_sync_migration_url
+        self.assertEqual(to_sync_migration_url(""), "")
+
+    def test_percent_encoded_url_preserved(self):
+        from app.db.migration_utils import to_sync_migration_url
+        pg_url = "postgresql+asyncpg://user:p%40ss@localhost:5432/db%5Ftest"
+        converted = to_sync_migration_url(pg_url)
+        self.assertIn("p%40ss", converted)
+        self.assertIn("db%5Ftest", converted)
+        self.assertNotIn("+asyncpg", converted)
+
+
+class AlembicConfigUrlTests(unittest.TestCase):
+    """P1.14 — Alembic ConfigParser compatibility with percent-encoded URLs."""
+
+    def test_config_set_main_option_percent_encoded_password(self):
+        from app.db.migration_utils import to_alembic_config_url
+        from alembic.config import Config
+
+        url = "postgresql+asyncpg://user:p%40ss%21@localhost:5432/db"
+        escaped = to_alembic_config_url(url)
+        self.assertNotIn("%", escaped.replace("%%", ""),
+                         "All bare % must be escaped to %%")
+        self.assertIn("%%", escaped)
+
+        cfg = Config()
+        cfg.set_main_option("sqlalchemy.url", escaped)
+
+        read_back = cfg.get_main_option("sqlalchemy.url")
+        self.assertIn("+psycopg", read_back)
+        self.assertNotIn("+asyncpg", read_back)
+        self.assertIn("p%40ss%21", read_back,
+                      "ConfigParser must decode %% back to literal %")
+
+    def test_config_url_semantic_preservation(self):
+        from app.db.migration_utils import to_alembic_config_url, to_sync_migration_url
+        from alembic.config import Config
+
+        url = "postgresql+asyncpg://user:secret@host:5432/db%5Fname"
+        escaped = to_alembic_config_url(url)
+
+        cfg = Config()
+        cfg.set_main_option("sqlalchemy.url", escaped)
+        read_back = cfg.get_main_option("sqlalchemy.url")
+
+        self.assertEqual(read_back, to_sync_migration_url(url),
+                         "Round-trip through ConfigParser must preserve URL semantics")
+
+    def test_config_url_no_percent_chars_unchanged(self):
+        from app.db.migration_utils import to_alembic_config_url, to_sync_migration_url
+        from alembic.config import Config
+
+        url = "postgresql+asyncpg://user:pass@localhost:5432/db"
+        escaped = to_alembic_config_url(url)
+
+        cfg = Config()
+        cfg.set_main_option("sqlalchemy.url", escaped)
+        read_back = cfg.get_main_option("sqlalchemy.url")
+
+        self.assertEqual(read_back, to_sync_migration_url(url))
+
+
+class FreshDatabaseMigrationTests(unittest.TestCase):
+    """P1.14 — Full migration chain produces zero drift on a clean database."""
+
+    def test_fresh_sqlite_migration_chain_zero_drift(self):
+        import tempfile as _tempfile
+        from alembic.config import Config as AlcConfig
+        from alembic import command
+        from alembic.runtime.migration import MigrationContext
+        from alembic.autogenerate import compare_metadata
+        from sqlalchemy import create_engine
+        import app.db.models  # noqa: ensure all models registered
+
+        td = _tempfile.TemporaryDirectory(prefix="emsalist-fresh-mig-")
+        try:
+            db_path = Path(td.name) / "fresh_test.db"
+            db_url = f"sqlite:///{db_path.as_posix()}"
+
+            migrations_dir = str(Path(__file__).resolve().parents[1] / "app" / "db" / "migrations")
+            alc_cfg = AlcConfig()
+            alc_cfg.set_main_option("script_location", migrations_dir)
+            alc_cfg.set_main_option("sqlalchemy.url", db_url)
+            command.upgrade(alc_cfg, "head")
+
+            engine = create_engine(db_url, echo=False)
+            with engine.connect() as conn:
+                ctx = MigrationContext.configure(conn)
+                diffs = compare_metadata(ctx, app.db.models.Base.metadata)
+                self.assertEqual(
+                    diffs, [],
+                    f"Fresh database has unresolved migration operations: {diffs}"
+                )
+            engine.dispose()
+        finally:
+            td.cleanup()
 
 
 if __name__ == "__main__":

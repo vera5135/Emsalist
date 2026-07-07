@@ -21,28 +21,34 @@ CID_B = "c-p8i-b"
 
 @pytest_asyncio.fixture
 async def db_session():
-    import sqlite3 as _sq
-    dbp = os.path.join(os.path.dirname(__file__), "..", "case_store", "emsalist.db")
-    c = _sq.connect(dbp)
-    c.execute(f"DELETE FROM background_job_artifacts WHERE tenant_id='{TID}'")
-    c.execute(f"DELETE FROM background_job_events WHERE job_id IN (SELECT id FROM background_jobs WHERE tenant_id='{TID}')")
-    c.execute(f"DELETE FROM background_job_attempts WHERE job_id IN (SELECT id FROM background_jobs WHERE tenant_id='{TID}')")
-    c.execute(f"DELETE FROM background_jobs WHERE tenant_id='{TID}'")
-    c.execute(f"DELETE FROM case_members WHERE tenant_id='{TID}'")
-    c.execute(f"DELETE FROM cases WHERE tenant_id='{TID}'")
-    c.execute(f"DELETE FROM users WHERE tenant_id='{TID}'")
-    c.execute(f"DELETE FROM tenants WHERE id='{TID}'")
-    c.execute(f"INSERT OR IGNORE INTO tenants(id,name,slug,status,created_at,updated_at) VALUES('{TID}','Int','{TID}','active',datetime('now'),datetime('now'))")
-    c.execute(f"INSERT OR IGNORE INTO users(id,tenant_id,email_normalized,display_name,status,role,created_at,updated_at) VALUES('{UID_O}','{TID}','o@i','Owner','active','lawyer',datetime('now'),datetime('now'))")
-    c.execute(f"INSERT OR IGNORE INTO users(id,tenant_id,email_normalized,display_name,status,role,created_at,updated_at) VALUES('{UID_V}','{TID}','v@i','Viewer','active','viewer',datetime('now'),datetime('now'))")
-    for cid in [CID_A, CID_B]:
-        c.execute(f"INSERT OR IGNORE INTO cases(id,tenant_id,owner_user_id,title,legal_topic,profile_id,event_text,status,version,created_at,updated_at) VALUES('{cid}','{TID}','{UID_O}','Case','t','def','','active',1,datetime('now'),datetime('now'))")
-    c.execute(f"INSERT OR IGNORE INTO case_members(id,tenant_id,case_id,user_id,membership_role,permissions_override,created_at) VALUES('mem-o-a','{TID}','{CID_A}','{UID_O}','owner','"+'{}'+"',datetime('now'))")
-    c.execute(f"INSERT OR IGNORE INTO case_members(id,tenant_id,case_id,user_id,membership_role,permissions_override,created_at) VALUES('mem-o-b','{TID}','{CID_B}','{UID_O}','owner','"+'{}'+"',datetime('now'))")
-    c.execute(f"INSERT OR IGNORE INTO case_members(id,tenant_id,case_id,user_id,membership_role,permissions_override,created_at) VALUES('mem-v-a','{TID}','{CID_A}','{UID_V}','viewer','"+'{}'+"',datetime('now'))")
-    c.commit(); c.close()
     maker = get_sessionmaker()
     async with maker() as s:
+        from sqlalchemy import delete, select
+        from app.db.models import Tenant, User, Case, CaseMember, BackgroundJob
+        from app.db.models import AuditEvent, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt
+        job_ids = select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID)
+        await s.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(job_ids)))
+        await s.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(job_ids)))
+        await s.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(job_ids)))
+        await s.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == TID))
+        await s.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TID))
+        await s.execute(delete(CaseMember).where(CaseMember.tenant_id == TID))
+        await s.execute(delete(Case).where(Case.tenant_id == TID))
+        await s.execute(delete(User).where(User.tenant_id == TID))
+        await s.execute(delete(Tenant).where(Tenant.id == TID))
+        await s.flush()
+        s.add(Tenant(id=TID, name="Int", slug=TID, status="active"))
+        s.add(User(id=UID_O, tenant_id=TID, email_normalized="o@i", display_name="Owner", status="active", role="lawyer"))
+        s.add(User(id=UID_V, tenant_id=TID, email_normalized="v@i", display_name="Viewer", status="active", role="viewer"))
+        await s.flush()
+        for cid in [CID_A, CID_B]:
+            s.add(Case(id=cid, tenant_id=TID, owner_user_id=UID_O, title="Case", legal_topic="t", profile_id="def", event_text="", status="active", version=1))
+        await s.flush()
+        s.add(CaseMember(id="mem-o-a", tenant_id=TID, case_id=CID_A, user_id=UID_O, membership_role="owner", permissions_override={}))
+        s.add(CaseMember(id="mem-o-b", tenant_id=TID, case_id=CID_B, user_id=UID_O, membership_role="owner", permissions_override={}))
+        s.add(CaseMember(id="mem-v-a", tenant_id=TID, case_id=CID_A, user_id=UID_V, membership_role="viewer", permissions_override={}))
+        await s.flush()
+        await s.commit()
         yield s
         await s.rollback()
 

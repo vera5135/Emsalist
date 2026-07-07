@@ -254,6 +254,7 @@ class JobWorker:
             "payload_json": job.payload_json or {},
             "attempt_count": job.attempt_count or 0,
             "max_attempts": job.max_attempts or 3,
+            "priority": job.priority or 0,
             "lease_expires_at": _iso(job.lease_expires_at),
             "worker_id_hash": job.worker_id_hash,
         }

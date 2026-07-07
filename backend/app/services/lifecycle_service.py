@@ -736,27 +736,57 @@ class DataLifecycleService:
 
     def _purge_db_graph(self, case_id: str, tenant_id: str) -> None:
         import asyncio as _asyncio
-        from app.db.session import get_sessionmaker
+        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+        from sqlalchemy.pool import NullPool
         from app.services.legal_issue_graph_db_service import purge_case_graph
 
-        async def _purge():
-            sessionmaker = get_sessionmaker()
-            async with sessionmaker() as db:
-                await purge_case_graph(
-                    db, tenant_id=tenant_id, case_id=case_id, dry_run=False,
-                )
-                await db.commit()
+        db_url = self._settings.database_url
+        if not db_url:
+            db_url = "sqlite+aiosqlite:///./case_store/emsalist.db"
+
+        async def _purge() -> None:
+            engine = create_async_engine(db_url, poolclass=NullPool)
+            try:
+                maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+                async with maker() as db:
+                    await purge_case_graph(
+                        db, tenant_id=tenant_id, case_id=case_id, dry_run=False,
+                    )
+                    await db.commit()
+            finally:
+                await engine.dispose()
 
         try:
             _asyncio.run(_purge())
         except RuntimeError:
+            self._run_in_worker_thread(_purge)
+
+    @staticmethod
+    def _run_in_worker_thread(coro) -> None:
+        import asyncio, threading
+
+        result: list = [None]
+        error: list[Exception | None] = [None]
+        done = threading.Event()
+
+        def _runner() -> None:
             try:
-                import nest_asyncio as _nest
-                loop = _asyncio.get_running_loop()
-                _nest.apply(loop)
-                _asyncio.ensure_future(_purge())
-            except Exception:
-                pass
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result[0] = loop.run_until_complete(coro)
+                finally:
+                    loop.close()
+            except Exception as exc:
+                error[0] = exc
+            finally:
+                done.set()
+
+        t = threading.Thread(target=_runner, daemon=True)
+        t.start()
+        done.wait(timeout=30)
+        if error[0] is not None:
+            raise error[0]
 
 
     def _purge_exports_for_case(self, case_id: str) -> None:

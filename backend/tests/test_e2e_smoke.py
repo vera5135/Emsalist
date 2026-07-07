@@ -54,19 +54,30 @@ async def e2e_db():
 
     maker = get_sessionmaker()
     async with maker() as db:
-        from app.db.models import Tenant, User, Case, CaseMember
-        from sqlalchemy import select, delete
+        from app.db.models import Tenant, User, Case, CaseMember, LegalIssueEdge, LegalIssueNode, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt, BackgroundJob, AuditEvent
+        from sqlalchemy import select, delete, or_
+
+        await db.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID))))
+        await db.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID))))
+        await db.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID))))
+        await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == TID))
+        await db.execute(delete(LegalIssueEdge).where(or_(LegalIssueEdge.tenant_id == TID, LegalIssueEdge.case_id == CID)))
+        await db.execute(delete(LegalIssueNode).where(or_(LegalIssueNode.tenant_id == TID, LegalIssueNode.case_id == CID)))
+        await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TID))
         await db.execute(delete(CaseMember).where(CaseMember.tenant_id == TID))
         await db.execute(delete(Case).where(Case.tenant_id == TID))
         await db.execute(delete(User).where(User.tenant_id == TID))
         await db.execute(delete(Tenant).where(Tenant.id == TID))
+        await db.flush()
         db.add(Tenant(id=TID, name="E2E", slug=TID, status="active"))
         db.add(User(id=UID_O, tenant_id=TID, email_normalized="o@e2e", display_name="Owner", status="active", role="tenant_admin"))
         db.add(User(id=UID_V, tenant_id=TID, email_normalized="v@e2e", display_name="Viewer", status="active", role="viewer"))
+        await db.flush()
         db.add(Case(id=CID, tenant_id=TID, owner_user_id=UID_O, title="E2E Case",
                      legal_topic="Borc", profile_id="defective_vehicle",
                      event_text="Muvekkil ikinci el araci galeriden satin aldi. Motor arizasi cikti.",
                      status="active", version=1))
+        await db.flush()
         db.add(CaseMember(id=new_uuid(), tenant_id=TID, case_id=CID, user_id=UID_O, membership_role="owner"))
         db.add(CaseMember(id=new_uuid(), tenant_id=TID, case_id=CID, user_id=UID_V, membership_role="viewer"))
         await db.commit()

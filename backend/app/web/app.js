@@ -55,7 +55,7 @@ const els = {
     $("auditPrecedentsBtn"),
     $("draftBtn"),
     $("localDraftBtn"),
-    $("geminiDraftBtn"),
+    $("aiDraftBtn"),
     $("auditDraftBtn"),
     $("refineDraftBtn"),
     $("sampleBtn"),
@@ -3394,7 +3394,7 @@ function wireEvents() {
   });
   $("reviewBtn").addEventListener("click", () => runFullReview().catch((error) => setStatus(error.message, true)));
   $("localDraftBtn").addEventListener("click", () => runDraft({ force: true, writer_mode: "local" }).catch((error) => setStatus(error.message, true)));
-  $("geminiDraftBtn").addEventListener("click", () => runDraft({ force: true, writer_mode: "gemini" }).catch((error) => setStatus(error.message, true)));
+  $("aiDraftBtn")?.addEventListener("click", () => runDraft({ force: true, writer_mode: "gemini" }).catch((error) => setStatus(error.message, true)));
   $("aiEnrichBtn").addEventListener("click", () => runAIEnrich().catch((error) => setStatus(error.message, true)));
   $("aiQuestionsBtn").addEventListener("click", () => runAIQuestions().catch((error) => setStatus(error.message, true)));
   $("aiSearchBtn").addEventListener("click", () => runAISearch().catch((error) => setStatus(error.message, true)));

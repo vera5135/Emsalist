@@ -1,12 +1,13 @@
 """P1.4 — Database session manager and config."""
-
 from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
 
@@ -28,14 +29,20 @@ def get_engine():
     global _engine
     if _engine is None:
         url = _build_url()
-        logger.info("db_engine_created backend=%s", "postgresql" if "postgres" in url else "sqlite")
-        _engine = create_async_engine(
-            url,
-            echo=False,
-            pool_size=5,
-            max_overflow=5,
-            pool_timeout=30,
-        )
+        settings = get_settings()
+        backend = "postgresql" if "postgres" in url else "sqlite"
+        if settings.environment == "test":
+            logger.info("db_engine_created backend=%s pool=NullPool (test)", backend)
+            _engine = create_async_engine(url, echo=False, poolclass=NullPool)
+        else:
+            logger.info("db_engine_created backend=%s pool=default", backend)
+            _engine = create_async_engine(
+                url,
+                echo=False,
+                pool_size=5,
+                max_overflow=5,
+                pool_timeout=30,
+            )
     return _engine
 
 
@@ -58,13 +65,21 @@ async def unit_of_work():
             yield session
 
 
+async def dispose_engine() -> None:
+    global _engine, _sessionmaker
+    if _engine is not None:
+        await _engine.dispose()
+        _engine = None
+    _sessionmaker = None
+
+
 async def check_db_health() -> dict:
     try:
         engine = get_engine()
         async with engine.connect() as conn:
             import time
             t0 = time.time()
-            await conn.execute(engine.dialect.statement_compiler(engine.dialect, None).visit_textual("SELECT 1"))
+            await conn.execute(text("SELECT 1"))
             lat = int((time.time() - t0) * 1000)
         from alembic.config import Config
         from alembic.script import ScriptDirectory

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -252,6 +253,54 @@ class InternalIntegrationTests(unittest.TestCase):
 
         delete = self.client.delete(f"/api/v1/documents/{doc_id}?case_id={case_id}")
         self.assertEqual(delete.status_code, 204)
+
+
+class OpenAPIDriftDetectionTests(unittest.TestCase):
+    """P1.14 — OpenAPI drift detection guards."""
+
+    def test_repository_openapi_matches_runtime_schema(self):
+        from app.main import app
+        import json
+
+        runtime_schema = app.openapi()
+        runtime_json = json.dumps(runtime_schema, sort_keys=True, indent=2)
+
+        repo_path = Path(__file__).resolve().parents[2] / "docs" / "api" / "openapi-v1.json"
+        if not repo_path.exists():
+            self.skipTest("Repository openapi-v1.json not found")
+        repo_json = json.dumps(
+            json.loads(repo_path.read_text(encoding="utf-8")),
+            sort_keys=True, indent=2,
+        )
+
+        self.assertEqual(
+            runtime_json, repo_json,
+            "Runtime OpenAPI schema differs from repository docs/api/openapi-v1.json. "
+            "Run: python -c \"from app.main import app; import json; "
+            "open('docs/api/openapi-v1.json','w').write(json.dumps(app.openapi(),sort_keys=True,indent=2))\""
+        )
+
+    def test_runtime_openapi_matches_self(self):
+        from app.main import app
+        import json
+
+        s1 = app.openapi()
+        s2 = app.openapi()
+        self.assertEqual(
+            json.dumps(s1, sort_keys=True, indent=2),
+            json.dumps(s2, sort_keys=True, indent=2),
+            "Repeated openapi() calls must produce identical output",
+        )
+
+    def test_openapi_schema_has_no_secrets(self):
+        from app.main import app
+        import json
+
+        schema = app.openapi()
+        raw = json.dumps(schema)
+        for secret in ("jwt_secret", "database_url", "gemini_api_key"):
+            self.assertNotIn(secret, raw.lower(),
+                             f"OpenAPI schema must not contain '{secret}'")
 
 
 if __name__ == "__main__":

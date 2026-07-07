@@ -1,7 +1,6 @@
 """P1.5.3 — Comprehensive auth, session and ownership tests."""
 from __future__ import annotations
 import unittest, os
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./case_store/emsalist_test.db"
 
 from fastapi.testclient import TestClient
 from app.main import app

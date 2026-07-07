@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import struct
+import subprocess
 import tarfile
 import tempfile
 import uuid
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from sqlalchemy.engine import make_url
 
 from app.config import get_settings
 from app.services.backup_service import (
@@ -101,8 +103,8 @@ class BackupLockManager:
         try:
             await db.execute(delete(BackupLock).where(
                 BackupLock.lock_name == lock_name,
-                BackupLock.lease_expires_at < now,
-                BackupLock.released_at.is_(None),
+                ((BackupLock.lease_expires_at < now) & BackupLock.released_at.is_(None))
+                | (BackupLock.released_at.is_not(None)),
             ))
             await db.flush()
         except Exception:
@@ -249,6 +251,10 @@ class BackupService:
 
             await self.repo.update_run(db, run_id, status="dumping_database")
             db_info = await self._dump_database(db, run_id)
+            if db_info:
+                await self.repo.add_item(db, run_id, "database_dump", db_info["logical_name"],
+                                          db_info["storage_key"], size_bytes=db_info["size_bytes"],
+                                          sha256=db_info["sha256"], status="collected")
 
             await self.repo.update_run(db, run_id, status="collecting_files")
             file_items = self._collect_files(run_id)
@@ -425,14 +431,33 @@ class BackupService:
     async def _pg_dump(self, run_id: str) -> dict | None:
         try:
             s = get_settings()
-            url = s.database_url or ""
+            raw_url = os.environ.get("DATABASE_URL") or s.database_url
+            parsed = make_url(raw_url)
+            args = [
+                "pg_dump",
+                "--host", parsed.host or "localhost",
+                "--port", str(parsed.port or 5432),
+                "--username", parsed.username or os.environ.get("PGUSER", "postgres"),
+                "--dbname", parsed.database or "postgres",
+                "--format=custom",
+                "--no-owner",
+                "--no-privileges",
+            ]
+            env = os.environ.copy()
+            if parsed.password:
+                env["PGPASSWORD"] = parsed.password
+            else:
+                env.pop("PGPASSWORD", None)
             result = subprocess.run(
-                ["pg_dump", url, "--format=custom", "--no-owner", "--no-privileges"],
-                capture_output=True, timeout=s.backup_database_timeout_seconds or 300,
-                env={**os.environ, "PGPASSWORD": os.environ.get("DB_PASSWORD", "")},
+                args,
+                capture_output=True,
+                timeout=s.backup_database_timeout_seconds or 300, env=env,
             )
             if result.returncode != 0:
-                logger.error("pg_dump_failed rc=%d stderr=%s", result.returncode, result.stderr.decode()[:200])
+                stderr_raw = (result.stderr or b"").decode(errors="replace")
+                stderr_safe = stderr_raw.replace(parsed.password or "", "***")[:200] if parsed.password else stderr_raw[:200]
+                logger.error("pg_dump_failed rc=%s host=%s port=%s db=%s stderr=%s",
+                    result.returncode, parsed.host, parsed.port, parsed.database, stderr_safe)
                 return None
             data = result.stdout
             sha = _safe_hash(data)

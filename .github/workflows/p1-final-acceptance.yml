@@ -60,6 +60,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      EMSALIST_ENVIRONMENT: test
     steps:
       - uses: actions/checkout@v4
 
@@ -89,7 +90,7 @@ jobs:
     name: PostgreSQL migration
     needs: environment-report
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16-alpine
@@ -105,6 +106,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      EMSALIST_ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
     steps:
       - uses: actions/checkout@v4
@@ -168,7 +170,7 @@ jobs:
         working-directory: backend
         run: |
           set -e
-          python -m alembic check 2>&1 || echo "alembic check note: may report new tables if autogenerate is used"
+          python -m alembic check
           echo "PASS: Migration check complete"
 
       - name: Alembic downgrade -1 then upgrade
@@ -199,56 +201,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r backend/requirements-test.txt
-
-      - name: Run purge tests individually
-        working-directory: backend
-        run: |
-          set -e
-          python -m pytest tests/test_lifecycle.py::PurgeTests::test_apply_purges_eligible -v --tb=long
-          python -m pytest tests/test_lifecycle.py::PurgeTests::test_purge_is_idempotent -v --tb=long
-          python -m pytest tests/test_lifecycle.py::StoreLifecycleTests::test_json_purge_removes -v --tb=long
-          echo "PASS: Purge tests passed"
-
-      - name: Run all purge-related tests
-        working-directory: backend
-        run: |
-          set -e
-          python -m pytest tests/test_lifecycle.py::PurgeTests -v --tb=short
-          python -m pytest tests/test_lifecycle.py::StoreLifecycleTests -v --tb=short
-          echo "PASS: All purge tests passed"
-
-  full-test-suite:
-    name: Full test suite
-    needs: [collection-check, migration-check, purge-tests]
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: emsalist
-          POSTGRES_PASSWORD: emsalist_test_pwd
-          POSTGRES_DB: emsalist_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
+      EMSALIST_ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
     steps:
       - uses: actions/checkout@v4
@@ -283,71 +236,182 @@ jobs:
 
       - name: Run migrations
         working-directory: backend
+        run: |
+          set -e
+          python -m alembic upgrade head
+          echo "PASS: Migrations applied"
+
+      - name: Run purge tests individually
+        working-directory: backend
+        run: |
+          set -e
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_apply_purges_eligible -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_purge_is_idempotent -v --tb=long
+          python -m pytest tests/test_lifecycle.py::StoreLifecycleTests::test_json_purge_removes -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_purge_db_failure_does_not_report_success -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_partial_purge_creates_audit_event -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_partial_purge_is_retried -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_retry_cleans_remaining_db_graph -v --tb=long
+          python -m pytest tests/test_lifecycle.py::PurgeTests::test_retry_after_json_removal_is_idempotent -v --tb=long
+          echo "PASS: Purge tests passed"
+
+      - name: Run all purge-related tests
+        working-directory: backend
+        run: |
+          set -e
+          python -m pytest tests/test_lifecycle.py::PurgeTests -v --tb=short
+          python -m pytest tests/test_lifecycle.py::StoreLifecycleTests -v --tb=short
+          echo "PASS: All purge tests passed"
+
+  full-test-suite:
+    name: Full test suite
+    needs: [collection-check, migration-check, purge-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_test_pwd
+          POSTGRES_DB: emsalist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres_target:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_target_pwd
+          POSTGRES_DB: emsalist_restore_target
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      EMSALIST_ENVIRONMENT: test
+      DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      SOURCE_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      TARGET_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_target_pwd@localhost:5433/emsalist_restore_target
+      PG_SOURCE_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      PG_TARGET_URL: postgresql://emsalist:emsalist_target_pwd@localhost:5433/emsalist_restore_target
+      BACKUP_ENCRYPTION_ENABLED: true
+      BACKUP_ENCRYPTION_KEY: p1-14-test-key-32chars-long!
+      EMSALIST_BACKUP_ROOT: /tmp/emsalist-test-backups
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements-test.txt
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5432 -U emsalist -d emsalist_test; then
+              echo "PostgreSQL source ready after ${i}s"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "FAIL: PostgreSQL source did not become ready"
+              exit 1
+            fi
+            sleep 2
+          done
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5433 -U emsalist -d emsalist_restore_target; then
+              echo "PostgreSQL target ready after ${i}s"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "FAIL: PostgreSQL target did not become ready"
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Run migrations (source)
+        working-directory: backend
         run: python -m alembic upgrade head
+
+      - name: Run migrations (target)
+        env:
+          DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_target_pwd@localhost:5433/emsalist_restore_target
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      - name: Seed DR test data
+        working-directory: backend
+        shell: bash
+        run: |
+          set -e
+          python -c "
+          import asyncio, os, sys
+          from app.db.session import get_sessionmaker
+          from app.db.models import Tenant, User, Case, CaseMember, Document, AuditEvent, new_uuid
+          from datetime import UTC, datetime
+
+          async def seed():
+              maker = get_sessionmaker()
+              async with maker() as db:
+                  from sqlalchemy import delete
+                  await db.execute(delete(Document).where(Document.id == 'd-s1'))
+                  await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-s1'))
+                  await db.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-s1'))
+                  await db.execute(delete(Case).where(Case.id == 'c-s1'))
+                  await db.execute(delete(User).where(User.id == 'u-s1'))
+                  await db.execute(delete(Tenant).where(Tenant.id == 't-s1'))
+                  await db.flush()
+
+                  db.add(Tenant(id='t-s1', name='Seed Tenant', slug='t-s1', status='active'))
+                  db.add(User(id='u-s1', tenant_id='t-s1', email_normalized='s1@test', display_name='S1', status='active', role='tenant_admin'))
+                  await db.flush()
+                  db.add(Case(id='c-s1', tenant_id='t-s1', owner_user_id='u-s1', title='Seed Case', legal_topic='Borc', profile_id='def', event_text='seed', status='active', version=1))
+                  await db.flush()
+                  db.add(CaseMember(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', membership_role='owner'))
+                  db.add(Document(id='d-s1', case_id='c-s1', tenant_id='t-s1', original_filename='seed.txt', storage_key='seed.txt', size_bytes=10, sha256='a'*64, status='active'))
+                  db.add(AuditEvent(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', actor_id='u-s1', action='case_created', resource_type='case', resource_id='c-s1', outcome='success'))
+                  await db.commit()
+                  print('Seed data inserted: t-s1, u-s1, c-s1, d-s1')
+          asyncio.run(seed())
+          "
 
       - name: Run full test suite
         working-directory: backend
         run: |
-          set -e
-          python -m pytest -ra --strict-markers --durations=30 -v --tb=short \
-            --ignore=tests/test_backup_restore_postgres.py \
-            --ignore=tests/test_background_jobs.py \
-            --ignore=tests/test_background_jobs_integration.py \
-            --ignore=tests/test_observability.py \
-            --ignore=tests/test_e2e_smoke.py \
-            --ignore=tests/test_yargitay_resilience.py \
-            --ignore=tests/test_yargitay_live_source_labeling.py \
-            --ignore=tests/test_yargitay_infra.py \
-            --ignore=tests/test_yargitay_query_builder.py \
-            --ignore=tests/test_dr_integration.py \
-            --ignore=tests/test_legal_source_pilot.py \
-            --ignore=tests/test_multi_case_regression.py \
-            --ignore=tests/test_no_hardcoded_production_examples.py \
-            --ignore=tests/test_precedent_benchmark.py \
-            --ignore=tests/test_ai_runs.py \
-            --ignore=tests/test_final_petition_writer.py \
-            --ignore=tests/test_dynamic_legal_reasoner_service.py \
-            --ignore=tests/test_legal_issue_graph_routes.py \
-            --ignore=tests/test_legal_issue_graph_service.py \
-            --ignore=tests/test_legal_issue_graph_db.py \
-            --ignore=tests/test_precedent_analysis_service.py \
-            --ignore=tests/test_precedent_authority.py \
-            --ignore=tests/test_precedent_evaluation.py \
-            --ignore=tests/test_precedent_regression.py \
-            --ignore=tests/test_case_state_service.py \
-            --ignore=tests/test_legal_ground_validator.py \
-            --ignore=tests/test_workflow_review.py \
-            --ignore=tests/test_structured_logging.py \
-            --ignore=tests/test_correlation_id.py \
-            -p no:cacheprovider
+          set -o pipefail
+          python -m pytest -vv --tb=long \
+            --junitxml=pytest-full.xml \
+            2>&1 | tee pytest-full.log
+        shell: bash
 
-      - name: Run observability tests (requires DB)
-        working-directory: backend
-        run: |
-          python -m pytest tests/test_observability.py -v --tb=short -k "not test_enqueue_then_count_one and not test_same_idempotency_key_still_one and not test_claim_reduces_pending and not test_retry_wait_counts_as_pending and not test_scheduled_counts_as_pending and not test_cancel_not_pending and not test_completed_not_pending and not test_dead_lettered_not_pending and not test_multiple_job_types_separate and not test_double_refresh_idempotent and not test_no_negative_after_all_cleared" || echo "Observability tests complete"
-
-      - name: Run background job tests
-        working-directory: backend
-        run: |
-          python -m pytest tests/test_background_jobs.py tests/test_background_jobs_integration.py -v --tb=short || echo "Background job tests complete"
-
-      - name: Run E2E smoke tests
-        working-directory: backend
-        run: |
-          python -m pytest tests/test_e2e_smoke.py -v --tb=short || echo "E2E smoke tests complete"
-
-      - name: Run backup/restore PostgreSQL tests
-        working-directory: backend
-        env:
-          SOURCE_DATABASE_URL: ${{ env.DATABASE_URL }}
-          TARGET_DATABASE_URL: ${{ env.DATABASE_URL }}
-          PG_SOURCE_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
-          PG_TARGET_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
-          BACKUP_ENCRYPTION_ENABLED: "true"
-          BACKUP_ENCRYPTION_KEY: "ci-test-key-32-bytes-long-minimum!!"
-          BACKUP_ROOT: /tmp/backup-storage
-        run: |
-          python -m pytest tests/test_backup_restore_postgres.py -v --tb=long || echo "Backup/restore tests complete"
+      - name: Upload full test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-14-full-test-results
+          path: |
+            backend/pytest-full.log
+            backend/pytest-full.xml
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Test summary
         if: always()
@@ -370,6 +434,7 @@ jobs:
       - name: Docker build
         run: |
           docker build \
+            --pull \
             --build-arg BUILD_COMMIT=${{ steps.args.outputs.commit }} \
             --build-arg BUILD_TIMESTAMP=${{ steps.args.outputs.timestamp }} \
             -t emsalist:p1.14 .
@@ -417,7 +482,14 @@ jobs:
 
       - name: Verify app import
         run: |
-          docker run --rm emsalist:p1.14 python -c "from app.main import app; print('PASS: App imports OK')"
+          docker run --rm \
+            -e AUTH_MODE=jwt \
+            -e JWT_SECRET_KEY=ci-only-not-a-production-secret-1234567890 \
+            -e DATABASE_URL=postgresql+asyncpg://emsalist@localhost:5432/emsalist \
+            -e ALLOWED_HOSTS=localhost \
+            -e CORS_ALLOW_ORIGINS=https://ci.invalid \
+            emsalist:p1.14 \
+            python -c "from app.main import app; print('PASS: App imports OK')"
 
       - name: Inspect image size
         run: docker images emsalist:p1.14
@@ -428,38 +500,56 @@ jobs:
       - name: Docker history
         run: docker history --no-trunc emsalist:p1.14
 
-      - name: Trivy image scan
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
+      - name: Trivy image report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: emsalist:p1.14
+          format: json
+          output: trivy-image-report.json
+          exit-code: 0
+          severity: CRITICAL,HIGH
+          vuln-type: os,library
+
+      - name: Upload Trivy image report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-14-trivy-image-report
+          path: trivy-image-report.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Trivy image gate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: emsalist:p1.14
           format: table
-          exit-code: 0
+          exit-code: 1
+          ignore-unfixed: true
           severity: CRITICAL,HIGH
+          vuln-type: os,library
+          skip-setup-trivy: true
 
       - name: Trivy config scan
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: config
           scan-ref: .
           format: table
-          exit-code: 0
+          exit-code: 1
           severity: CRITICAL,HIGH
 
       - name: Pip audit
         working-directory: backend
-        continue-on-error: true
         run: |
-          pip install pip-audit
-          pip-audit -r requirements.txt --desc on --no-deps || echo "pip-audit found issues"
+          python -m pip install "pip-audit==2.10.1"
+          python -m pip_audit -r requirements.txt --desc on
 
       - name: Bandit scan
         working-directory: backend
-        continue-on-error: true
         run: |
           pip install bandit
-          bandit -r app/ -f json -o bandit-report.json --severity-level high -x app/web || echo "Bandit found issues"
+          bandit -r app/ -f json -o bandit-report.json --severity-level high -x app/web
 
       - name: Upload Bandit report
         uses: actions/upload-artifact@v4
@@ -493,9 +583,16 @@ jobs:
       - name: Build image
         run: |
           docker build \
+            --pull \
             --build-arg BUILD_COMMIT=${{ steps.args.outputs.commit }} \
             --build-arg BUILD_TIMESTAMP=${{ steps.args.outputs.timestamp }} \
             -t emsalist-api:latest .
+
+      - name: Validate compose config
+        run: |
+          set -e
+          docker compose -f docker-compose.yml -f docker-compose.production.yml config
+          echo "PASS: Compose config is valid"
 
       - name: Start compose stack
         run: |
@@ -503,38 +600,59 @@ jobs:
 
       - name: Wait for services
         run: |
+          set -euo pipefail
+          ready=0
           for i in $(seq 1 60); do
-            if curl -s http://localhost:8000/live | grep -q alive; then
+            if curl --silent --show-error --fail http://localhost:8000/live \
+              | grep -q '"status":"alive"'; then
               echo "API ready after ${i}s"
+              ready=1
               break
             fi
             echo "Waiting for API... ($i)"
             sleep 2
           done
+          if [ "$ready" -ne 1 ]; then
+            echo "FAIL: API did not become live within 120 seconds"
+            docker compose -f docker-compose.yml -f docker-compose.production.yml ps -a || true
+            docker compose -f docker-compose.yml -f docker-compose.production.yml logs --no-color postgres migration api || true
+            exit 1
+          fi
 
       - name: Verify compose services
         run: |
-          docker compose ps
-          docker compose logs --no-color migration 2>/dev/null || echo "No migration logs"
-          docker compose logs --no-color api --tail=20 2>/dev/null || echo "No api logs"
+          docker compose -f docker-compose.yml -f docker-compose.production.yml ps
+          docker compose -f docker-compose.yml -f docker-compose.production.yml logs --no-color migration 2>/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.production.yml logs --no-color api --tail=20 2>/dev/null
 
       - name: Verify live endpoint
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/live)
-          if [ "$STATUS" != "200" ]; then
-            echo "FAIL: /live returned $STATUS"
-            exit 1
-          fi
-          echo "PASS: /live returns $STATUS"
+          set -euo pipefail
+          curl --fail-with-body --show-error http://localhost:8000/live \
+            | tee /tmp/live-response.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/live-response.json").read_text())
+          assert payload.get("status") == "alive", payload
+          print("PASS: /live is alive")
+          PY
 
       - name: Verify ready endpoint
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ready)
-          if [ "$STATUS" != "200" ]; then
-            echo "WARN: /ready returned $STATUS (may not be ready yet)"
-          else
-            echo "PASS: /ready returns $STATUS"
-          fi
+          set -euo pipefail
+          curl --fail-with-body --show-error \
+            http://localhost:8000/ready \
+            | tee /tmp/ready-response.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/ready-response.json").read_text())
+          assert payload.get("status") == "ready", payload
+          assert payload["checks"]["database"]["status"] == "ok", payload
+          assert payload["checks"]["configuration"]["status"] == "ok", payload
+          print("PASS: /ready is ready")
+          PY
 
       - name: Verify health endpoint
         run: |
@@ -545,17 +663,38 @@ jobs:
       - name: API smoke test
         run: |
           set -e
-          # /api/v1/meta/version
           VERSION=$(curl -s http://localhost:8000/api/v1/meta/version)
           echo "Version: $VERSION"
           echo "$VERSION" | python -c "import sys,json; d=json.load(sys.stdin); assert d.get('application')=='emsalist', 'Bad version response'"
           echo "PASS: meta/version"
-
-          # /api/v1/meta/capabilities
           CAPS=$(curl -s http://localhost:8000/api/v1/meta/capabilities)
           echo "Capabilities: $CAPS"
           echo "$CAPS" | python -c "import sys,json; d=json.load(sys.stdin); assert 'features' in d, 'Bad capabilities response'"
           echo "PASS: meta/capabilities"
+
+      - name: Capture compose diagnostics
+        if: always()
+        run: |
+          mkdir -p compose-diagnostics
+          docker compose -f docker-compose.yml -f docker-compose.production.yml \
+            ps -a > compose-diagnostics/compose-ps.txt 2>&1 || true
+          docker compose -f docker-compose.yml -f docker-compose.production.yml \
+            logs --no-color postgres migration api \
+            > compose-diagnostics/compose.log 2>&1 || true
+          docker inspect emsalist-api \
+            > compose-diagnostics/api-inspect.json 2>&1 || true
+          docker inspect emsalist-api \
+            --format '{{json .State}}' \
+            > compose-diagnostics/api-state.json 2>&1 || true
+
+      - name: Upload compose diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-14-compose-diagnostics
+          path: compose-diagnostics/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Cleanup compose
         if: always()
@@ -591,13 +730,20 @@ jobs:
 
       - name: Compare OpenAPI schemas
         run: |
-          RUNTIME_SIZE=$(stat -c%s /tmp/runtime-openapi.json)
-          REPO_SIZE=$(stat -c%s docs/api/openapi-v1.json 2>/dev/null || echo 0)
-          echo "Runtime OpenAPI size: $RUNTIME_SIZE bytes"
-          echo "Repo OpenAPI size: $REPO_SIZE bytes"
-          if [ "$REPO_SIZE" != "0" ] && [ "$RUNTIME_SIZE" != "$REPO_SIZE" ]; then
-            echo "WARN: OpenAPI sizes differ (runtime=$RUNTIME_SIZE repo=$REPO_SIZE)"
-          fi
+          set -e
+          python -c "
+          import json, sys
+          with open('docs/api/openapi-v1.json') as f:
+              repo = json.load(f)
+          with open('/tmp/runtime-openapi.json') as f:
+              runtime = json.load(f)
+          repo_json = json.dumps(repo, sort_keys=True, indent=2)
+          runtime_json = json.dumps(runtime, sort_keys=True, indent=2)
+          if repo_json != runtime_json:
+              print('FAIL: OpenAPI drift detected')
+              sys.exit(1)
+          print('PASS: OpenAPI schema matches repository')
+          "
 
       - name: Count operation IDs
         working-directory: backend
@@ -605,7 +751,7 @@ jobs:
           python -c "
           from app.main import app
           schema = app.openapi()
-          ops = set()
+          ops = []
           for path, methods in schema.get('paths', {}).items():
               if not path.startswith('/api/v1'):
                   continue
@@ -613,24 +759,27 @@ jobs:
                   if method in ('get','post','put','delete','patch'):
                       opid = methods[method].get('operationId', '')
                       if opid:
-                          ops.add(opid)
+                          ops.append(opid)
           print(f'V1 operation IDs: {len(ops)}')
-          assert len(ops) == len(set(ops)), 'Duplicate operation IDs'
-          print('PASS: All operation IDs unique')
+          assert len(ops) == len(set(ops)), f'Duplicate operation IDs found'
+          print('PASS: All {0} operation IDs unique'.format(len(ops)))
           "
 
       - name: Verify security scheme
         run: |
           python -c "
-          import json
+          import json, sys
           with open('docs/api/openapi-v1.json') as f:
               schema = json.load(f)
-          if 'components' in schema and 'securitySchemes' in schema['components']:
+          components = schema.get('components', {})
+          sec = components.get('securitySchemes', {})
+          if sec:
               print('PASS: Security schemes defined')
           elif 'security' in schema:
               print('PASS: Global security defined')
           else:
-              print('NOTE: No explicit security scheme in repo schema')
+              print('FAIL: No security scheme in OpenAPI schema')
+              sys.exit(1)
           "
 
   acceptance-summary:
@@ -667,7 +816,7 @@ jobs:
         run: |
           FAILURES=0
           for RESULT in "${ENV_RESULT}" "${COLL_RESULT}" "${MIG_RESULT}" "${PURGE_RESULT}" "${TEST_RESULT}" "${DOCKER_RESULT}" "${COMPOSE_RESULT}" "${OAPI_RESULT}"; do
-            if [ "${RESULT}" != "success" ] && [ "${RESULT}" != "skipped" ]; then
+            if [ "${RESULT}" != "success" ]; then
               echo "FAIL: Job result = ${RESULT}"
               FAILURES=$((FAILURES + 1))
             fi

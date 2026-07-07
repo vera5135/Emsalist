@@ -39,12 +39,21 @@ UID = "u-dr"
 CID = "c-dr"
 
 
+async def _make_one_shot_sessionmaker(database_url: str):
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    from sqlalchemy.pool import NullPool
+
+    engine = create_async_engine(database_url, poolclass=NullPool)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    return engine, maker
+
+
 # ── Helpers ──
 
-def _run_pg(source_url: str, target_url: str):
-    """Real pg_dump from source, pg_restore to target. Returns (dump_path, exit_code_dump, exit_code_restore)."""
+def _pg_dump_only(source_url: str):
+    """Run pg_dump only, return (dump_path, exit_code, stderr)."""
     if not IS_POSTGRES:
-        return None, -1, -1
+        return None, -1, ""
     tmp = tempfile.NamedTemporaryFile(suffix=".dump", delete=False)
     tmp.close()
     env = {**os.environ, "PGPASSWORD": os.environ.get("DB_PASSWORD", "")}
@@ -54,21 +63,57 @@ def _run_pg(source_url: str, target_url: str):
             capture_output=True, timeout=120, env=env,
         )
         if r.returncode != 0:
-            return None, r.returncode, -1
+            return None, r.returncode, _safe_stderr(r.stderr)
         with open(tmp.name, "wb") as f:
             f.write(r.stdout)
-        r2 = subprocess.run(
-            ["pg_restore", "--clean", "--if-exists", "--no-owner", target_url, tmp.name],
+        return tmp.name, 0, ""
+    except Exception as e:
+        return None, -1, str(e)[:200]
+
+
+def _pg_restore_with_reset(target_url: str, dump_path: str):
+    """Drop and recreate public schema on target, then pg_restore. Returns (exit_code, stderr)."""
+    if not IS_POSTGRES:
+        return -1, ""
+    env = {**os.environ, "PGPASSWORD": os.environ.get("DB_PASSWORD", "")}
+    try:
+        reset = subprocess.run(
+            ["psql", target_url, "-v", "ON_ERROR_STOP=1", "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"],
+            capture_output=True, timeout=30, env=env,
+        )
+        if reset.returncode != 0:
+            return reset.returncode, _safe_stderr(reset.stderr)
+        r = subprocess.run(
+            ["pg_restore", "--exit-on-error", "--no-owner", "--no-privileges", "--dbname", target_url, dump_path],
             capture_output=True, timeout=120, env=env,
         )
-        return tmp.name, r.returncode, r2.returncode
-    except Exception:
+        return r.returncode, _safe_stderr(r.stderr)
+    except Exception as e:
+        return -1, str(e)[:200]
+
+
+def _safe_stderr(stderr: bytes | str) -> str:
+    s = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
+    pw = os.environ.get("DB_PASSWORD", "")
+    if pw:
+        s = s.replace(pw, "***")
+    return s[:200]
+
+
+def _run_pg(source_url: str, target_url: str):
+    """Legacy combined dump+restore. Returns (dump_path, exit_code_dump, exit_code_restore)."""
+    if not IS_POSTGRES:
         return None, -1, -1
-    finally:
-        try:
-            os.unlink(tmp.name)
-        except Exception:
-            pass
+    dump_path, exit_dump, _ = _pg_dump_only(source_url)
+    if exit_dump != 0:
+        return None, exit_dump, -1
+    exit_restore, _ = _pg_restore_with_reset(target_url, dump_path)
+    try:
+        if dump_path:
+            os.unlink(dump_path)
+    except Exception:
+        pass
+    return dump_path, exit_dump, exit_restore
 
 
 def _db_fingerprint(db_url: str, table: str) -> tuple[int, str]:
@@ -123,20 +168,33 @@ class TestRealPgDumpRestore:
 
     def test_pg_dump_exit_code_zero(self):
         source = os.environ.get("PG_SOURCE_URL", "")
-        target = os.environ.get("PG_TARGET_URL", "")
-        if not source or not target:
-            pytest.skip("PG_SOURCE_URL and PG_TARGET_URL required")
-        _, exit_dump, _ = _run_pg(source, target)
-        assert exit_dump == 0, f"pg_dump failed with exit code {exit_dump}"
+        if not source:
+            pytest.skip("PG_SOURCE_URL required")
+        dump_path, exit_dump, stderr = _pg_dump_only(source)
+        try:
+            assert exit_dump == 0, f"pg_dump failed with exit code {exit_dump}, stderr: {stderr}"
+        finally:
+            if dump_path:
+                try:
+                    os.unlink(dump_path)
+                except Exception:
+                    pass
 
     def test_pg_restore_exit_code_zero(self):
         source = os.environ.get("PG_SOURCE_URL", "")
         target = os.environ.get("PG_TARGET_URL", "")
         if not source or not target:
             pytest.skip("PG_SOURCE_URL and PG_TARGET_URL required")
-        _, exit_dump, exit_restore = _run_pg(source, target)
-        assert exit_dump == 0, f"pg_dump failed"
-        assert exit_restore == 0, f"pg_restore failed with exit code {exit_restore}"
+        dump_path, exit_dump, stderr = _pg_dump_only(source)
+        assert dump_path is not None, f"pg_dump failed: {stderr}"
+        try:
+            exit_restore, restore_stderr = _pg_restore_with_reset(target, dump_path)
+            assert exit_restore == 0, f"pg_restore failed with exit code {exit_restore}, stderr: {restore_stderr}"
+        finally:
+            try:
+                os.unlink(dump_path)
+            except Exception:
+                pass
 
 
 @_CI_SKIP
@@ -241,11 +299,18 @@ class TestPhysicalDocumentRestore:
         shutil.rmtree(str(test_dir), ignore_errors=True)
 
     def test_traversal_entry_blocked(self):
-        with tarfile.open(tempfile.NamedTemporaryFile(suffix=".tar.gz").name, "w:gz") as tar:
-            pass
-        archive_data = Path(tempfile.NamedTemporaryFile(suffix=".tar.gz").name).read_bytes()
-        if archive_data and len(archive_data) > 0:
-            pass  # archive creation works
+        tmp = tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False)
+        try:
+            tmp.close()
+            with tarfile.open(tmp.name, "w:gz") as tar:
+                info = tarfile.TarInfo(name="../evil.txt")
+                info.size = 0
+                tar.addfile(info)
+            with tarfile.open(tmp.name, "r:gz") as tar:
+                traversal_found = any(".." in m.name for m in tar.getmembers())
+                assert traversal_found, "Traversal entry not detected in archive"
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
 
     def test_symlink_member_detected(self):
         test_dir = Path("/tmp/symlink-test")
@@ -266,51 +331,43 @@ class TestPhysicalDocumentRestore:
 
 @_CI_SKIP
 class TestRestoreE2E:
-    """Restore target E2E smoke using production wiring on PostgreSQL."""
+    """Restore target E2E smoke using one-shot sessionmakers, no global state mutation."""
 
-    def test_target_db_accessible(self):
+    @pytest.mark.asyncio
+    async def test_target_db_accessible(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            import asyncio as _asyncio
-            async def check():
-                from app.db.session import check_db_health
-                h = await check_db_health()
-                return h
-            health = _asyncio.run(check())
-            assert health.get("connected"), f"Target DB not reachable: {health}"
+            async with maker() as db:
+                result = await db.execute(text("SELECT 1"))
+                assert result.scalar() == 1, "Target DB not reachable"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_target_tenant_accessible(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            maker = get_sessionmaker()
             async with maker() as db:
                 from sqlalchemy import select
                 r = await db.execute(select(Tenant).where(Tenant.id == 't-s1').limit(1))
                 tenant = r.scalar()
                 assert tenant is not None, "Seed tenant t-s1 not found on target"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_target_case_readable(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            maker = get_sessionmaker()
             async with maker() as db:
                 from sqlalchemy import select
                 r = await db.execute(select(Case).where(Case.id == 'c-s1').limit(1))
@@ -318,41 +375,37 @@ class TestRestoreE2E:
                 assert case is not None, "Seed case c-s1 not found on target"
                 assert case.status == "active"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_target_document_readable(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            maker = get_sessionmaker()
             async with maker() as db:
                 from sqlalchemy import select
                 r = await db.execute(select(Document).where(Document.id == 'd-s1').limit(1))
                 doc = r.scalar()
                 assert doc is not None, "Seed document d-s1 not found on target"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_cross_tenant_isolation(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            maker = get_sessionmaker()
             async with maker() as db:
                 from sqlalchemy import select
                 r = await db.execute(select(Case).where(Case.tenant_id == 'other-tenant').limit(1))
                 other = r.scalar()
                 assert other is None, "Cross-tenant data leaked to other tenant"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
 
 class TestRealDocumentRestoreLocal:
@@ -396,11 +449,54 @@ class TestRealDocumentRestoreLocal:
             os.unlink(tmp_name)
 
 
+@pytest_asyncio.fixture
+async def tdr_db():
+    """Create t-dr tenant used by TestIndexRebuildState and TestPruneAllProtections."""
+    maker = get_sessionmaker()
+    async with maker() as db:
+        from sqlalchemy import delete, select
+        from app.db.models import BackgroundJob, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt, AuditEvent
+        job_ids = select(BackgroundJob.id).where(BackgroundJob.tenant_id == 't-dr')
+        await db.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-dr'))
+        await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-dr'))
+        await db.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-dr'))
+        await db.execute(delete(Case).where(Case.tenant_id == 't-dr'))
+        await db.execute(delete(User).where(User.tenant_id == 't-dr'))
+        await db.execute(delete(Tenant).where(Tenant.id == 't-dr'))
+        await db.flush()
+        db.add(Tenant(id='t-dr', name='DR Test', slug='t-dr', status='active'))
+        db.add(User(id='u-dr', tenant_id='t-dr', email_normalized='dr@test', display_name='DR', status='active', role='tenant_admin'))
+        await db.flush()
+        db.add(Case(id='c-dr', tenant_id='t-dr', owner_user_id='u-dr', title='DR Case', legal_topic='test', status='active', version=1))
+        await db.flush()
+        db.add(CaseMember(id='member-tdr', tenant_id='t-dr', case_id='c-dr', user_id='u-dr', membership_role='owner'))
+        await db.flush()
+        await db.commit()
+    yield
+    async with maker() as db:
+        from sqlalchemy import delete, select
+        from app.db.models import BackgroundJob, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt, AuditEvent
+        job_ids = select(BackgroundJob.id).where(BackgroundJob.tenant_id == 't-dr')
+        await db.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-dr'))
+        await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-dr'))
+        await db.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-dr'))
+        await db.execute(delete(Case).where(Case.tenant_id == 't-dr'))
+        await db.execute(delete(User).where(User.tenant_id == 't-dr'))
+        await db.execute(delete(Tenant).where(Tenant.id == 't-dr'))
+        await db.commit()
+
+
 @pytest.mark.asyncio
 class TestIndexRebuildState:
     """Index rebuild state machine: enqueue, degraded, healthy."""
 
-    async def test_rebuild_job_enqueued_after_restore(self):
+    async def test_rebuild_job_enqueued_after_restore(self, tdr_db):
         from app.services.job_service import job_service
         maker = get_sessionmaker()
         async with maker() as db:
@@ -409,7 +505,7 @@ class TestIndexRebuildState:
             assert j["id"]
             assert j["tenant_id"] == "t-dr"
 
-    async def test_rebuild_not_duplicate(self):
+    async def test_rebuild_not_duplicate(self, tdr_db):
         from app.services.job_service import job_service
         maker = get_sessionmaker()
         async with maker() as db:
@@ -419,7 +515,7 @@ class TestIndexRebuildState:
                                             payload={"backup_id": "rebuild-idem", "rebuild_indexes": True})
             assert j1["id"] == j2["id"]  # idempotency key same
 
-    async def test_degraded_on_failed_rebuild(self):
+    async def test_degraded_on_failed_rebuild(self, tdr_db):
         from app.services.job_service import job_service
         maker = get_sessionmaker()
         async with maker() as db:
@@ -444,7 +540,7 @@ class TestPruneAllProtections:
             return run
 
     @pytest.mark.asyncio
-    async def test_dry_run_does_not_delete_metadata(self):
+    async def test_dry_run_does_not_delete_metadata(self, tdr_db):
         run = await self._make_backup()
         maker = get_sessionmaker()
         async with maker() as db:

@@ -100,6 +100,20 @@ def validate_production_config(settings: Settings) -> list[str]:
     if not settings.allowed_hosts:
         blocking.append("ALLOWED_HOSTS productionda bos olamaz")
 
+    if not settings.database_url:
+        blocking.append("DATABASE_URL productionda bos olamaz")
+    else:
+        try:
+            from sqlalchemy.engine import make_url
+            parsed = make_url(settings.database_url)
+            if parsed.get_backend_name() != "postgresql":
+                blocking.append(
+                    f"DATABASE_URL yalnizca PostgreSQL kabul eder; "
+                    f"backend={parsed.get_backend_name()} desteklenmez"
+                )
+        except Exception:
+            blocking.append("DATABASE_URL gecersiz; parse edilemedi")
+
     cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
     if not cors_origins:
         blocking.append("CORS_ALLOW_ORIGINS productionda bos olamaz")
@@ -173,6 +187,8 @@ def get_settings() -> Settings:
         gemini_api_key=gemini_api_key,
         gemini_model=getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         gemini_timeout_seconds=int(getenv("GEMINI_TIMEOUT_SECONDS", "30")),
+        database_url=_env("DATABASE_URL", ""),
+        storage_backend=_env("STORAGE_BACKEND", "json"),
         jwt_secret_key=getenv("JWT_SECRET_KEY", ""),
         auth_mode=getenv("AUTH_MODE", "local"),
         backup_encryption_enabled=getenv("BACKUP_ENCRYPTION_ENABLED", "").lower() in {"1", "true", "yes"},

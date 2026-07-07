@@ -20,6 +20,19 @@ from app.config import (
 )
 
 
+def safe_production_settings(**overrides):
+    values = {
+        "environment": "production",
+        "auth_mode": "jwt",
+        "jwt_secret_key": "x" * MIN_JWT_SECRET_LENGTH,
+        "cors_allow_origins": "https://app.example.com",
+        "allowed_hosts": "app.example.com",
+        "database_url": "postgresql+asyncpg://user:pass@localhost:5432/emsalist_test",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
 class ProductionStartupSafetyTests(unittest.TestCase):
     """P1.11.1 — Production startup must fail closed."""
 
@@ -28,112 +41,58 @@ class ProductionStartupSafetyTests(unittest.TestCase):
             validate_production_config(Settings(environment="production"))
 
     def test_production_local_auth_rejected(self):
+        s = safe_production_settings(auth_mode="local")
         with self.assertRaises(ProductionConfigError):
-            validate_production_config(Settings(
-                environment="production",
-                jwt_secret_key="a" * MIN_JWT_SECRET_LENGTH,
-                cors_allow_origins="https://example.com",
-                allowed_hosts="example.com",
-            ))
+            validate_production_config(s)
 
     def test_production_empty_jwt_secret_rejected(self):
-        issues = []
-        settings = Settings(environment="production", auth_mode="jwt",
-                            cors_allow_origins="https://example.com",
-                            allowed_hosts="example.com")
-        try:
-            validate_production_config(settings)
-        except ProductionConfigError as e:
-            issues.append(str(e))
-        self.assertTrue(any("SECRET" in i.upper() for i in issues))
+        s = safe_production_settings(jwt_secret_key="")
+        with self.assertRaises(ProductionConfigError) as ctx:
+            validate_production_config(s)
+        self.assertIn("SECRET", str(ctx.exception).upper())
 
     def test_production_default_jwt_secret_rejected(self):
         for secret in _DEFAULT_JWT_SECRETS:
             if not secret:
                 continue
-            try:
-                validate_production_config(Settings(
-                    environment="production", auth_mode="jwt",
-                    jwt_secret_key=secret,
-                    cors_allow_origins="https://example.com",
-                    allowed_hosts="example.com",
-                ))
-                self.fail(f"Default secret '{secret}' should be rejected")
-            except ProductionConfigError:
-                pass
+            s = safe_production_settings(jwt_secret_key=secret)
+            with self.assertRaises(ProductionConfigError):
+                validate_production_config(s)
 
     def test_production_debug_rejected(self):
-        try:
-            validate_production_config(Settings(
-                environment="production", debug=True, auth_mode="jwt",
-                jwt_secret_key="x" * MIN_JWT_SECRET_LENGTH,
-                cors_allow_origins="https://example.com",
-                allowed_hosts="example.com",
-            ))
-            self.fail("debug=true should be rejected in production")
-        except ProductionConfigError:
-            pass
+        s = safe_production_settings(debug=True)
+        with self.assertRaises(ProductionConfigError):
+            validate_production_config(s)
 
     def test_production_wildcard_cors_rejected(self):
-        try:
-            validate_production_config(Settings(
-                environment="production", auth_mode="jwt",
-                jwt_secret_key="x" * MIN_JWT_SECRET_LENGTH,
-                cors_allow_origins="*",
-                allowed_hosts="example.com",
-            ))
-            self.fail("wildcard CORS should be rejected in production")
-        except ProductionConfigError:
-            pass
+        s = safe_production_settings(cors_allow_origins="*")
+        with self.assertRaises(ProductionConfigError) as ctx:
+            validate_production_config(s)
+        self.assertIn("CORS", str(ctx.exception).upper())
 
     def test_production_wildcard_subdomain_cors_rejected(self):
-        try:
-            validate_production_config(Settings(
-                environment="production", auth_mode="jwt",
-                jwt_secret_key="x" * MIN_JWT_SECRET_LENGTH,
-                cors_allow_origins="*.example.com",
-                allowed_hosts="example.com",
-            ))
-            self.fail("wildcard subdomain CORS should be rejected")
-        except ProductionConfigError:
-            pass
+        s = safe_production_settings(cors_allow_origins="*.example.com")
+        with self.assertRaises(ProductionConfigError) as ctx:
+            validate_production_config(s)
+        self.assertIn("CORS", str(ctx.exception).upper())
 
     def test_production_no_allowed_hosts_rejected(self):
-        try:
-            validate_production_config(Settings(
-                environment="production", auth_mode="jwt",
-                jwt_secret_key="x" * MIN_JWT_SECRET_LENGTH,
-                cors_allow_origins="https://example.com",
-            ))
-            self.fail("empty allowed_hosts should be rejected")
-        except ProductionConfigError:
-            pass
+        s = safe_production_settings(allowed_hosts="")
+        with self.assertRaises(ProductionConfigError) as ctx:
+            validate_production_config(s)
+        self.assertIn("ALLOWED_HOSTS", str(ctx.exception).upper())
 
     def test_production_short_jwt_secret_rejected(self):
-        try:
-            validate_production_config(Settings(
-                environment="production", auth_mode="jwt",
-                jwt_secret_key="too-short",
-                cors_allow_origins="https://example.com",
-                allowed_hosts="example.com",
-            ))
-            self.fail("short JWT secret should be rejected")
-        except ProductionConfigError:
-            pass
+        s = safe_production_settings(jwt_secret_key="too-short")
+        with self.assertRaises(ProductionConfigError) as ctx:
+            validate_production_config(s)
+        self.assertIn("SECRET", str(ctx.exception).upper())
 
     def test_production_encryption_no_key_rejected(self):
-        try:
-            validate_production_config(Settings(
-                environment="production", auth_mode="jwt",
-                jwt_secret_key="x" * MIN_JWT_SECRET_LENGTH,
-                cors_allow_origins="https://example.com",
-                allowed_hosts="example.com",
-                backup_encryption_enabled=True,
-                backup_encryption_key="",
-            ))
-            self.fail("encryption enabled without key should be rejected")
-        except ProductionConfigError:
-            pass
+        s = safe_production_settings(backup_encryption_enabled=True, backup_encryption_key="")
+        with self.assertRaises(ProductionConfigError) as ctx:
+            validate_production_config(s)
+        self.assertIn("ENCRYPTION", str(ctx.exception).upper())
 
     def test_development_accepts_defaults(self):
         issues = validate_production_config(Settings(environment="development"))
@@ -144,13 +103,9 @@ class ProductionStartupSafetyTests(unittest.TestCase):
         self.assertEqual(issues, [])
 
     def test_production_safe_config_accepted(self):
+        s = safe_production_settings()
         try:
-            issues = validate_production_config(Settings(
-                environment="production", auth_mode="jwt",
-                jwt_secret_key="x" * MIN_JWT_SECRET_LENGTH,
-                cors_allow_origins="https://app.example.com",
-                allowed_hosts="app.example.com",
-            ))
+            issues = validate_production_config(s)
             self.assertEqual(issues, [])
         except ProductionConfigError as e:
             self.fail(f"Safe production config should be accepted: {e}")
@@ -395,6 +350,79 @@ class SymlinkEscapeTests(unittest.TestCase):
             self.fail("Should raise for symlinked uploads")
         except DocumentIntakeError:
             pass
+
+
+class SymlinkDetectionRegressionTests(unittest.TestCase):
+    """P1.14 — Symlink detection before path resolution."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def _try_symlink(self, target: Path, link: Path) -> bool:
+        import os as _os
+        try:
+            _os.symlink(str(target), str(link))
+            return True
+        except OSError:
+            return False
+
+    def test_root_storage_symlink_rejected(self):
+        from app.services.document_intake_service import DocumentIntakeService, DocumentIntakeError
+        base = Path(self.temporary.name)
+        real_dir = base / "real_storage"
+        real_dir.mkdir()
+        link_dir = base / "linked_storage"
+        if not self._try_symlink(real_dir, link_dir):
+            self.skipTest("symlink creation requires elevated privileges")
+
+        with self.assertRaises(DocumentIntakeError):
+            DocumentIntakeService(link_dir)
+
+    def test_uploads_symlink_outside_root_rejected(self):
+        from app.services.document_intake_service import DocumentIntakeService, DocumentIntakeError
+        base = Path(self.temporary.name)
+        store = base / "safe_store"
+        store.mkdir(parents=True)
+        evil = base / "outside_target"
+        evil.mkdir()
+        uploads_link = store / "uploads"
+        if not self._try_symlink(evil, uploads_link):
+            self.skipTest("symlink creation requires elevated privileges")
+
+        with self.assertRaises(DocumentIntakeError):
+            DocumentIntakeService(store)
+
+    def test_broken_uploads_symlink_rejected(self):
+        from app.services.document_intake_service import DocumentIntakeService, DocumentIntakeError
+        base = Path(self.temporary.name)
+        store = base / "broken_store"
+        store.mkdir(parents=True)
+        nonexistent = base / "nonexistent_target"
+        uploads_link = store / "uploads"
+        if not self._try_symlink(nonexistent, uploads_link):
+            self.skipTest("symlink creation requires elevated privileges")
+
+        with self.assertRaises(DocumentIntakeError):
+            DocumentIntakeService(store)
+
+    def test_normal_directory_accepted(self):
+        from app.services.document_intake_service import DocumentIntakeService
+        base = Path(self.temporary.name)
+        store = base / "normal_store"
+        store.mkdir(parents=True)
+        svc = DocumentIntakeService(store)
+        self.assertTrue(svc.upload_dir.exists())
+
+    def test_nested_ordinary_directory_accepted(self):
+        from app.services.document_intake_service import DocumentIntakeService
+        base = Path(self.temporary.name)
+        store = base / "nested" / "store"
+        store.mkdir(parents=True, exist_ok=True)
+        svc = DocumentIntakeService(store)
+        self.assertTrue(svc.upload_dir.exists())
 
 
 class SafeErrorResponseTests(unittest.TestCase):
