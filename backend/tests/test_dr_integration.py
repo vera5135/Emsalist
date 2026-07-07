@@ -284,9 +284,9 @@ class TestRestoreE2E:
             pytest.skip("TARGET_DATABASE_URL required")
         engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            from app.db.session import check_db_health
-            health = await check_db_health()
-            assert health.get("connected"), f"Target DB not reachable: {health}"
+            async with maker() as db:
+                result = await db.execute(text("SELECT 1"))
+                assert result.scalar() == 1, "Target DB not reachable"
         finally:
             await engine.dispose()
 
