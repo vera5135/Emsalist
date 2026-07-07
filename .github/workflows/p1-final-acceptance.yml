@@ -493,7 +493,7 @@ jobs:
         run: docker history --no-trunc emsalist:p1.14
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@6c3f29c0b5829cf0c4da20bb7188d5911abaa6ab
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: emsalist:p1.14
           format: table
@@ -501,7 +501,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Trivy config scan
-        uses: aquasecurity/trivy-action@6c3f29c0b5829cf0c4da20bb7188d5911abaa6ab
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: config
           scan-ref: .
