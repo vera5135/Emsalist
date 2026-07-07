@@ -103,8 +103,8 @@ class BackupLockManager:
         try:
             await db.execute(delete(BackupLock).where(
                 BackupLock.lock_name == lock_name,
-                BackupLock.lease_expires_at < now,
-                BackupLock.released_at.is_(None),
+                ((BackupLock.lease_expires_at < now) & BackupLock.released_at.is_(None))
+                | (BackupLock.released_at.is_not(None)),
             ))
             await db.flush()
         except Exception:
