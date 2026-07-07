@@ -434,6 +434,7 @@ jobs:
       - name: Docker build
         run: |
           docker build \
+            --pull \
             --build-arg BUILD_COMMIT=${{ steps.args.outputs.commit }} \
             --build-arg BUILD_TIMESTAMP=${{ steps.args.outputs.timestamp }} \
             -t emsalist:p1.14 .
@@ -560,6 +561,7 @@ jobs:
       - name: Build image
         run: |
           docker build \
+            --pull \
             --build-arg BUILD_COMMIT=${{ steps.args.outputs.commit }} \
             --build-arg BUILD_TIMESTAMP=${{ steps.args.outputs.timestamp }} \
             -t emsalist-api:latest .
