@@ -42,7 +42,21 @@ async def db_session():
         await session.flush()
         await session.commit()
         yield session
-        await session.rollback()
+        from sqlalchemy import delete
+        job_ids = select(BackgroundJobArtifact.job_id).where(BackgroundJobArtifact.job_id.in_(
+            select(BackgroundJob.id).where(BackgroundJob.tenant_id == 't-p8')))
+        await session.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(job_ids)))
+        await session.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(
+            select(BackgroundJob.id).where(BackgroundJob.tenant_id == 't-p8'))))
+        await session.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(
+            select(BackgroundJob.id).where(BackgroundJob.tenant_id == 't-p8'))))
+        await session.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-p8'))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-p8'))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-p8'))
+        await session.execute(delete(Case).where(Case.tenant_id == 't-p8'))
+        await session.execute(delete(User).where(User.tenant_id == 't-p8'))
+        await session.execute(delete(Tenant).where(Tenant.id == 't-p8'))
+        await session.commit()
 
 
 @pytest_asyncio.fixture
@@ -56,7 +70,14 @@ async def second_tenant_db(db_session):
     db_session.add(CaseMember(id=new_uuid(), tenant_id="other-tenant", case_id="other-case", user_id="other-user", membership_role="owner"))
     await db_session.flush()
     await db_session.commit()
-    return db_session
+    yield db_session
+    from sqlalchemy import delete
+    await db_session.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 'other-tenant'))
+    await db_session.execute(delete(CaseMember).where(CaseMember.tenant_id == 'other-tenant'))
+    await db_session.execute(delete(Case).where(Case.tenant_id == 'other-tenant'))
+    await db_session.execute(delete(User).where(User.tenant_id == 'other-tenant'))
+    await db_session.execute(delete(Tenant).where(Tenant.id == 'other-tenant'))
+    await db_session.commit()
 
 
 class TestStatusTransitions:

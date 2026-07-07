@@ -251,6 +251,10 @@ class BackupService:
 
             await self.repo.update_run(db, run_id, status="dumping_database")
             db_info = await self._dump_database(db, run_id)
+            if db_info:
+                await self.repo.add_item(db, run_id, "database_dump", db_info["logical_name"],
+                                          db_info["storage_key"], size_bytes=db_info["size_bytes"],
+                                          sha256=db_info["sha256"], status="collected")
 
             await self.repo.update_run(db, run_id, status="collecting_files")
             file_items = self._collect_files(run_id)
@@ -405,7 +409,6 @@ class BackupService:
     async def _dump_database(self, db, run_id: str) -> dict | None:
         s = get_settings()
         url = s.database_url or ""
-        logger.info("_dump_database url_prefix=%s", url[:50] if url else "(empty)")
         if url and "postgresql" in url:
             return await self._pg_dump(run_id)
         db_path = (Path(__file__).resolve().parents[1] / "case_store" / "emsalist.db")
@@ -429,7 +432,6 @@ class BackupService:
         try:
             s = get_settings()
             raw_url = os.environ.get("DATABASE_URL") or s.database_url
-            logger.info("pg_dump_start db=%s", (s.database_url or "")[:40])
             parsed = make_url(raw_url)
             args = [
                 "pg_dump",

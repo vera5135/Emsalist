@@ -449,13 +449,19 @@ class TestRealDocumentRestoreLocal:
             os.unlink(tmp_name)
 
 
-@pytest_asyncio.fixture(autouse=True)
+@pytest_asyncio.fixture
 async def tdr_db():
     """Create t-dr tenant used by TestIndexRebuildState and TestPruneAllProtections."""
     maker = get_sessionmaker()
     async with maker() as db:
-        from sqlalchemy import delete
+        from sqlalchemy import delete, select
+        from app.db.models import BackgroundJob, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt, AuditEvent
+        job_ids = select(BackgroundJob.id).where(BackgroundJob.tenant_id == 't-dr')
+        await db.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(job_ids)))
         await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-dr'))
+        await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-dr'))
         await db.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-dr'))
         await db.execute(delete(Case).where(Case.tenant_id == 't-dr'))
         await db.execute(delete(User).where(User.tenant_id == 't-dr'))
@@ -465,11 +471,25 @@ async def tdr_db():
         db.add(User(id='u-dr', tenant_id='t-dr', email_normalized='dr@test', display_name='DR', status='active', role='tenant_admin'))
         await db.flush()
         db.add(Case(id='c-dr', tenant_id='t-dr', owner_user_id='u-dr', title='DR Case', legal_topic='test', status='active', version=1))
-        db.add(CaseMember(id=new_uuid(), tenant_id='t-dr', case_id='c-dr', user_id='u-dr', membership_role='owner'))
+        await db.flush()
+        db.add(CaseMember(id='member-tdr', tenant_id='t-dr', case_id='c-dr', user_id='u-dr', membership_role='owner'))
         await db.flush()
         await db.commit()
-        yield db
-        await db.rollback()
+    yield
+    async with maker() as db:
+        from sqlalchemy import delete, select
+        from app.db.models import BackgroundJob, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt, AuditEvent
+        job_ids = select(BackgroundJob.id).where(BackgroundJob.tenant_id == 't-dr')
+        await db.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(job_ids)))
+        await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-dr'))
+        await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-dr'))
+        await db.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-dr'))
+        await db.execute(delete(Case).where(Case.tenant_id == 't-dr'))
+        await db.execute(delete(User).where(User.tenant_id == 't-dr'))
+        await db.execute(delete(Tenant).where(Tenant.id == 't-dr'))
+        await db.commit()
 
 
 @pytest.mark.asyncio
