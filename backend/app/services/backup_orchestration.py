@@ -428,8 +428,8 @@ class BackupService:
         try:
             s = get_settings()
             parsed = make_url(s.database_url)
-            parsed = parsed.set(drivername="postgresql")
-            dbname = parsed.render_as_string(hide_password=False)
+            password_part = f":{parsed.password}" if parsed.password else ""
+            dbname = f"postgresql://{parsed.username}{password_part}@{parsed.host}:{parsed.port or 5432}/{parsed.database}"
             result = subprocess.run(
                 ["pg_dump", dbname, "--format=custom", "--no-owner", "--no-privileges"],
                 capture_output=True, timeout=s.backup_database_timeout_seconds or 300,
