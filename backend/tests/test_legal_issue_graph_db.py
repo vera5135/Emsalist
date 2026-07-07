@@ -11,19 +11,17 @@ from app.db.session import get_sessionmaker
 
 @pytest_asyncio.fixture
 async def db_session():
-    import sqlite3, os
-    db_path = os.path.join(os.path.dirname(__file__), "..", "case_store", "emsalist.db")
-    conn = sqlite3.connect(db_path)
-    conn.execute("DELETE FROM legal_issue_edges WHERE tenant_id IN ('t-a-g','t-b-g')")
-    conn.execute("DELETE FROM legal_issue_nodes WHERE tenant_id IN ('t-a-g','t-b-g')")
-    conn.execute("DELETE FROM case_members WHERE tenant_id IN ('t-a-g','t-b-g')")
-    conn.execute("DELETE FROM cases WHERE tenant_id IN ('t-a-g','t-b-g')")
-    conn.execute("DELETE FROM users WHERE tenant_id IN ('t-a-g','t-b-g')")
-    conn.execute("DELETE FROM tenants WHERE id IN ('t-a-g','t-b-g')")
-    conn.commit()
-    conn.close()
     maker = get_sessionmaker()
     async with maker() as session:
+        from sqlalchemy import delete
+        from app.db.models import LegalIssueNode, LegalIssueEdge, CaseMember, Case, User, Tenant
+        await session.execute(delete(LegalIssueEdge).where(LegalIssueEdge.tenant_id.in_(['t-a-g', 't-b-g'])))
+        await session.execute(delete(LegalIssueNode).where(LegalIssueNode.tenant_id.in_(['t-a-g', 't-b-g'])))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(['t-a-g', 't-b-g'])))
+        await session.execute(delete(Case).where(Case.tenant_id.in_(['t-a-g', 't-b-g'])))
+        await session.execute(delete(User).where(User.tenant_id.in_(['t-a-g', 't-b-g'])))
+        await session.execute(delete(Tenant).where(Tenant.id.in_(['t-a-g', 't-b-g'])))
+        await session.flush()
         yield session
         await session.rollback()
 

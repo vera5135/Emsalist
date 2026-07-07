@@ -14,22 +14,15 @@ from app.services.job_handlers import handler_registry
 
 @pytest_asyncio.fixture
 async def db_session():
-    import sqlite3, os
-    db_path = os.path.join(os.path.dirname(__file__), "..", "case_store", "emsalist.db")
-    conn = sqlite3.connect(db_path)
-    conn.execute("DELETE FROM background_job_artifacts WHERE tenant_id='t-p8'")
-    conn.execute("DELETE FROM background_job_events WHERE job_id IN (SELECT id FROM background_jobs WHERE tenant_id='t-p8')")
-    conn.execute("DELETE FROM background_job_attempts WHERE job_id IN (SELECT id FROM background_jobs WHERE tenant_id='t-p8')")
-    conn.execute("DELETE FROM background_jobs WHERE tenant_id='t-p8'")
-    conn.execute("DELETE FROM case_members WHERE tenant_id='t-p8'")
-    conn.execute("DELETE FROM cases WHERE tenant_id='t-p8'")
-    conn.execute("DELETE FROM users WHERE tenant_id='t-p8'")
-    conn.execute("DELETE FROM tenants WHERE id='t-p8'")
-    conn.commit()
-    conn.close()
     maker = get_sessionmaker()
     async with maker() as session:
-        from app.db.models import Tenant, User, Case, CaseMember
+        from sqlalchemy import delete
+        await session.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-p8'))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-p8'))
+        await session.execute(delete(Case).where(Case.tenant_id == 't-p8'))
+        await session.execute(delete(User).where(User.tenant_id == 't-p8'))
+        await session.execute(delete(Tenant).where(Tenant.id == 't-p8'))
+        await session.flush()
         session.add(Tenant(id="t-p8", name="P8", slug="t-p8", status="active"))
         session.add(User(id="u-p8", tenant_id="t-p8", email_normalized="p8@t.com", display_name="P8 User", status="active", role="tenant_admin"))
         session.add(User(id="u-p8-v", tenant_id="t-p8", email_normalized="p8v@t.com", display_name="P8 Viewer", status="active", role="viewer"))
@@ -38,7 +31,7 @@ async def db_session():
         session.add(CaseMember(id=new_uuid(), tenant_id="t-p8", case_id="c-p8-a", user_id="u-p8", membership_role="owner"))
         session.add(CaseMember(id=new_uuid(), tenant_id="t-p8", case_id="c-p8-b", user_id="u-p8", membership_role="owner"))
         session.add(CaseMember(id=new_uuid(), tenant_id="t-p8", case_id="c-p8-a", user_id="u-p8-v", membership_role="viewer"))
-        await session.commit()
+        await session.flush()
         yield session
         await session.rollback()
 

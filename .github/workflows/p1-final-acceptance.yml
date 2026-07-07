@@ -285,6 +285,9 @@ jobs:
     env:
       EMSALIST_ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      BACKUP_ENCRYPTION_ENABLED: true
+      BACKUP_ENCRYPTION_KEY: p1-14-test-key-32chars-long!
+      EMSALIST_BACKUP_ROOT: /tmp/emsalist-test-backups
     steps:
       - uses: actions/checkout@v4
 
@@ -323,9 +326,22 @@ jobs:
       - name: Run full test suite
         working-directory: backend
         run: |
-          set -e
-          python -m pytest -ra --strict-markers --durations=30 -v --tb=short \
-            -p no:cacheprovider
+          set -o pipefail
+          python -m pytest -vv --tb=long \
+            --junitxml=pytest-full.xml \
+            2>&1 | tee pytest-full.log
+        shell: bash
+
+      - name: Upload full test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-14-full-test-results
+          path: |
+            backend/pytest-full.log
+            backend/pytest-full.xml
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Test summary
         if: always()

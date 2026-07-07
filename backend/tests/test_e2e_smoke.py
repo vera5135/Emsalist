@@ -60,9 +60,11 @@ async def e2e_db():
         await db.execute(delete(Case).where(Case.tenant_id == TID))
         await db.execute(delete(User).where(User.tenant_id == TID))
         await db.execute(delete(Tenant).where(Tenant.id == TID))
+        await db.flush()
         db.add(Tenant(id=TID, name="E2E", slug=TID, status="active"))
         db.add(User(id=UID_O, tenant_id=TID, email_normalized="o@e2e", display_name="Owner", status="active", role="tenant_admin"))
         db.add(User(id=UID_V, tenant_id=TID, email_normalized="v@e2e", display_name="Viewer", status="active", role="viewer"))
+        await db.flush()
         db.add(Case(id=CID, tenant_id=TID, owner_user_id=UID_O, title="E2E Case",
                      legal_topic="Borc", profile_id="defective_vehicle",
                      event_text="Muvekkil ikinci el araci galeriden satin aldi. Motor arizasi cikti.",

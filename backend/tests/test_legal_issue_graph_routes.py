@@ -14,39 +14,45 @@ CASE_A = "case-rt-a"
 CASE_B = "case-rt-b"
 
 
-def _setup_sync():
-    import sqlite3, os
-    db_path = os.path.join(os.path.dirname(__file__), "..", "case_store", "emsalist.db")
-    conn = sqlite3.connect(db_path)
-    conn.execute("DELETE FROM legal_issue_edges WHERE tenant_id='local' AND case_id IN ('" + CASE_A + "','" + CASE_B + "')")
-    conn.execute("DELETE FROM legal_issue_nodes WHERE tenant_id='local' AND case_id IN ('" + CASE_A + "','" + CASE_B + "')")
-    conn.execute("DELETE FROM case_members WHERE id IN ('mem-rt-a','mem-rt-b')")
-    conn.execute("DELETE FROM cases WHERE id IN ('" + CASE_A + "','" + CASE_B + "')")
-    conn.execute("DELETE FROM users WHERE id='local-user'")
-    conn.execute("DELETE FROM tenants WHERE id='local'")
-    conn.execute("INSERT INTO tenants (id,name,slug,status,created_at,updated_at) VALUES ('local','LocalRoute','local-rt','active',datetime('now'),datetime('now'))")
-    conn.execute("INSERT INTO users (id,tenant_id,email_normalized,display_name,status,role,created_at,updated_at) VALUES ('local-user','local','rt@local','Test','active','lawyer',datetime('now'),datetime('now'))")
-    conn.execute("INSERT INTO cases (id,tenant_id,owner_user_id,title,legal_topic,profile_id,event_text,status,version,created_at,updated_at) VALUES ('" + CASE_A + "','local','local-user','CaseA','test','default','','active',1,datetime('now'),datetime('now'))")
-    conn.execute("INSERT INTO cases (id,tenant_id,owner_user_id,title,legal_topic,profile_id,event_text,status,version,created_at,updated_at) VALUES ('" + CASE_B + "','local','local-user','CaseB','test','default','','active',1,datetime('now'),datetime('now'))")
-    conn.execute("INSERT INTO case_members (id,tenant_id,case_id,user_id,membership_role,permissions_override,created_at) VALUES ('mem-rt-a','local','" + CASE_A + "','local-user','owner','{}',datetime('now'))")
-    conn.execute("INSERT INTO case_members (id,tenant_id,case_id,user_id,membership_role,permissions_override,created_at) VALUES ('mem-rt-b','local','" + CASE_B + "','local-user','owner','{}',datetime('now'))")
-    conn.commit()
-    conn.close()
-
-
-@pytest.fixture(scope="module", autouse=True)
-def db_setup():
-    _setup_sync()
+@pytest_asyncio.fixture(autouse=True)
+async def db_setup():
+    maker = get_sessionmaker()
+    async with maker() as session:
+        from sqlalchemy import delete
+        from app.db.models import LegalIssueNode, LegalIssueEdge, CaseMember, Case, User, Tenant
+        await session.execute(delete(LegalIssueEdge).where(
+            (LegalIssueEdge.tenant_id == 'local') &
+            LegalIssueEdge.case_id.in_([CASE_A, CASE_B])))
+        await session.execute(delete(LegalIssueNode).where(
+            (LegalIssueNode.tenant_id == 'local') &
+            LegalIssueNode.case_id.in_([CASE_A, CASE_B])))
+        await session.execute(delete(CaseMember).where(CaseMember.id.in_(['mem-rt-a', 'mem-rt-b'])))
+        await session.execute(delete(Case).where(Case.id.in_([CASE_A, CASE_B])))
+        await session.execute(delete(User).where(User.id == 'local-user'))
+        await session.execute(delete(Tenant).where(Tenant.id == 'local'))
+        await session.flush()
+        tid = Tenant(id="local", name="LocalRoute", slug="local-rt", status="active")
+        uid = User(id="local-user", tenant_id="local", email_normalized="rt@local", display_name="Test", status="active", role="lawyer")
+        session.add(tid)
+        session.add(uid)
+        session.add(Case(id=CASE_A, tenant_id="local", owner_user_id="local-user", title="CaseA", legal_topic="test", profile_id="default", event_text="", status="active", version=1))
+        session.add(Case(id=CASE_B, tenant_id="local", owner_user_id="local-user", title="CaseB", legal_topic="test", profile_id="default", event_text="", status="active", version=1))
+        session.add(CaseMember(id="mem-rt-a", tenant_id="local", case_id=CASE_A, user_id="local-user", membership_role="owner", permissions_override={}))
+        session.add(CaseMember(id="mem-rt-b", tenant_id="local", case_id=CASE_B, user_id="local-user", membership_role="owner", permissions_override={}))
+        await session.flush()
     yield
-    import sqlite3, os
-    db_path = os.path.join(os.path.dirname(__file__), "..", "case_store", "emsalist.db")
-    conn = sqlite3.connect(db_path)
-    conn.execute("DELETE FROM legal_issue_edges WHERE tenant_id='local' AND case_id IN ('" + CASE_A + "','" + CASE_B + "')")
-    conn.execute("DELETE FROM legal_issue_nodes WHERE tenant_id='local' AND case_id IN ('" + CASE_A + "','" + CASE_B + "')")
-    conn.execute("DELETE FROM case_members WHERE id IN ('mem-rt-a','mem-rt-b')")
-    conn.execute("DELETE FROM cases WHERE id IN ('" + CASE_A + "','" + CASE_B + "')")
-    conn.commit()
-    conn.close()
+    async with maker() as session:
+        from sqlalchemy import delete
+        from app.db.models import LegalIssueNode, LegalIssueEdge, CaseMember, Case
+        await session.execute(delete(LegalIssueEdge).where(
+            (LegalIssueEdge.tenant_id == 'local') &
+            LegalIssueEdge.case_id.in_([CASE_A, CASE_B])))
+        await session.execute(delete(LegalIssueNode).where(
+            (LegalIssueNode.tenant_id == 'local') &
+            LegalIssueNode.case_id.in_([CASE_A, CASE_B])))
+        await session.execute(delete(CaseMember).where(CaseMember.id.in_(['mem-rt-a', 'mem-rt-b'])))
+        await session.execute(delete(Case).where(Case.id.in_([CASE_A, CASE_B])))
+        await session.commit()
 
 
 @pytest_asyncio.fixture
