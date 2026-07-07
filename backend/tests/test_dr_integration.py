@@ -275,51 +275,43 @@ class TestPhysicalDocumentRestore:
 
 @_CI_SKIP
 class TestRestoreE2E:
-    """Restore target E2E smoke using production wiring on PostgreSQL."""
+    """Restore target E2E smoke using one-shot sessionmakers, no global state mutation."""
 
-    def test_target_db_accessible(self):
+    @pytest.mark.asyncio
+    async def test_target_db_accessible(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            import asyncio as _asyncio
-            async def check():
-                from app.db.session import check_db_health
-                h = await check_db_health()
-                return h
-            health = _asyncio.run(check())
+            from app.db.session import check_db_health
+            health = await check_db_health()
             assert health.get("connected"), f"Target DB not reachable: {health}"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_target_tenant_accessible(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            maker = get_sessionmaker()
             async with maker() as db:
                 from sqlalchemy import select
                 r = await db.execute(select(Tenant).where(Tenant.id == 't-s1').limit(1))
                 tenant = r.scalar()
                 assert tenant is not None, "Seed tenant t-s1 not found on target"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_target_case_readable(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            maker = get_sessionmaker()
             async with maker() as db:
                 from sqlalchemy import select
                 r = await db.execute(select(Case).where(Case.id == 'c-s1').limit(1))
@@ -327,41 +319,37 @@ class TestRestoreE2E:
                 assert case is not None, "Seed case c-s1 not found on target"
                 assert case.status == "active"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_target_document_readable(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            maker = get_sessionmaker()
             async with maker() as db:
                 from sqlalchemy import select
                 r = await db.execute(select(Document).where(Document.id == 'd-s1').limit(1))
                 doc = r.scalar()
                 assert doc is not None, "Seed document d-s1 not found on target"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_cross_tenant_isolation(self):
         target = os.environ.get("TARGET_DATABASE_URL", "")
         if not target:
             pytest.skip("TARGET_DATABASE_URL required")
-        old = os.environ.get("DATABASE_URL", "")
-        os.environ["DATABASE_URL"] = target
+        engine, maker = await _make_one_shot_sessionmaker(target)
         try:
-            maker = get_sessionmaker()
             async with maker() as db:
                 from sqlalchemy import select
                 r = await db.execute(select(Case).where(Case.tenant_id == 'other-tenant').limit(1))
                 other = r.scalar()
                 assert other is None, "Cross-tenant data leaked to other tenant"
         finally:
-            os.environ["DATABASE_URL"] = old
+            await engine.dispose()
 
 
 class TestRealDocumentRestoreLocal:

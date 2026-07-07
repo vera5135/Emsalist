@@ -622,8 +622,10 @@ class TestJobsPendingWiring:
     @pytest.mark.asyncio
     async def test_empty_queue_is_zero(self):
         from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        from app.db.session import get_sessionmaker
         jobs_pending._data.clear()
-        await _refresh_jobs_pending_from_db()
+        maker = get_sessionmaker()
+        await _refresh_jobs_pending_from_db(maker)
         body = collect_metrics()
         assert "emsalist_jobs_pending" in body
 
@@ -650,7 +652,7 @@ class TestJobsPendingWiring:
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         body = collect_metrics()
         assert f'job_type="{jtype}"' in body
 
@@ -696,7 +698,7 @@ class TestJobsPendingWiring:
                 db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         count = jobs_pending._data.get(key, 0)
         assert count >= 1
@@ -740,7 +742,7 @@ class TestJobsPendingWiring:
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         before = jobs_pending._data.get(key, 0)
         assert before == 1
@@ -752,7 +754,7 @@ class TestJobsPendingWiring:
             )
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         after = jobs_pending._data.get(key, 0)
         assert after == 0
 
@@ -795,7 +797,7 @@ class TestJobsPendingWiring:
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 1
 
@@ -840,7 +842,7 @@ class TestJobsPendingWiring:
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 1
 
@@ -883,7 +885,7 @@ class TestJobsPendingWiring:
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 0
 
@@ -926,7 +928,7 @@ class TestJobsPendingWiring:
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 0
 
@@ -969,7 +971,7 @@ class TestJobsPendingWiring:
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         key = (jtype,)
         assert jobs_pending._data.get(key, 0) == 0
 
@@ -1015,7 +1017,7 @@ class TestJobsPendingWiring:
                     db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         assert jobs_pending._data.get((jtype_a,), 0) == 2
         assert jobs_pending._data.get((jtype_b,), 0) == 3
 
@@ -1059,9 +1061,9 @@ class TestJobsPendingWiring:
             db.add(job)
             await db.commit()
 
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         v1 = jobs_pending._data.get((jtype,), 0)
-        await _refresh_jobs_pending_from_db()
+        await _refresh_jobs_pending_from_db(maker)
         v2 = jobs_pending._data.get((jtype,), 0)
         assert v1 == v2 == 1
 
@@ -1084,8 +1086,10 @@ class TestJobsPendingWiring:
     @pytest.mark.asyncio
     async def test_no_negative_after_all_cleared(self):
         from app.core.metrics import _refresh_jobs_pending_from_db, jobs_pending
+        from app.db.session import get_sessionmaker
         jobs_pending._data.clear()
-        await _refresh_jobs_pending_from_db()
+        maker = get_sessionmaker()
+        await _refresh_jobs_pending_from_db(maker)
         for key, val in jobs_pending._data.items():
             assert val >= 0, f"Negative pending for {key}: {val}"
 

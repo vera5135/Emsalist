@@ -28,17 +28,9 @@ def _dispose_db_engine():
             await dispose_engine()
 
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                task = asyncio.ensure_future(_dispose())
-                try:
-                    loop.run_until_complete(asyncio.wait([task], timeout=5))
-                except asyncio.TimeoutError:
-                    pass
-            else:
-                loop.run_until_complete(_dispose())
-        except RuntimeError:
             asyncio.run(_dispose())
+        except RuntimeError:
+            pass
     except Exception:
         pass
 

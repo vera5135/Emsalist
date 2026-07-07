@@ -60,6 +60,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      EMSALIST_ENVIRONMENT: test
     steps:
       - uses: actions/checkout@v4
 

@@ -69,7 +69,11 @@ def _safe_path(source_dir: Path, file_rel: str) -> Path:
 
     if os.path.lexists(str(candidate)):
         for parent in candidate.parents:
-            if parent == source_dir or not str(parent).startswith(str(source_dir)):
+            if parent == source_root:
+                break
+            try:
+                parent.relative_to(source_root)
+            except ValueError:
                 break
             if os.path.lexists(str(parent)) and parent.is_symlink():
                 raise ValueError(f"symlink_forbidden: {file_rel}")
@@ -552,7 +556,9 @@ class LegalSourcePilotService:
         known: set[str] = set()
         src_root = source_dir.resolve()
         for f in source_dir.rglob("*"):
-            if not str(f.resolve()).startswith(str(src_root)):
+            try:
+                f.resolve().relative_to(src_root)
+            except ValueError:
                 continue
             if f.is_file():
                 rel = str(f.relative_to(source_dir)).replace("\\", "/")
