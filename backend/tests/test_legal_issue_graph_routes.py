@@ -40,6 +40,7 @@ async def db_setup():
         session.add(CaseMember(id="mem-rt-a", tenant_id="local", case_id=CASE_A, user_id="local-user", membership_role="owner", permissions_override={}))
         session.add(CaseMember(id="mem-rt-b", tenant_id="local", case_id=CASE_B, user_id="local-user", membership_role="owner", permissions_override={}))
         await session.flush()
+        await session.commit()
     yield
     async with maker() as session:
         from sqlalchemy import delete

@@ -54,6 +54,7 @@ async def pg_db():
         await db.execute(text("DELETE FROM tenants WHERE id=:tid"), {"tid": TID})
         db.add(Tenant(id=TID, name="PG Claim", slug=TID, status="active"))
         db.add(User(id=UID, tenant_id=TID, email_normalized="pg@t.com", display_name="PG User", status="active", role="tenant_admin"))
+        await db.flush()
         db.add(Case(id=CID, tenant_id=TID, owner_user_id=UID, title="PG Case", legal_topic="test", profile_id="def", event_text="", status="active", version=1))
         db.add(CaseMember(id=new_uuid(), tenant_id=TID, case_id=CID, user_id=UID, membership_role="owner"))
         await db.commit()
