@@ -357,7 +357,7 @@ jobs:
                   await db.flush()
                   db.add(CaseMember(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', membership_role='owner'))
                   db.add(Document(id='d-s1', case_id='c-s1', tenant_id='t-s1', original_filename='seed.txt', storage_key='seed.txt', size_bytes=10, sha256='a'*64, status='active'))
-                  db.add(AuditEvent(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', event_type='case_created', version=1))
+                  db.add(AuditEvent(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', actor_id='u-s1', action='case_created', resource_type='case', resource_id='c-s1', outcome='success'))
                   await db.commit()
                   print('Seed data inserted: t-s1, u-s1, c-s1, d-s1')
           asyncio.run(seed())
