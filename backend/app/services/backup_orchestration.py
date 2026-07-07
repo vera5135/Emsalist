@@ -405,6 +405,7 @@ class BackupService:
     async def _dump_database(self, db, run_id: str) -> dict | None:
         s = get_settings()
         url = s.database_url or ""
+        logger.info("_dump_database url_prefix=%s", url[:50] if url else "(empty)")
         if url and "postgresql" in url:
             return await self._pg_dump(run_id)
         db_path = (Path(__file__).resolve().parents[1] / "case_store" / "emsalist.db")
@@ -428,6 +429,7 @@ class BackupService:
         try:
             s = get_settings()
             raw_url = os.environ.get("DATABASE_URL") or s.database_url
+            logger.info("pg_dump_start db=%s", (s.database_url or "")[:40])
             parsed = make_url(raw_url)
             args = [
                 "pg_dump",
