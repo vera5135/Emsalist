@@ -350,14 +350,18 @@ _pending_last_refresh: float = 0.0
 _pending_refresh_ttl: float = 15.0
 
 
-async def _refresh_jobs_pending_from_db() -> None:
+async def _refresh_jobs_pending_from_db(sessionmaker_override=None) -> None:
     global _pending_last_refresh
     try:
-        from app.db.session import get_sessionmaker
         from sqlalchemy import select, func
         from app.db.models import BackgroundJob
 
-        maker = get_sessionmaker()
+        if sessionmaker_override is not None:
+            maker = sessionmaker_override
+        else:
+            from app.db.session import get_sessionmaker
+            maker = get_sessionmaker()
+
         async with maker() as db:
             stmt = (
                 select(BackgroundJob.job_type, func.count(BackgroundJob.id))

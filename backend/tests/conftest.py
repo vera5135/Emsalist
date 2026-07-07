@@ -21,17 +21,20 @@ def isolated_case_store_for_test_process():
 
 def _dispose_db_engine():
     try:
-        from app.db.session import get_engine
-        engine = get_engine()
         import asyncio
+        from app.db.session import dispose_engine
 
         async def _dispose():
-            await engine.dispose()
+            await dispose_engine()
 
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                asyncio.ensure_future(_dispose())
+                task = asyncio.ensure_future(_dispose())
+                try:
+                    loop.run_until_complete(asyncio.wait([task], timeout=5))
+                except asyncio.TimeoutError:
+                    pass
             else:
                 loop.run_until_complete(_dispose())
         except RuntimeError:
@@ -80,15 +83,18 @@ def _guard_global_db_state(request):
     current_db_url = os.environ.get("DATABASE_URL")
     current_emsalist_db_url = os.environ.get("EMSALIST_DATABASE_URL")
     current_engine = _session_mod._engine if _session_mod else None
+    current_sessionmaker = _session_mod._sessionmaker if _session_mod else None
 
     leaked: list[str] = []
     if saved_db_url is not None and current_db_url is not None and current_db_url != saved_db_url:
-        leaked.append(f"DATABASE_URL changed: {saved_db_url!r} → {current_db_url!r}")
+        leaked.append(f"DATABASE_URL changed: {saved_db_url!r} -> {current_db_url!r}")
     if saved_emsalist_db_url is not None and current_emsalist_db_url is not None \
        and current_emsalist_db_url != saved_emsalist_db_url:
         leaked.append(f"EMSALIST_DATABASE_URL changed")
     if saved_engine is not None and current_engine is not saved_engine:
         leaked.append("app.db.session._engine replaced")
+    if saved_sessionmaker is not None and current_sessionmaker is not saved_sessionmaker:
+        leaked.append("app.db.session._sessionmaker replaced")
 
     if leaked:
         try:
@@ -99,6 +105,11 @@ def _guard_global_db_state(request):
         if _session_mod and saved_engine is not None and current_engine is not saved_engine:
             try:
                 _session_mod._engine = saved_engine
+            except Exception:
+                pass
+        if _session_mod and saved_sessionmaker is not None and current_sessionmaker is not saved_sessionmaker:
+            try:
+                _session_mod._sessionmaker = saved_sessionmaker
             except Exception:
                 pass
         if saved_db_url is not None and current_db_url != saved_db_url:

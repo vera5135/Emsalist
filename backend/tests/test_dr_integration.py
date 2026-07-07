@@ -39,6 +39,15 @@ UID = "u-dr"
 CID = "c-dr"
 
 
+async def _make_one_shot_sessionmaker(database_url: str):
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    from sqlalchemy.pool import NullPool
+
+    engine = create_async_engine(database_url, poolclass=NullPool)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    return engine, maker
+
+
 # ── Helpers ──
 
 def _run_pg(source_url: str, target_url: str):
