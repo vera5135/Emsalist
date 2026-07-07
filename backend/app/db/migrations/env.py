@@ -13,7 +13,7 @@ from app.config import get_settings
 from app.db.migration_utils import to_alembic_config_url
 
 existing = config.get_main_option("sqlalchemy.url")
-if not existing:
+if not existing or "://" not in existing or existing.startswith("driver://"):
     settings = get_settings()
     db_url = settings.database_url or "sqlite:///./case_store/emsalist.db"
     _alembic_url = to_alembic_config_url(db_url)
