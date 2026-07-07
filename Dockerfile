@@ -41,7 +41,7 @@ COPY --from=builder /deps /usr/local/lib/python3.12/site-packages/
 WORKDIR /app
 COPY backend/ .
 
-RUN mkdir -p /data/uploads /data/exports /data/backups /data/logs \
+RUN mkdir -p /data/uploads /data/exports /data/backups /data/logs /app/case_store \
     && chown -R emsalist:emsalist /app /data
 
 USER emsalist
