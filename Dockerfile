@@ -2,7 +2,7 @@
 # Target: Python 3.12 on Debian slim (stable, well-tested)
 
 # ─── Build stage ─────────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /build
 COPY backend/requirements.txt .
@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && rm -rf /root/.cache
 
 # ─── Runtime stage ───────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim AS runtime
 
 ARG UID=1001
 ARG GID=1001
@@ -34,14 +34,7 @@ ENV EMSALIST_COMMIT="${BUILD_COMMIT}"
 ENV EMSALIST_BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"
 
 RUN groupadd --gid "${GID}" emsalist \
-    && useradd --uid "${UID}" --gid "${GID}" --no-create-home --shell /bin/false emsalist \
-    && apt-get update -qq \
-    && apt-get install -y --no-install-recommends --only-upgrade zlib1g 2>/dev/null \
-    || (echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list \
-        && apt-get update -qq \
-        && apt-get install -y --no-install-recommends -t trixie zlib1g \
-        && rm /etc/apt/sources.list.d/trixie.list) \
-    && rm -rf /var/lib/apt/lists/*
+    && useradd --uid "${UID}" --gid "${GID}" --no-create-home --shell /bin/false emsalist
 
 COPY --from=builder /deps /usr/local/lib/python3.12/site-packages/
 
