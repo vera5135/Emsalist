@@ -34,7 +34,14 @@ ENV EMSALIST_COMMIT="${BUILD_COMMIT}"
 ENV EMSALIST_BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"
 
 RUN groupadd --gid "${GID}" emsalist \
-    && useradd --uid "${UID}" --gid "${GID}" --no-create-home --shell /bin/false emsalist
+    && useradd --uid "${UID}" --gid "${GID}" --no-create-home --shell /bin/false emsalist \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g 2>/dev/null \
+    || (echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list \
+        && apt-get update -qq \
+        && apt-get install -y --no-install-recommends -t trixie zlib1g \
+        && rm /etc/apt/sources.list.d/trixie.list) \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /deps /usr/local/lib/python3.12/site-packages/
 
