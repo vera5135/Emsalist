@@ -429,9 +429,10 @@ class BackupService:
             s = get_settings()
             url = s.database_url or os.environ.get("DATABASE_URL", "")
             dbname = url.replace("+asyncpg", "")
+            env = {**os.environ, "PGPASSWORD": os.environ.get("DB_PASSWORD", "")}
             result = subprocess.run(
                 ["pg_dump", dbname, "--format=custom", "--no-owner", "--no-privileges"],
-                capture_output=True, timeout=s.backup_database_timeout_seconds or 300,
+                capture_output=True, timeout=s.backup_database_timeout_seconds or 300, env=env,
             )
             if result.returncode != 0:
                 logger.error("pg_dump_failed rc=%d stderr=%s", result.returncode, result.stderr.decode()[:200])
