@@ -427,9 +427,8 @@ class BackupService:
     async def _pg_dump(self, run_id: str) -> dict | None:
         try:
             s = get_settings()
-            parsed = make_url(s.database_url)
-            password_part = f":{parsed.password}" if parsed.password else ""
-            dbname = f"postgresql://{parsed.username}{password_part}@{parsed.host}:{parsed.port or 5432}/{parsed.database}"
+            url = s.database_url or os.environ.get("DATABASE_URL", "")
+            dbname = url.replace("+asyncpg", "")
             result = subprocess.run(
                 ["pg_dump", dbname, "--format=custom", "--no-owner", "--no-privileges"],
                 capture_output=True, timeout=s.backup_database_timeout_seconds or 300,
