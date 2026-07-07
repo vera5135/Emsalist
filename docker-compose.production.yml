@@ -20,3 +20,5 @@ services:
       - upload_data:/data/uploads:rw
       - export_data:/data/exports:rw
       - backup_data:/data/backups:rw
+      - case_store_data:/data/case_store:rw
+      - document_store_data:/data/document_store:rw

@@ -58,6 +58,7 @@ services:
       EMSALIST_LOG_FORMAT: json
       EMSALIST_STORAGE_ROOT: /data
       EMSALIST_CASE_STORE_DIR: /data/case_store
+      EMSALIST_DOCUMENT_STORE_DIR: /data/document_store
       GEMINI_ENABLED: ${GEMINI_ENABLED:-false}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       BACKUP_ENCRYPTION_ENABLED: ${BACKUP_ENCRYPTION_ENABLED:-false}
@@ -68,6 +69,8 @@ services:
       - upload_data:/data/uploads
       - export_data:/data/exports
       - backup_data:/data/backups
+      - case_store_data:/data/case_store:rw
+      - document_store_data:/data/document_store:rw
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/live')"]
       interval: 30s
@@ -92,3 +95,7 @@ volumes:
     name: emsalist_exports
   backup_data:
     name: emsalist_backups
+  case_store_data:
+    name: emsalist_case_store
+  document_store_data:
+    name: emsalist_document_store

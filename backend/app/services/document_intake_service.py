@@ -135,7 +135,7 @@ class DocumentIntakeService:
     def __init__(self, storage_dir: Path | None = None, max_file_size: int | None = None) -> None:
         import os as _os
 
-        root = storage_dir or Path(__file__).resolve().parents[1] / "document_store"
+        root = storage_dir or _os.environ.get("EMSALIST_DOCUMENT_STORE_DIR", "") or (Path(__file__).resolve().parents[1] / "document_store")
         raw_root = Path(root).expanduser().absolute()
 
         if raw_root.is_symlink():
