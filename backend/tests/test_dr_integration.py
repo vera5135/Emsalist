@@ -496,7 +496,7 @@ async def tdr_db():
 class TestIndexRebuildState:
     """Index rebuild state machine: enqueue, degraded, healthy."""
 
-    async def test_rebuild_job_enqueued_after_restore(self):
+    async def test_rebuild_job_enqueued_after_restore(self, tdr_db):
         from app.services.job_service import job_service
         maker = get_sessionmaker()
         async with maker() as db:
@@ -505,7 +505,7 @@ class TestIndexRebuildState:
             assert j["id"]
             assert j["tenant_id"] == "t-dr"
 
-    async def test_rebuild_not_duplicate(self):
+    async def test_rebuild_not_duplicate(self, tdr_db):
         from app.services.job_service import job_service
         maker = get_sessionmaker()
         async with maker() as db:
@@ -515,7 +515,7 @@ class TestIndexRebuildState:
                                             payload={"backup_id": "rebuild-idem", "rebuild_indexes": True})
             assert j1["id"] == j2["id"]  # idempotency key same
 
-    async def test_degraded_on_failed_rebuild(self):
+    async def test_degraded_on_failed_rebuild(self, tdr_db):
         from app.services.job_service import job_service
         maker = get_sessionmaker()
         async with maker() as db:
@@ -540,7 +540,7 @@ class TestPruneAllProtections:
             return run
 
     @pytest.mark.asyncio
-    async def test_dry_run_does_not_delete_metadata(self):
+    async def test_dry_run_does_not_delete_metadata(self, tdr_db):
         run = await self._make_backup()
         maker = get_sessionmaker()
         async with maker() as db:
