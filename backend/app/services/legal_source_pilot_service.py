@@ -53,12 +53,32 @@ def _safe_path(source_dir: Path, file_rel: str) -> Path:
     raw = os.path.normpath(file_rel)
     if os.path.isabs(raw):
         raise ValueError(f"absolute_path_forbidden: {file_rel}")
-    resolved = (source_dir / raw).resolve()
-    if not str(resolved).startswith(str(source_dir.resolve())):
-        raise ValueError(f"path_traversal_blocked: {file_rel}")
-    if resolved.is_symlink():
-        raise ValueError(f"symlink_forbidden: {file_rel}")
-    return resolved
+
+    source_root = source_dir.resolve(strict=False)
+    candidate = source_dir / raw
+
+    if os.path.lexists(str(candidate)):
+        if candidate.is_symlink():
+            raise ValueError(f"symlink_forbidden: {file_rel}")
+
+        if candidate.exists():
+            resolved_candidate = candidate.resolve()
+            try:
+                resolved_candidate.relative_to(source_root)
+            except ValueError:
+                raise ValueError(f"path_traversal_blocked: {file_rel}")
+            return resolved_candidate
+
+    for parent in candidate.parents:
+        if parent == source_dir or not str(parent).startswith(str(source_dir)):
+            break
+        if os.path.lexists(str(parent)):
+            if parent.is_symlink():
+                raise ValueError(f"symlink_forbidden: {file_rel}")
+            if str(parent.resolve()) != str(parent):
+                raise ValueError(f"symlink_forbidden: {file_rel}")
+
+    return candidate
 
 
 def _compute_sha256(path: Path) -> str:

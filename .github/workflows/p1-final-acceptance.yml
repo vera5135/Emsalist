@@ -105,6 +105,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      EMSALIST_ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
     steps:
       - uses: actions/checkout@v4
@@ -199,6 +200,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      EMSALIST_ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
     steps:
       - uses: actions/checkout@v4
@@ -280,6 +282,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      EMSALIST_ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
     steps:
       - uses: actions/checkout@v4
