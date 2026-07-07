@@ -30,8 +30,27 @@ TID = "t-bkp"
 async def backup_db():
     maker = get_sessionmaker()
     async with maker() as db:
-        from sqlalchemy import select, text
+        from sqlalchemy import select, text, delete
         from app.db.models import BackupRun, BackupItem, RestoreRun, RestoreItem, BackupLock, Tenant, User
+        from app.db.models import BackgroundJob, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt, AuditEvent
+        job_ids = select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID)
+        for tbl, col, val in [
+            (BackgroundJobArtifact, BackgroundJobArtifact.job_id, job_ids),
+            (BackgroundJobEvent, BackgroundJobEvent.job_id, job_ids),
+            (BackgroundJobAttempt, BackgroundJobAttempt.job_id, job_ids),
+        ]:
+            try:
+                await db.execute(delete(tbl).where(col.in_(val)))
+            except Exception:
+                pass
+        try:
+            await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == TID))
+        except Exception:
+            pass
+        try:
+            await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TID))
+        except Exception:
+            pass
         for m in [RestoreItem, RestoreRun, BackupItem, BackupRun, BackupLock]:
             try:
                 result = await db.execute(select(m.id))
@@ -44,6 +63,14 @@ async def backup_db():
             await db.commit()
         except Exception:
             await db.rollback()
+        try:
+            await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == TID))
+        except Exception:
+            pass
+        try:
+            await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TID))
+        except Exception:
+            pass
         try:
             result = await db.execute(select(User).where(User.tenant_id == TID))
             for row in result.scalars():

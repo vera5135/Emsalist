@@ -431,7 +431,7 @@ class BackupService:
             parsed = parsed.set(drivername="postgresql")
             dbname = parsed.render_as_string(hide_password=False)
             result = subprocess.run(
-                ["pg_dump", f"--dbname={dbname}", "--format=custom", "--no-owner", "--no-privileges"],
+                ["pg_dump", dbname, "--format=custom", "--no-owner", "--no-privileges"],
                 capture_output=True, timeout=s.backup_database_timeout_seconds or 300,
             )
             if result.returncode != 0:
