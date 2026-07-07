@@ -542,8 +542,8 @@ jobs:
       - name: Pip audit
         working-directory: backend
         run: |
-          pip install pip-audit
-          pip-audit -r requirements.txt --desc on --fail-on-known-vulnerability --no-deps
+          python -m pip install "pip-audit==2.10.1"
+          python -m pip_audit -r requirements.txt --desc on
 
       - name: Bandit scan
         working-directory: backend
