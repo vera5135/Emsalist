@@ -427,15 +427,33 @@ class BackupService:
     async def _pg_dump(self, run_id: str) -> dict | None:
         try:
             s = get_settings()
-            url = s.database_url or os.environ.get("DATABASE_URL", "")
-            dbname = url.replace("+asyncpg", "")
-            env = {**os.environ, "PGPASSWORD": os.environ.get("DB_PASSWORD", "")}
+            raw_url = os.environ.get("DATABASE_URL") or s.database_url
+            parsed = make_url(raw_url)
+            args = [
+                "pg_dump",
+                "--host", parsed.host or "localhost",
+                "--port", str(parsed.port or 5432),
+                "--username", parsed.username or os.environ.get("PGUSER", "postgres"),
+                "--dbname", parsed.database or "postgres",
+                "--format=custom",
+                "--no-owner",
+                "--no-privileges",
+            ]
+            env = os.environ.copy()
+            if parsed.password:
+                env["PGPASSWORD"] = parsed.password
+            else:
+                env.pop("PGPASSWORD", None)
             result = subprocess.run(
-                ["pg_dump", dbname, "--format=custom", "--no-owner", "--no-privileges"],
-                capture_output=True, timeout=s.backup_database_timeout_seconds or 300, env=env,
+                args,
+                capture_output=True,
+                timeout=s.backup_database_timeout_seconds or 300, env=env,
             )
             if result.returncode != 0:
-                logger.error("pg_dump_failed rc=%d stderr=%s", result.returncode, result.stderr.decode()[:200])
+                stderr_raw = (result.stderr or b"").decode(errors="replace")
+                stderr_safe = stderr_raw.replace(parsed.password or "", "***")[:200] if parsed.password else stderr_raw[:200]
+                logger.error("pg_dump_failed rc=%s host=%s port=%s db=%s stderr=%s",
+                    result.returncode, parsed.host, parsed.port, parsed.database, stderr_safe)
                 return None
             data = result.stdout
             sha = _safe_hash(data)

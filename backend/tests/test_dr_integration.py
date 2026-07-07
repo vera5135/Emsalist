@@ -50,10 +50,10 @@ async def _make_one_shot_sessionmaker(database_url: str):
 
 # ── Helpers ──
 
-def _run_pg(source_url: str, target_url: str):
-    """Real pg_dump from source, pg_restore to target. Returns (dump_path, exit_code_dump, exit_code_restore)."""
+def _pg_dump_only(source_url: str):
+    """Run pg_dump only, return (dump_path, exit_code, stderr)."""
     if not IS_POSTGRES:
-        return None, -1, -1
+        return None, -1, ""
     tmp = tempfile.NamedTemporaryFile(suffix=".dump", delete=False)
     tmp.close()
     env = {**os.environ, "PGPASSWORD": os.environ.get("DB_PASSWORD", "")}
@@ -63,21 +63,57 @@ def _run_pg(source_url: str, target_url: str):
             capture_output=True, timeout=120, env=env,
         )
         if r.returncode != 0:
-            return None, r.returncode, -1
+            return None, r.returncode, _safe_stderr(r.stderr)
         with open(tmp.name, "wb") as f:
             f.write(r.stdout)
-        r2 = subprocess.run(
-            ["pg_restore", "--clean", "--if-exists", "--no-owner", target_url, tmp.name],
+        return tmp.name, 0, ""
+    except Exception as e:
+        return None, -1, str(e)[:200]
+
+
+def _pg_restore_with_reset(target_url: str, dump_path: str):
+    """Drop and recreate public schema on target, then pg_restore. Returns (exit_code, stderr)."""
+    if not IS_POSTGRES:
+        return -1, ""
+    env = {**os.environ, "PGPASSWORD": os.environ.get("DB_PASSWORD", "")}
+    try:
+        reset = subprocess.run(
+            ["psql", target_url, "-v", "ON_ERROR_STOP=1", "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"],
+            capture_output=True, timeout=30, env=env,
+        )
+        if reset.returncode != 0:
+            return reset.returncode, _safe_stderr(reset.stderr)
+        r = subprocess.run(
+            ["pg_restore", "--exit-on-error", "--no-owner", "--no-privileges", "--dbname", target_url, dump_path],
             capture_output=True, timeout=120, env=env,
         )
-        return tmp.name, r.returncode, r2.returncode
-    except Exception:
+        return r.returncode, _safe_stderr(r.stderr)
+    except Exception as e:
+        return -1, str(e)[:200]
+
+
+def _safe_stderr(stderr: bytes | str) -> str:
+    s = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
+    pw = os.environ.get("DB_PASSWORD", "")
+    if pw:
+        s = s.replace(pw, "***")
+    return s[:200]
+
+
+def _run_pg(source_url: str, target_url: str):
+    """Legacy combined dump+restore. Returns (dump_path, exit_code_dump, exit_code_restore)."""
+    if not IS_POSTGRES:
         return None, -1, -1
-    finally:
-        try:
-            os.unlink(tmp.name)
-        except Exception:
-            pass
+    dump_path, exit_dump, _ = _pg_dump_only(source_url)
+    if exit_dump != 0:
+        return None, exit_dump, -1
+    exit_restore, _ = _pg_restore_with_reset(target_url, dump_path)
+    try:
+        if dump_path:
+            os.unlink(dump_path)
+    except Exception:
+        pass
+    return dump_path, exit_dump, exit_restore
 
 
 def _db_fingerprint(db_url: str, table: str) -> tuple[int, str]:
@@ -132,20 +168,33 @@ class TestRealPgDumpRestore:
 
     def test_pg_dump_exit_code_zero(self):
         source = os.environ.get("PG_SOURCE_URL", "")
-        target = os.environ.get("PG_TARGET_URL", "")
-        if not source or not target:
-            pytest.skip("PG_SOURCE_URL and PG_TARGET_URL required")
-        _, exit_dump, _ = _run_pg(source, target)
-        assert exit_dump == 0, f"pg_dump failed with exit code {exit_dump}"
+        if not source:
+            pytest.skip("PG_SOURCE_URL required")
+        dump_path, exit_dump, stderr = _pg_dump_only(source)
+        try:
+            assert exit_dump == 0, f"pg_dump failed with exit code {exit_dump}, stderr: {stderr}"
+        finally:
+            if dump_path:
+                try:
+                    os.unlink(dump_path)
+                except Exception:
+                    pass
 
     def test_pg_restore_exit_code_zero(self):
         source = os.environ.get("PG_SOURCE_URL", "")
         target = os.environ.get("PG_TARGET_URL", "")
         if not source or not target:
             pytest.skip("PG_SOURCE_URL and PG_TARGET_URL required")
-        _, exit_dump, exit_restore = _run_pg(source, target)
-        assert exit_dump == 0, f"pg_dump failed"
-        assert exit_restore == 0, f"pg_restore failed with exit code {exit_restore}"
+        dump_path, exit_dump, stderr = _pg_dump_only(source)
+        assert dump_path is not None, f"pg_dump failed: {stderr}"
+        try:
+            exit_restore, restore_stderr = _pg_restore_with_reset(target, dump_path)
+            assert exit_restore == 0, f"pg_restore failed with exit code {exit_restore}, stderr: {restore_stderr}"
+        finally:
+            try:
+                os.unlink(dump_path)
+            except Exception:
+                pass
 
 
 @_CI_SKIP

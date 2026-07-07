@@ -282,13 +282,26 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      postgres_target:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_target_pwd
+          POSTGRES_DB: emsalist_restore_target
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       EMSALIST_ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
       SOURCE_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
-      TARGET_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      TARGET_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_target_pwd@localhost:5433/emsalist_restore_target
       PG_SOURCE_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
-      PG_TARGET_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      PG_TARGET_URL: postgresql://emsalist:emsalist_target_pwd@localhost:5433/emsalist_restore_target
       BACKUP_ENCRYPTION_ENABLED: true
       BACKUP_ENCRYPTION_KEY: p1-14-test-key-32chars-long!
       EMSALIST_BACKUP_ROOT: /tmp/emsalist-test-backups
@@ -313,17 +326,34 @@ jobs:
         run: |
           for i in $(seq 1 30); do
             if pg_isready -h localhost -p 5432 -U emsalist -d emsalist_test; then
-              echo "PostgreSQL ready after ${i}s"
+              echo "PostgreSQL source ready after ${i}s"
               break
             fi
             if [ $i -eq 30 ]; then
-              echo "FAIL: PostgreSQL did not become ready"
+              echo "FAIL: PostgreSQL source did not become ready"
+              exit 1
+            fi
+            sleep 2
+          done
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5433 -U emsalist -d emsalist_restore_target; then
+              echo "PostgreSQL target ready after ${i}s"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "FAIL: PostgreSQL target did not become ready"
               exit 1
             fi
             sleep 2
           done
 
-      - name: Run migrations
+      - name: Run migrations (source)
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      - name: Run migrations (target)
+        env:
+          DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_target_pwd@localhost:5433/emsalist_restore_target
         working-directory: backend
         run: python -m alembic upgrade head
 
