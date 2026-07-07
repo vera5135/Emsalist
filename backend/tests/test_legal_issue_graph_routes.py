@@ -20,12 +20,15 @@ async def db_setup():
     async with maker() as session:
         from sqlalchemy import delete
         from app.db.models import LegalIssueNode, LegalIssueEdge, CaseMember, Case, User, Tenant
+        from app.db.models import AuditEvent, BackgroundJob
+        await session.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 'local'))
         await session.execute(delete(LegalIssueEdge).where(
             (LegalIssueEdge.tenant_id == 'local') &
             LegalIssueEdge.case_id.in_([CASE_A, CASE_B])))
         await session.execute(delete(LegalIssueNode).where(
             (LegalIssueNode.tenant_id == 'local') &
             LegalIssueNode.case_id.in_([CASE_A, CASE_B])))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 'local'))
         await session.execute(delete(CaseMember).where(CaseMember.id.in_(['mem-rt-a', 'mem-rt-b'])))
         await session.execute(delete(Case).where(Case.id.in_([CASE_A, CASE_B])))
         await session.execute(delete(User).where(User.id == 'local-user'))
@@ -47,12 +50,14 @@ async def db_setup():
     async with maker() as session:
         from sqlalchemy import delete
         from app.db.models import LegalIssueNode, LegalIssueEdge, CaseMember, Case
+        from app.db.models import AuditEvent
         await session.execute(delete(LegalIssueEdge).where(
             (LegalIssueEdge.tenant_id == 'local') &
             LegalIssueEdge.case_id.in_([CASE_A, CASE_B])))
         await session.execute(delete(LegalIssueNode).where(
             (LegalIssueNode.tenant_id == 'local') &
             LegalIssueNode.case_id.in_([CASE_A, CASE_B])))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 'local'))
         await session.execute(delete(CaseMember).where(CaseMember.id.in_(['mem-rt-a', 'mem-rt-b'])))
         await session.execute(delete(Case).where(Case.id.in_([CASE_A, CASE_B])))
         await session.commit()

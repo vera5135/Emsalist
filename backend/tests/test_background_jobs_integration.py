@@ -25,7 +25,9 @@ async def db_session():
     async with maker() as s:
         from sqlalchemy import delete
         from app.db.models import Tenant, User, Case, CaseMember, BackgroundJob
+        from app.db.models import AuditEvent
         await s.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == TID))
+        await s.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TID))
         await s.execute(delete(CaseMember).where(CaseMember.tenant_id == TID))
         await s.execute(delete(Case).where(Case.tenant_id == TID))
         await s.execute(delete(User).where(User.tenant_id == TID))

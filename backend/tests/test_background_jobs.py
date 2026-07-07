@@ -17,7 +17,9 @@ async def db_session():
     maker = get_sessionmaker()
     async with maker() as session:
         from sqlalchemy import delete
+        from app.db.models import AuditEvent, BackgroundJob
         await session.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-p8'))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-p8'))
         await session.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-p8'))
         await session.execute(delete(Case).where(Case.tenant_id == 't-p8'))
         await session.execute(delete(User).where(User.tenant_id == 't-p8'))

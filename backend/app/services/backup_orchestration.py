@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import struct
+import subprocess
 import tarfile
 import tempfile
 import uuid

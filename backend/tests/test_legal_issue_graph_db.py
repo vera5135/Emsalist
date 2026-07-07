@@ -15,13 +15,17 @@ async def db_session():
     async with maker() as session:
         from sqlalchemy import delete
         from app.db.models import LegalIssueNode, LegalIssueEdge, CaseMember, Case, User, Tenant
+        from app.db.models import AuditEvent, BackgroundJob
+        await session.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id.in_(['t-a-g', 't-b-g'])))
         await session.execute(delete(LegalIssueEdge).where(LegalIssueEdge.tenant_id.in_(['t-a-g', 't-b-g'])))
         await session.execute(delete(LegalIssueNode).where(LegalIssueNode.tenant_id.in_(['t-a-g', 't-b-g'])))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(['t-a-g', 't-b-g'])))
         await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(['t-a-g', 't-b-g'])))
         await session.execute(delete(Case).where(Case.tenant_id.in_(['t-a-g', 't-b-g'])))
         await session.execute(delete(User).where(User.tenant_id.in_(['t-a-g', 't-b-g'])))
         await session.execute(delete(Tenant).where(Tenant.id.in_(['t-a-g', 't-b-g'])))
         await session.flush()
+        await session.commit()
         yield session
         await session.rollback()
 
