@@ -193,6 +193,7 @@ def get_settings() -> Settings:
         auth_mode=getenv("AUTH_MODE", "local"),
         backup_encryption_enabled=getenv("BACKUP_ENCRYPTION_ENABLED", "").lower() in {"1", "true", "yes"},
         backup_encryption_key=getenv("BACKUP_ENCRYPTION_KEY", ""),
+        backup_root=_env("BACKUP_ROOT", ""),
         allowed_hosts=_env("ALLOWED_HOSTS", ""),
         cors_allow_origins=_env("CORS_ALLOW_ORIGINS", ""),
         max_upload_size_bytes=int(getenv("EMSALIST_MAX_UPLOAD_SIZE", str(MAX_UPLOAD_SIZE_BYTES))),
