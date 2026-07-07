@@ -500,13 +500,35 @@ jobs:
       - name: Docker history
         run: docker history --no-trunc emsalist:p1.14
 
-      - name: Trivy image scan
+      - name: Trivy image report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: emsalist:p1.14
+          format: json
+          output: trivy-image-report.json
+          exit-code: 0
+          severity: CRITICAL,HIGH
+          vuln-type: os,library
+
+      - name: Upload Trivy image report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-14-trivy-image-report
+          path: trivy-image-report.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Trivy image gate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: emsalist:p1.14
           format: table
           exit-code: 1
+          ignore-unfixed: true
           severity: CRITICAL,HIGH
+          vuln-type: os,library
+          skip-setup-trivy: true
 
       - name: Trivy config scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25

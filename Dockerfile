@@ -2,7 +2,7 @@
 # Target: Python 3.12 on Debian slim (stable, well-tested)
 
 # ─── Build stage ─────────────────────────────────────────────
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /build
 COPY backend/requirements.txt .
@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && rm -rf /root/.cache
 
 # ─── Runtime stage ───────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 ARG UID=1001
 ARG GID=1001
