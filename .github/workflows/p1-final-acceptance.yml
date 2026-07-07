@@ -481,7 +481,14 @@ jobs:
 
       - name: Verify app import
         run: |
-          docker run --rm emsalist:p1.14 python -c "from app.main import app; print('PASS: App imports OK')"
+          docker run --rm \
+            -e AUTH_MODE=jwt \
+            -e JWT_SECRET_KEY=ci-only-not-a-production-secret-1234567890 \
+            -e DATABASE_URL=postgresql+asyncpg://emsalist@localhost:5432/emsalist \
+            -e ALLOWED_HOSTS=localhost \
+            -e CORS_ALLOW_ORIGINS=https://ci.invalid \
+            emsalist:p1.14 \
+            python -c "from app.main import app; print('PASS: App imports OK')"
 
       - name: Inspect image size
         run: docker images emsalist:p1.14
