@@ -16,8 +16,12 @@ from app.services.job_handlers import handler_registry
 async def db_session():
     maker = get_sessionmaker()
     async with maker() as session:
-        from sqlalchemy import delete
-        from app.db.models import AuditEvent, BackgroundJob
+        from sqlalchemy import delete, select
+        from app.db.models import AuditEvent, BackgroundJob, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt
+        job_ids = select(BackgroundJob.id).where(BackgroundJob.tenant_id == 't-p8')
+        await session.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(job_ids)))
+        await session.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(job_ids)))
+        await session.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(job_ids)))
         await session.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-p8'))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-p8'))
         await session.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-p8'))
@@ -39,6 +43,20 @@ async def db_session():
         await session.commit()
         yield session
         await session.rollback()
+
+
+@pytest_asyncio.fixture
+async def second_tenant_db(db_session):
+    """Create a second valid tenant with own user/case for cross-tenant tests."""
+    db_session.add(Tenant(id="other-tenant", name="Other", slug="other-tenant", status="active"))
+    db_session.add(User(id="other-user", tenant_id="other-tenant", email_normalized="other@t.com", display_name="Other User", status="active", role="tenant_admin"))
+    await db_session.flush()
+    db_session.add(Case(id="other-case", tenant_id="other-tenant", owner_user_id="other-user", title="OtherCase", legal_topic="test", profile_id="default", event_text="", status="active", version=1))
+    await db_session.flush()
+    db_session.add(CaseMember(id=new_uuid(), tenant_id="other-tenant", case_id="other-case", user_id="other-user", membership_role="owner"))
+    await db_session.flush()
+    await db_session.commit()
+    return db_session
 
 
 class TestStatusTransitions:
@@ -92,12 +110,12 @@ class TestIdempotency:
             await db.rollback()
 
     @pytest.mark.asyncio
-    async def test_idempotency_key_tenant_scoped(self, db_session):
+    async def test_idempotency_key_tenant_scoped(self, db_session, second_tenant_db):
         repo = JobRepository()
         maker = get_sessionmaker()
         async with maker() as db:
             j1 = await repo.create_job(db, "t-p8", "petition_generate", {"a": "1"}, case_id="c-p8-a", created_by="u-p8")
-            j2 = await repo.create_job(db, "other-tenant", "petition_generate", {"a": "1"}, case_id="c-p8-a", created_by="u-p8")
+            j2 = await repo.create_job(db, "other-tenant", "petition_generate", {"a": "1"}, case_id="other-case", created_by="other-user")
             assert j1["id"] != j2["id"]
             await db.rollback()
 

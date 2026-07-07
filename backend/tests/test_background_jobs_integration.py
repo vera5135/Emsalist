@@ -23,9 +23,13 @@ CID_B = "c-p8i-b"
 async def db_session():
     maker = get_sessionmaker()
     async with maker() as s:
-        from sqlalchemy import delete
+        from sqlalchemy import delete, select
         from app.db.models import Tenant, User, Case, CaseMember, BackgroundJob
-        from app.db.models import AuditEvent
+        from app.db.models import AuditEvent, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt
+        job_ids = select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID)
+        await s.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(job_ids)))
+        await s.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(job_ids)))
+        await s.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(job_ids)))
         await s.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == TID))
         await s.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TID))
         await s.execute(delete(CaseMember).where(CaseMember.tenant_id == TID))

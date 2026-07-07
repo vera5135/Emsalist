@@ -54,8 +54,16 @@ async def e2e_db():
 
     maker = get_sessionmaker()
     async with maker() as db:
-        from app.db.models import Tenant, User, Case, CaseMember
-        from sqlalchemy import select, delete
+        from app.db.models import Tenant, User, Case, CaseMember, LegalIssueEdge, LegalIssueNode, BackgroundJobArtifact, BackgroundJobEvent, BackgroundJobAttempt, BackgroundJob, AuditEvent
+        from sqlalchemy import select, delete, or_
+
+        await db.execute(delete(BackgroundJobArtifact).where(BackgroundJobArtifact.job_id.in_(select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID))))
+        await db.execute(delete(BackgroundJobEvent).where(BackgroundJobEvent.job_id.in_(select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID))))
+        await db.execute(delete(BackgroundJobAttempt).where(BackgroundJobAttempt.job_id.in_(select(BackgroundJob.id).where(BackgroundJob.tenant_id == TID))))
+        await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == TID))
+        await db.execute(delete(LegalIssueEdge).where(or_(LegalIssueEdge.tenant_id == TID, LegalIssueEdge.case_id == CID)))
+        await db.execute(delete(LegalIssueNode).where(or_(LegalIssueNode.tenant_id == TID, LegalIssueNode.case_id == CID)))
+        await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TID))
         await db.execute(delete(CaseMember).where(CaseMember.tenant_id == TID))
         await db.execute(delete(Case).where(Case.tenant_id == TID))
         await db.execute(delete(User).where(User.tenant_id == TID))

@@ -285,6 +285,10 @@ jobs:
     env:
       EMSALIST_ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      SOURCE_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      TARGET_DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      PG_SOURCE_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+      PG_TARGET_URL: postgresql://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
       BACKUP_ENCRYPTION_ENABLED: true
       BACKUP_ENCRYPTION_KEY: p1-14-test-key-32chars-long!
       EMSALIST_BACKUP_ROOT: /tmp/emsalist-test-backups
@@ -322,6 +326,42 @@ jobs:
       - name: Run migrations
         working-directory: backend
         run: python -m alembic upgrade head
+
+      - name: Seed DR test data
+        working-directory: backend
+        shell: bash
+        run: |
+          set -e
+          python -c "
+          import asyncio, os, sys
+          from app.db.session import get_sessionmaker
+          from app.db.models import Tenant, User, Case, CaseMember, Document, AuditEvent, new_uuid
+          from datetime import UTC, datetime
+
+          async def seed():
+              maker = get_sessionmaker()
+              async with maker() as db:
+                  from sqlalchemy import delete
+                  await db.execute(delete(Document).where(Document.id == 'd-s1'))
+                  await db.execute(delete(AuditEvent).where(AuditEvent.tenant_id == 't-s1'))
+                  await db.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-s1'))
+                  await db.execute(delete(Case).where(Case.id == 'c-s1'))
+                  await db.execute(delete(User).where(User.id == 'u-s1'))
+                  await db.execute(delete(Tenant).where(Tenant.id == 't-s1'))
+                  await db.flush()
+
+                  db.add(Tenant(id='t-s1', name='Seed Tenant', slug='t-s1', status='active'))
+                  db.add(User(id='u-s1', tenant_id='t-s1', email_normalized='s1@test', display_name='S1', status='active', role='tenant_admin'))
+                  await db.flush()
+                  db.add(Case(id='c-s1', tenant_id='t-s1', owner_user_id='u-s1', title='Seed Case', legal_topic='Borc', profile_id='def', event_text='seed', status='active', version=1))
+                  await db.flush()
+                  db.add(CaseMember(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', membership_role='owner'))
+                  db.add(Document(id='d-s1', case_id='c-s1', tenant_id='t-s1', filename='seed.txt', storage_path='seed.txt', status='active', file_size_bytes=10, sha256_hex='a'*64))
+                  db.add(AuditEvent(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', event_type='case_created', version=1))
+                  await db.commit()
+                  print('Seed data inserted: t-s1, u-s1, c-s1, d-s1')
+          asyncio.run(seed())
+          "
 
       - name: Run full test suite
         working-directory: backend

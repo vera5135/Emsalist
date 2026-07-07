@@ -250,11 +250,18 @@ class TestPhysicalDocumentRestore:
         shutil.rmtree(str(test_dir), ignore_errors=True)
 
     def test_traversal_entry_blocked(self):
-        with tarfile.open(tempfile.NamedTemporaryFile(suffix=".tar.gz").name, "w:gz") as tar:
-            pass
-        archive_data = Path(tempfile.NamedTemporaryFile(suffix=".tar.gz").name).read_bytes()
-        if archive_data and len(archive_data) > 0:
-            pass  # archive creation works
+        tmp = tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False)
+        try:
+            tmp.close()
+            with tarfile.open(tmp.name, "w:gz") as tar:
+                info = tarfile.TarInfo(name="../evil.txt")
+                info.size = 0
+                tar.addfile(info)
+            with tarfile.open(tmp.name, "r:gz") as tar:
+                traversal_found = any(".." in m.name for m in tar.getmembers())
+                assert traversal_found, "Traversal entry not detected in archive"
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
 
     def test_symlink_member_detected(self):
         test_dir = Path("/tmp/symlink-test")
@@ -391,6 +398,29 @@ class TestRealDocumentRestoreLocal:
             assert len(duplicate) >= 2, f"Should detect duplicate entries, got {names}"
         finally:
             os.unlink(tmp_name)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def tdr_db():
+    """Create t-dr tenant used by TestIndexRebuildState and TestPruneAllProtections."""
+    maker = get_sessionmaker()
+    async with maker() as db:
+        from sqlalchemy import delete
+        await db.execute(delete(BackgroundJob).where(BackgroundJob.tenant_id == 't-dr'))
+        await db.execute(delete(CaseMember).where(CaseMember.tenant_id == 't-dr'))
+        await db.execute(delete(Case).where(Case.tenant_id == 't-dr'))
+        await db.execute(delete(User).where(User.tenant_id == 't-dr'))
+        await db.execute(delete(Tenant).where(Tenant.id == 't-dr'))
+        await db.flush()
+        db.add(Tenant(id='t-dr', name='DR Test', slug='t-dr', status='active'))
+        db.add(User(id='u-dr', tenant_id='t-dr', email_normalized='dr@test', display_name='DR', status='active', role='tenant_admin'))
+        await db.flush()
+        db.add(Case(id='c-dr', tenant_id='t-dr', owner_user_id='u-dr', title='DR Case', legal_topic='test', status='active', version=1))
+        db.add(CaseMember(id=new_uuid(), tenant_id='t-dr', case_id='c-dr', user_id='u-dr', membership_role='owner'))
+        await db.flush()
+        await db.commit()
+        yield db
+        await db.rollback()
 
 
 @pytest.mark.asyncio

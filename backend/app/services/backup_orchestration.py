@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from sqlalchemy.engine import make_url
 
 from app.config import get_settings
 from app.services.backup_service import (
@@ -426,11 +427,12 @@ class BackupService:
     async def _pg_dump(self, run_id: str) -> dict | None:
         try:
             s = get_settings()
-            url = s.database_url or ""
+            parsed = make_url(s.database_url)
+            parsed = parsed.set(drivername="postgresql")
+            dbname = parsed.render_as_string(hide_password=False)
             result = subprocess.run(
-                ["pg_dump", url, "--format=custom", "--no-owner", "--no-privileges"],
+                ["pg_dump", f"--dbname={dbname}", "--format=custom", "--no-owner", "--no-privileges"],
                 capture_output=True, timeout=s.backup_database_timeout_seconds or 300,
-                env={**os.environ, "PGPASSWORD": os.environ.get("DB_PASSWORD", "")},
             )
             if result.returncode != 0:
                 logger.error("pg_dump_failed rc=%d stderr=%s", result.returncode, result.stderr.decode()[:200])
