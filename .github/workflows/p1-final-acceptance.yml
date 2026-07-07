@@ -600,29 +600,43 @@ jobs:
 
       - name: Wait for services
         run: |
+          set -euo pipefail
+          ready=0
           for i in $(seq 1 60); do
-            if curl -s http://localhost:8000/live | grep -q alive; then
+            if curl --silent --show-error --fail http://localhost:8000/live \
+              | grep -q '"status":"alive"'; then
               echo "API ready after ${i}s"
+              ready=1
               break
             fi
             echo "Waiting for API... ($i)"
             sleep 2
           done
+          if [ "$ready" -ne 1 ]; then
+            echo "FAIL: API did not become live within 120 seconds"
+            docker compose -f docker-compose.yml -f docker-compose.production.yml ps -a || true
+            docker compose -f docker-compose.yml -f docker-compose.production.yml logs --no-color postgres migration api || true
+            exit 1
+          fi
 
       - name: Verify compose services
         run: |
-          docker compose ps
-          docker compose logs --no-color migration 2>/dev/null
-          docker compose logs --no-color api --tail=20 2>/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.production.yml ps
+          docker compose -f docker-compose.yml -f docker-compose.production.yml logs --no-color migration 2>/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.production.yml logs --no-color api --tail=20 2>/dev/null
 
       - name: Verify live endpoint
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/live)
-          if [ "$STATUS" != "200" ]; then
-            echo "FAIL: /live returned $STATUS"
-            exit 1
-          fi
-          echo "PASS: /live returns $STATUS"
+          set -euo pipefail
+          curl --fail-with-body --show-error http://localhost:8000/live \
+            | tee /tmp/live-response.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/live-response.json").read_text())
+          assert payload.get("status") == "alive", payload
+          print("PASS: /live is alive")
+          PY
 
       - name: Verify ready endpoint
         run: |
@@ -642,17 +656,38 @@ jobs:
       - name: API smoke test
         run: |
           set -e
-          # /api/v1/meta/version
           VERSION=$(curl -s http://localhost:8000/api/v1/meta/version)
           echo "Version: $VERSION"
           echo "$VERSION" | python -c "import sys,json; d=json.load(sys.stdin); assert d.get('application')=='emsalist', 'Bad version response'"
           echo "PASS: meta/version"
-
-          # /api/v1/meta/capabilities
           CAPS=$(curl -s http://localhost:8000/api/v1/meta/capabilities)
           echo "Capabilities: $CAPS"
           echo "$CAPS" | python -c "import sys,json; d=json.load(sys.stdin); assert 'features' in d, 'Bad capabilities response'"
           echo "PASS: meta/capabilities"
+
+      - name: Capture compose diagnostics
+        if: always()
+        run: |
+          mkdir -p compose-diagnostics
+          docker compose -f docker-compose.yml -f docker-compose.production.yml \
+            ps -a > compose-diagnostics/compose-ps.txt 2>&1 || true
+          docker compose -f docker-compose.yml -f docker-compose.production.yml \
+            logs --no-color postgres migration api \
+            > compose-diagnostics/compose.log 2>&1 || true
+          docker inspect emsalist-api \
+            > compose-diagnostics/api-inspect.json 2>&1 || true
+          docker inspect emsalist-api \
+            --format '{{json .State}}' \
+            > compose-diagnostics/api-state.json 2>&1 || true
+
+      - name: Upload compose diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-14-compose-diagnostics
+          path: compose-diagnostics/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Cleanup compose
         if: always()
