@@ -89,16 +89,30 @@ jobs:
           async def seed():
               maker = get_sessionmaker()
               async with maker() as db:
-                  t = Tenant(id='t-s1', name='Source1', slug='t-s1', status='active')
-                  db.add(t)
+                  db.add(Tenant(id='t-s1', name='Source1', slug='t-s1', status='active'))
+                  await db.flush()
                   db.add(User(id='u-s1', tenant_id='t-s1', email_normalized='s1@t.com', display_name='S1', status='active', role='tenant_admin'))
-                  c = Case(id='c-s1', tenant_id='t-s1', owner_user_id='u-s1', title='SourceCase', legal_topic='test', profile_id='def', event_text='test', status='active', version=1)
-                  db.add(c)
+                  await db.flush()
+                  db.add(Case(id='c-s1', tenant_id='t-s1', owner_user_id='u-s1', title='SourceCase', legal_topic='test', profile_id='def', event_text='test', status='active', version=1))
+                  await db.flush()
                   db.add(CaseMember(id=new_uuid(), tenant_id='t-s1', case_id='c-s1', user_id='u-s1', membership_role='owner'))
                   db.add(Document(id='d-s1', case_id='c-s1', tenant_id='t-s1', original_filename='test.txt', storage_key='uploads/test.txt', size_bytes=100, sha256='abcdef01', document_type='text', status='active'))
+                  await db.flush()
                   db.add(AuditEvent(tenant_id='t-s1', actor_id='u-s1', case_id='c-s1', action='test.created', outcome='success', safe_metadata={'info': 'test'}))
                   await db.commit()
-                  print('SEED_OK')
+
+                  from sqlalchemy import text
+                  r = await db.execute(text(\"SELECT count(*) FROM tenants WHERE id='t-s1'\"))
+                  assert r.scalar() == 1, 'Seed: tenant t-s1 not found'
+                  r = await db.execute(text(\"SELECT count(*) FROM users WHERE id='u-s1'\"))
+                  assert r.scalar() == 1, 'Seed: user u-s1 not found'
+                  r = await db.execute(text(\"SELECT count(*) FROM cases WHERE id='c-s1'\"))
+                  assert r.scalar() == 1, 'Seed: case c-s1 not found'
+                  r = await db.execute(text(\"SELECT count(*) FROM documents WHERE id='d-s1'\"))
+                  assert r.scalar() == 1, 'Seed: document d-s1 not found'
+                  r = await db.execute(text(\"SELECT count(*) FROM audit_events WHERE tenant_id='t-s1' AND action='test.created'\"))
+                  assert r.scalar() >= 1, 'Seed: audit_event not found'
+                  print('SEED_OK: t-s1, u-s1, c-s1, d-s1, audit_event verified')
           asyncio.run(seed())
           "
 
@@ -128,20 +142,25 @@ jobs:
 
       - name: Cleanup target database
         if: always()
+        working-directory: backend
         env:
           DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
         run: |
-          python -c "
+          set -euo pipefail
+          python - <<'PY'
           import asyncio
-          from app.db.session import get_sessionmaker
+          from sqlalchemy import text
+          from app.db.session import dispose_engine, get_sessionmaker
+
           async def clean():
               maker = get_sessionmaker()
               async with maker() as db:
-                  from sqlalchemy import text
-                  await db.execute(text('DROP SCHEMA public CASCADE; CREATE SCHEMA public;'))
+                  await db.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
                   await db.commit()
+              await dispose_engine()
+
           asyncio.run(clean())
-          " || echo "Cleanup skipped"
+          PY
 
       - name: Backup restore summary
         if: always()
