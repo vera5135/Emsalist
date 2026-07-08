@@ -15,8 +15,9 @@ class MessageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isUser = message.isUser;
-    final Alignment alignment =
-        isUser ? Alignment.centerRight : Alignment.centerLeft;
+    final Alignment alignment = isUser
+        ? Alignment.centerRight
+        : Alignment.centerLeft;
 
     Widget content;
     if (message.type == MessageType.card) {

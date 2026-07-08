@@ -35,7 +35,8 @@ class MessageModel {
         id: 'm1',
         sender: MessageSender.user,
         timestamp: now.subtract(const Duration(minutes: 10)),
-        text: 'Müvekkilim aldığı araçta ayıp olduğunu fark etti, ne yapmalıyız?',
+        text:
+            'Müvekkilim aldığı araçta ayıp olduğunu fark etti, ne yapmalıyız?',
       ),
       MessageModel(
         id: 'm2',

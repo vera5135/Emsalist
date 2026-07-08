@@ -86,14 +86,16 @@ class RiskCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         title,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     Text(
                       severity.label,
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: severity.color),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: severity.color,
+                      ),
                     ),
                   ],
                 ),

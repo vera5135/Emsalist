@@ -25,8 +25,7 @@ class EmsalistCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final BorderRadius radius =
-        BorderRadius.circular(AppConstants.radiusLg);
+    final BorderRadius radius = BorderRadius.circular(AppConstants.radiusLg);
 
     Widget content = Container(
       padding: padding,
@@ -50,22 +49,14 @@ class EmsalistCard extends StatelessWidget {
     if (onTap != null) {
       content = Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: radius,
-          onTap: onTap,
-          child: content,
-        ),
+        child: InkWell(borderRadius: radius, onTap: onTap, child: content),
       );
     }
 
     content = Padding(padding: margin, child: content);
 
     if (semanticsLabel != null) {
-      return Semantics(
-        container: true,
-        label: semanticsLabel,
-        child: content,
-      );
+      return Semantics(container: true, label: semanticsLabel, child: content);
     }
     return content;
   }

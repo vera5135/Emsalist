@@ -59,8 +59,9 @@ class DocumentCard extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       name,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(

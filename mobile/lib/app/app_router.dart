@@ -78,27 +78,27 @@ GoRouter createAppRouter() {
             name: AppRoutes.cases,
             builder: (BuildContext context, GoRouterState state) =>
                 const _PlaceholderScreen(
-              title: 'Dosyalar',
-              icon: Icons.folder_outlined,
-            ),
+                  title: 'Dosyalar',
+                  icon: Icons.folder_outlined,
+                ),
           ),
           GoRoute(
             path: AppRoutes.sourcesPath,
             name: AppRoutes.sources,
             builder: (BuildContext context, GoRouterState state) =>
                 const _PlaceholderScreen(
-              title: 'Kaynaklar',
-              icon: Icons.menu_book_outlined,
-            ),
+                  title: 'Kaynaklar',
+                  icon: Icons.menu_book_outlined,
+                ),
           ),
           GoRoute(
             path: AppRoutes.draftsPath,
             name: AppRoutes.drafts,
             builder: (BuildContext context, GoRouterState state) =>
                 const _PlaceholderScreen(
-              title: 'Taslaklar',
-              icon: Icons.edit_note_outlined,
-            ),
+                  title: 'Taslaklar',
+                  icon: Icons.edit_note_outlined,
+                ),
           ),
         ],
       ),
@@ -113,8 +113,9 @@ class _ScaffoldWithNavBar extends StatelessWidget {
   final Widget child;
 
   int get _currentIndex {
-    final int index =
-        _destinations.indexWhere((_NavDestination d) => location == d.path);
+    final int index = _destinations.indexWhere(
+      (_NavDestination d) => location == d.path,
+    );
     return index < 0 ? 0 : index;
   }
 

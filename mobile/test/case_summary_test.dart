@@ -5,9 +5,7 @@ import 'package:emsalist_mobile/app/app.dart';
 
 void main() {
   testWidgets('Case summary bottom sheet opens', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     final caseTile = find.byTooltip('Open case summary');
@@ -20,9 +18,7 @@ void main() {
   });
 
   testWidgets('Case summary shows sections', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     final caseTile = find.byTooltip('Open case summary');
@@ -35,10 +31,10 @@ void main() {
     }
   });
 
-  testWidgets('Case summary bottom sheet dismisses', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+  testWidgets('Case summary bottom sheet dismisses', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     final caseTile = find.byTooltip('Open case summary');
@@ -57,9 +53,7 @@ void main() {
   });
 
   testWidgets('Case summary has a title', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     final caseTile = find.byTooltip('Open case summary');

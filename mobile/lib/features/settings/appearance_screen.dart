@@ -1,98 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/constants/app_constants.dart';
 import '../../core/providers/theme_provider.dart';
 
-class AppearanceScreen extends ConsumerWidget {
-  const AppearanceScreen({super.key});
+class AppearancePicker extends StatelessWidget {
+  const AppearancePicker({super.key});
+
+  static const List<_ThemeEntry> _entries = <_ThemeEntry>[
+    _ThemeEntry(
+      label: 'Otomatik',
+      icon: Icons.brightness_auto,
+      mode: ThemeMode.system,
+    ),
+    _ThemeEntry(label: 'Açık', icon: Icons.light_mode, mode: ThemeMode.light),
+    _ThemeEntry(label: 'Koyu', icon: Icons.dark_mode, mode: ThemeMode.dark),
+  ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ThemeData theme = Theme.of(context);
-    final ThemeMode current = ref.watch(themeModeProvider);
-    final ThemeModeNotifier notifier = ref.read(themeModeProvider.notifier);
-
-    return Semantics(
-      container: true,
-      label: 'Görünüm ayarları',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          vertical: AppConstants.spacingMd,
-        ),
-        child: Column(
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (BuildContext context, WidgetRef ref, Widget? child) {
+        final ThemeMode currentMode = ref.watch(themeModeProvider);
+        return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacingLg,
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Görünüm',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              child: Text('Görünüm', style: theme.textTheme.titleLarge),
             ),
-            const SizedBox(height: AppConstants.spacingSm),
-            _ThemeOption(
-              label: 'Otomatik',
-              icon: Icons.brightness_auto_outlined,
-              value: ThemeMode.system,
-              groupValue: current,
-              onChanged: notifier.setThemeMode,
-            ),
-            _ThemeOption(
-              label: 'Açık',
-              icon: Icons.light_mode_outlined,
-              value: ThemeMode.light,
-              groupValue: current,
-              onChanged: notifier.setThemeMode,
-            ),
-            _ThemeOption(
-              label: 'Koyu',
-              icon: Icons.dark_mode_outlined,
-              value: ThemeMode.dark,
-              groupValue: current,
-              onChanged: notifier.setThemeMode,
+            RadioGroup<ThemeMode>(
+              groupValue: currentMode,
+              onChanged: (ThemeMode? mode) {
+                if (mode != null) {
+                  ref.read(themeModeProvider.notifier).setThemeMode(mode);
+                }
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final _ThemeEntry entry in _entries)
+                    Semantics(
+                      selected: entry.mode == currentMode,
+                      inMutuallyExclusiveGroup: true,
+                      label: entry.label,
+                      child: RadioListTile<ThemeMode>(
+                        value: entry.mode,
+                        title: Text(entry.label),
+                        secondary: Icon(entry.icon),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-class _ThemeOption extends StatelessWidget {
-  const _ThemeOption({
+class _ThemeEntry {
+  const _ThemeEntry({
     required this.label,
     required this.icon,
-    required this.value,
-    required this.groupValue,
-    required this.onChanged,
+    required this.mode,
   });
 
   final String label;
   final IconData icon;
-  final ThemeMode value;
-  final ThemeMode groupValue;
-  final ValueChanged<ThemeMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool selected = value == groupValue;
-    return Semantics(
-      selected: selected,
-      inMutuallyExclusiveGroup: true,
-      label: label,
-      child: RadioListTile<ThemeMode>(
-        value: value,
-        groupValue: groupValue,
-        onChanged: (ThemeMode? mode) {
-          if (mode != null) {
-            onChanged(mode);
-          }
-        },
-        title: Text(label),
-        secondary: Icon(icon),
-        controlAffinity: ListTileControlAffinity.trailing,
-      ),
-    );
-  }
+  final ThemeMode mode;
 }

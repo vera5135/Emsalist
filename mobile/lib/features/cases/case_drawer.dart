@@ -46,8 +46,7 @@ class CaseDrawer extends ConsumerWidget {
                   prefixIcon: const Icon(Icons.search),
                   isDense: true,
                   border: OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusMd),
+                    borderRadius: BorderRadius.circular(AppConstants.radiusMd),
                   ),
                 ),
               ),
@@ -140,8 +139,9 @@ class _Section extends StatelessWidget {
             label: 'Dosya ${c.title}, ${c.legalTopic}',
             child: ListTile(
               selected: active,
-              selectedTileColor:
-                  theme.colorScheme.primary.withValues(alpha: 0.10),
+              selectedTileColor: theme.colorScheme.primary.withValues(
+                alpha: 0.10,
+              ),
               leading: Icon(
                 c.pinned ? Icons.push_pin_outlined : Icons.folder_outlined,
               ),

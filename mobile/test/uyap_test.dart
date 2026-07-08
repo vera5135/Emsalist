@@ -5,19 +5,17 @@ import 'package:emsalist_mobile/app/app.dart';
 import 'package:emsalist_mobile/features/uyap/uyap_status_icon.dart';
 
 void main() {
-  testWidgets('UYAP icon is visible with correct default status', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+  testWidgets('UYAP icon is visible with correct default status', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     expect(find.byType(UyapStatusIcon), findsOneWidget);
   });
 
   testWidgets('UYAP bottom sheet opens on tap', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     final uyapIcon = find.byType(UyapStatusIcon);
@@ -29,10 +27,10 @@ void main() {
     expect(find.byType(BottomSheet), findsOneWidget);
   });
 
-  testWidgets('UYAP bottom sheet dismisses correctly', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+  testWidgets('UYAP bottom sheet dismisses correctly', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     final uyapIcon = find.byType(UyapStatusIcon);

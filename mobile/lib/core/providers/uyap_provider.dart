@@ -4,13 +4,13 @@ import '../models/uyap_status.dart';
 
 class UyapNotifier extends StateNotifier<UyapState> {
   UyapNotifier()
-      : super(
-          UyapState(
-            status: UyapStatus.connected,
-            movementCount: 2,
-            lastChecked: DateTime.now().subtract(const Duration(minutes: 4)),
-          ),
-        );
+    : super(
+        UyapState(
+          status: UyapStatus.connected,
+          movementCount: 2,
+          lastChecked: DateTime.now().subtract(const Duration(minutes: 4)),
+        ),
+      );
 
   void reconnect() {
     state = state.copyWith(status: UyapStatus.connecting);
@@ -35,6 +35,4 @@ class UyapNotifier extends StateNotifier<UyapState> {
 }
 
 final StateNotifierProvider<UyapNotifier, UyapState> uyapProvider =
-    StateNotifierProvider<UyapNotifier, UyapState>(
-  (Ref ref) => UyapNotifier(),
-);
+    StateNotifierProvider<UyapNotifier, UyapState>((Ref ref) => UyapNotifier());

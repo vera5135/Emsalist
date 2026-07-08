@@ -41,17 +41,15 @@ class AppTheme {
 
     final TextTheme textTheme = Typography.material2021(
       platform: TargetPlatform.iOS,
-    ).black.apply(
-          bodyColor: scheme.onSurface,
-          displayColor: scheme.onSurface,
-        );
+    ).black.apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
 
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
-      scaffoldBackgroundColor:
-          isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      scaffoldBackgroundColor: isDark
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
       textTheme: isDark
           ? textTheme.apply(
               bodyColor: scheme.onSurface,

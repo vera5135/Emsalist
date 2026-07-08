@@ -9,12 +9,7 @@ import '../../features/uyap/uyap_status_icon.dart';
 enum AppBarMenuAction { summary, appearance, share }
 
 class EmsalistAppBar extends ConsumerWidget implements PreferredSizeWidget {
-  const EmsalistAppBar({
-    super.key,
-    this.title,
-    this.subtitle,
-    this.onSummary,
-  });
+  const EmsalistAppBar({super.key, this.title, this.subtitle, this.onSummary});
 
   final String? title;
   final String? subtitle;
@@ -32,7 +27,7 @@ class EmsalistAppBar extends ConsumerWidget implements PreferredSizeWidget {
         showModalBottomSheet<void>(
           context: context,
           showDragHandle: true,
-          builder: (BuildContext ctx) => const AppearanceScreen(),
+          builder: (BuildContext ctx) => const AppearancePicker(),
         );
         break;
       case AppBarMenuAction.share:

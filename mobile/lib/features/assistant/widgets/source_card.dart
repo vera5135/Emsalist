@@ -38,8 +38,9 @@ class SourceCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -58,10 +59,7 @@ class SourceCard extends StatelessWidget {
                     : theme.colorScheme.outline,
                 icon: verified ? Icons.verified_outlined : Icons.help_outline,
               ),
-              Text(
-                'İlgi: %$relevancePct',
-                style: theme.textTheme.bodySmall,
-              ),
+              Text('İlgi: %$relevancePct', style: theme.textTheme.bodySmall),
             ],
           ),
         ],
@@ -97,10 +95,10 @@ class _Badge extends StatelessWidget {
           ],
           Text(
             label,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: color, fontWeight: FontWeight.w600),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

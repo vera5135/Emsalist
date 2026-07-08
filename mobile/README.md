@@ -2,39 +2,61 @@
 
 iOS-first Flutter mobile shell for the Emsalist legal workspace. P2.1 delivers the
 initial application shell with design system, navigation, chat composer, case drawer
-mock, UYAP status mock, and CI/test infrastructure.
+mock, UYAP status mock, native iOS/Android flavors, and CI/test infrastructure.
+
+## Environment
+
+- Flutter 3.44.4 (stable channel)
+- Dart 3.12.2
 
 ## Quick start
 
 ```powershell
 cd mobile
 flutter pub get
-flutter run
+flutter run --flavor development
 ```
 
-The app launches in development flavor by default with mock data.
+The app launches with mock data.
 
 ## Flavors
 
-Flavors are configured via `--dart-define`:
+Flavors are real native build flavors (iOS schemes/build configurations and Android
+product flavors), selected with `--flavor`:
 
 ```powershell
-# Development (default)
-flutter run --dart-define FLAVOR=development
+# Development
+flutter run --flavor development
 
 # Staging
-flutter run --dart-define FLAVOR=staging
+flutter run --flavor staging
 
 # Production
-flutter run --dart-define FLAVOR=production
+flutter run --flavor production
 ```
 
-Each flavor controls:
+Build examples:
 
-- Bundle identifier
-- API base URL
-- Push notification environment
-- App display suffix
+```powershell
+flutter build ios --simulator --no-codesign --flavor development
+flutter build apk --flavor staging
+flutter build appbundle --flavor production
+```
+
+### Bundle / application ID matrix
+
+| Flavor      | iOS `PRODUCT_BUNDLE_IDENTIFIER` | Android `applicationId`  |
+| ----------- | ------------------------------- | ------------------------ |
+| development | `com.emsalist.app.dev`          | `com.emsalist.app.dev`     |
+| staging     | `com.emsalist.app.staging`      | `com.emsalist.app.staging` |
+| production  | `com.emsalist.app`              | `com.emsalist.app`         |
+
+- iOS: three shared schemes (`development`, `staging`, `production`) with
+  `Debug`/`Profile`/`Release` build configurations per flavor, wired through
+  `ios/Flutter/Flavors/*.xcconfig`. No signing Team ID is committed; simulator
+  builds run with `--no-codesign`.
+- Android: `flavorDimensions "environment"` with `development`, `staging`, and
+  `production` product flavors (dev/staging apply an `applicationIdSuffix`).
 
 ## Project structure
 
@@ -42,49 +64,40 @@ Each flavor controls:
 mobile/
   lib/
     main.dart
-    app/                          # App root, router, theme provider
+    app/                          # App root, router, theme
     core/
       constants/                  # App-wide constants and tokens
-      errors/                     # Error types and mapping
       models/                     # Shared domain models
-      widgets/                    # Shared widgets (loading, error, empty)
-    design_system/                # Theme, typography, spacing, semantic tokens
-    features/                     # Feature-first modules
-      auth/
-      workspace/
-      cases/
-      chat/
-      case_memory/
-      documents/
-      sources/
-      search/
-      drafts/
-      uyap/
-      notifications/
-      settings/
-  test/                           # Unit and widget tests
-  integration_test/               # Integration tests
-  ios/                            # iOS platform files
-  android/                        # Android platform files (future)
+      providers/                  # Riverpod providers (case, theme, UYAP)
+      widgets/                    # Shared state widgets (loading, error, empty)
+    design_system/
+      components/                 # App bar, card, composer
+    features/
+      assistant/                  # Chat/assistant screen and message cards
+      cases/                      # Case drawer and summary sheet
+      settings/                   # Appearance settings
+      uyap/                       # UYAP status icon and bottom sheet
+  test/                           # Widget tests
+  ios/                            # iOS platform files (Runner + flavors)
+  android/                        # Android platform files (flavors)
 ```
 
 ## P2.1 scope
 
 - [x] Flutter project under `/mobile`
-- [x] Development, staging, production flavor foundation
+- [x] Native development, staging, production flavors (iOS + Android)
 - [x] iOS-first design system tokens
 - [x] System/light/dark theme support
 - [x] Main chat shell screen
 - [x] Case drawer mock
-- [x] Message composer with keyboard-safe behavior
+- [x] Message composer with keyboard-safe behavior and 6 attach options
 - [x] UYAP status icon and mock bottom sheet
 - [x] Appearance settings
-- [x] Loading, empty, error, and offline states
+- [x] Loading, empty, error states
 - [x] Safe-area and Dynamic Type support
-- [x] Small iPhone overflow tests
-- [x] Golden light/dark tests
-- [x] Widget test infrastructure
-- [x] Mobile CI pipeline (format, analyze, test, iOS simulator build)
+- [x] Overflow tests across 375x812 / 390x844 / 430x932
+- [x] Widget test suite (45 tests)
+- [x] Mobile CI pipeline (format, analyze, test, iOS simulator build per flavor)
 
 ## Out of scope for P2.1
 
@@ -96,38 +109,32 @@ mobile/
 - AI-powered drafting
 - Push notifications
 - UYAP bridge integration
-- Android platform support
 - App Store / TestFlight distribution
 
 ## Known limitations
 
-- **No real auth**: Login screens and flows use mock data. Real authentication
-  arrives in P2.2.
 - **Mock data only**: All case lists, messages, and UYAP status are hardcoded mock
   data. No backend calls are made.
-- **iOS build needs macOS**: The CI iOS simulator build job (`ios_build`) runs on
-  `macos-latest`. It is allowed to fail in pull requests since the iOS project
-  scaffolding evolves during P2.1.
-- **No offline cache**: Encrypted local storage for messages and case metadata is
-  not yet implemented.
-- **Certificate pinning not enforced**: Planned for post-threat-model evaluation.
+- **No real auth**: Real authentication arrives in a later phase.
+- **iOS build requires macOS**: The CI `iOS Simulator Build` job runs on
+  `macos-latest` for all three flavors and is a required check (not
+  allowed-to-fail). It cannot be validated on Windows locally.
+- **No golden tests**: Golden image tests are not part of P2.1.
+- **No offline cache**: Encrypted local storage is not yet implemented.
 
 ## Test commands
 
 ```powershell
 cd mobile
 
-# Run all unit and widget tests
+# Run all widget tests
 flutter test
 
-# Run tests with coverage
-flutter test --coverage
-
 # Run a specific test file
-flutter test test/chat_shell_test.dart
+flutter test test/composer_test.dart
 
-# Format check
-flutter format --set-exit-if-changed .
+# Format check (CI gate)
+dart format --output=none --set-exit-if-changed lib test
 
 # Static analysis
 flutter analyze
@@ -135,25 +142,17 @@ flutter analyze
 
 ## Architecture
 
-P2.1 follows a **feature-first** layout with layered boundaries inside each feature:
-
-| Layer            | Responsibility                                      |
-| ---------------- | --------------------------------------------------- |
-| `presentation/`  | Widgets, screens, UI logic                          |
-| `application/`   | State management, notifiers, providers              |
-| `domain/`        | Entities, value objects, repository interfaces      |
-| `data/`          | Repository implementations, data sources, DTOs      |
+P2.1 uses a **feature-first** layout with Riverpod for state and GoRouter for
+navigation.
 
 **State management**: [Riverpod](https://riverpod.dev) — compile-safe, testable
-providers with async loading/data/error states.
+providers.
 
-**Navigation**: [GoRouter](https://pub.dev/packages/go_router) — typed declarative
-routing with auth guard, workspace guard, and deep link support.
+**Navigation**: [GoRouter](https://pub.dev/packages/go_router) — declarative routing.
 
 **Key design rules**:
 
-- UI widgets never call HTTP clients directly; all data flows through repository
-  adapters.
+- UI widgets never call HTTP clients directly.
 - Active case state is invalidated on case switch.
 - Theme follows `ThemeMode.system` by default; manual light/dark is available in
   settings.

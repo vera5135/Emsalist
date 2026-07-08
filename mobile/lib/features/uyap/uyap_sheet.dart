@@ -25,7 +25,7 @@ class UyapSheet extends ConsumerWidget {
     return Semantics(
       container: true,
       label: 'UYAP durumu paneli',
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppConstants.spacingLg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -39,8 +39,9 @@ class UyapSheet extends ConsumerWidget {
                 const SizedBox(width: AppConstants.spacingSm),
                 Text(
                   state.status.label,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(color: state.status.color),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: state.status.color,
+                  ),
                 ),
               ],
             ),
@@ -100,11 +101,16 @@ class _InfoRow extends StatelessWidget {
         Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
         const SizedBox(width: AppConstants.spacingSm),
         Text(label, style: theme.textTheme.bodyMedium),
-        const Spacer(),
-        Text(
-          value,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(fontWeight: FontWeight.w600),
+        const SizedBox(width: AppConstants.spacingMd),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );

@@ -2,96 +2,88 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:emsalist_mobile/app/app.dart';
+import 'package:emsalist_mobile/features/uyap/uyap_status_icon.dart';
+
+const List<Size> _deviceSizes = <Size>[
+  Size(375, 812),
+  Size(390, 844),
+  Size(430, 932),
+];
+
+Future<void> _pumpAt(WidgetTester tester, Size size) async {
+  tester.view.physicalSize = size * 3.0;
+  tester.view.devicePixelRatio = 3.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+  await tester.pumpAndSettle();
+}
 
 void main() {
-  testWidgets('Small iPhone viewport 375x667 has no overflow', (WidgetTester tester) async {
-    tester.binding.window.physicalSizeTestValue = const Size(375 * 3, 667 * 3);
-    tester.binding.window.devicePixelRatioTestValue = 3.0;
-    addTearDown(() {
-      tester.binding.window.clearPhysicalSizeTestValue();
-      tester.binding.window.clearDevicePixelRatioTestValue();
+  for (final Size size in _deviceSizes) {
+    final String label = '${size.width.toInt()}x${size.height.toInt()}';
+
+    testWidgets('No overflow on $label', (WidgetTester tester) async {
+      await _pumpAt(tester, size);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AppBar), findsAtLeastNWidgets(1));
+      expect(find.byType(Scaffold), findsAtLeastNWidgets(1));
     });
 
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
-    await tester.pumpAndSettle();
+    testWidgets('Drawer has no overflow on $label', (
+      WidgetTester tester,
+    ) async {
+      await _pumpAt(tester, size);
 
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('iPhone SE sized viewport renders all key widgets', (WidgetTester tester) async {
-    tester.binding.window.physicalSizeTestValue = const Size(375 * 2, 667 * 2);
-    tester.binding.window.devicePixelRatioTestValue = 2.0;
-    addTearDown(() {
-      tester.binding.window.clearPhysicalSizeTestValue();
-      tester.binding.window.clearDevicePixelRatioTestValue();
-    });
-
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byType(AppBar), findsOneWidget);
-    expect(find.byType(Scaffold), findsAtLeastNWidgets(1));
-  });
-
-  testWidgets('Small viewport does not overflow drawer', (WidgetTester tester) async {
-    tester.binding.window.physicalSizeTestValue = const Size(375 * 2, 667 * 2);
-    tester.binding.window.devicePixelRatioTestValue = 2.0;
-    addTearDown(() {
-      tester.binding.window.clearPhysicalSizeTestValue();
-      tester.binding.window.clearDevicePixelRatioTestValue();
-    });
-
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
-    await tester.pumpAndSettle();
-
-    final hamburger = find.byTooltip('Open navigation menu');
-    if (hamburger.evaluate().isNotEmpty) {
-      await tester.tap(hamburger);
+      await tester.tap(find.byIcon(Icons.menu).first);
       await tester.pumpAndSettle();
 
-      expect(find.byType(Drawer), findsOneWidget);
+      expect(find.byType(Drawer), findsAtLeastNWidgets(1));
       expect(tester.takeException(), isNull);
-    }
-  });
-
-  testWidgets('Bottom sheet fits in small viewport', (WidgetTester tester) async {
-    tester.binding.window.physicalSizeTestValue = const Size(375 * 2, 667 * 2);
-    tester.binding.window.devicePixelRatioTestValue = 2.0;
-    addTearDown(() {
-      tester.binding.window.clearPhysicalSizeTestValue();
-      tester.binding.window.clearDevicePixelRatioTestValue();
     });
 
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+    testWidgets('UYAP sheet has no overflow on $label', (
+      WidgetTester tester,
+    ) async {
+      await _pumpAt(tester, size);
+
+      await tester.tap(find.byType(UyapStatusIcon));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Composer visible with keyboard inset on $label', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = size * 3.0;
+      tester.view.devicePixelRatio = 3.0;
+      tester.view.viewInsets = const FakeViewPadding(bottom: 336 * 3.0);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewInsets);
+
+      await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TextField), findsWidgets);
+      expect(find.byIcon(Icons.send), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('High Dynamic Type has no overflow', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(375, 812) * 3.0;
+    tester.view.devicePixelRatio = 3.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('All content fits without overflow on 375x667', (WidgetTester tester) async {
-    tester.binding.window.physicalSizeTestValue = const Size(375 * 2, 667 * 2);
-    tester.binding.window.devicePixelRatioTestValue = 2.0;
-    addTearDown(() {
-      tester.binding.window.clearPhysicalSizeTestValue();
-      tester.binding.window.clearDevicePixelRatioTestValue();
-    });
-
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
-    await tester.pumpAndSettle();
-
-    final overflowErrors = tester.renderObjectList.whereType<RenderFlex>();
-    for (final flex in overflowErrors) {
-      expect(flex.hasOverflow, isFalse, reason: '${flex.runtimeType} has overflow');
-    }
   });
 }

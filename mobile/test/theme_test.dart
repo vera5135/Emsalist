@@ -11,69 +11,71 @@ void main() {
   });
 
   testWidgets('Default theme mode is system', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(materialApp.themeMode, equals(ThemeMode.system));
   });
 
-  testWidgets('Switching to light theme via provider', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+  testWidgets('Switching to light theme via provider', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
-    container.read(themeProvider.notifier).setTheme(ThemeMode.light);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    container.read(themeModeProvider.notifier).setThemeMode(ThemeMode.light);
     await tester.pumpAndSettle();
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(materialApp.themeMode, equals(ThemeMode.light));
   });
 
-  testWidgets('Switching to dark theme via provider', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+  testWidgets('Switching to dark theme via provider', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
-    container.read(themeProvider.notifier).setTheme(ThemeMode.dark);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    container.read(themeModeProvider.notifier).setThemeMode(ThemeMode.dark);
     await tester.pumpAndSettle();
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(materialApp.themeMode, equals(ThemeMode.dark));
   });
 
-  testWidgets('Theme mode persists via provider state', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
+  testWidgets('Theme mode persists via provider state', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
     );
+    final notifier = container.read(themeModeProvider.notifier);
+
+    notifier.setThemeMode(ThemeMode.dark);
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
-    final notifier = container.read(themeProvider.notifier);
-
-    notifier.setTheme(ThemeMode.dark);
-    await tester.pumpAndSettle();
-
-    final state = container.read(themeProvider);
+    final state = container.read(themeModeProvider);
     expect(state, equals(ThemeMode.dark));
 
-    notifier.setTheme(ThemeMode.light);
+    notifier.setThemeMode(ThemeMode.light);
     await tester.pumpAndSettle();
 
-    final state2 = container.read(themeProvider);
+    final state2 = container.read(themeModeProvider);
     expect(state2, equals(ThemeMode.light));
   });
 
   testWidgets('MaterialApp theme is available', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: EmsalistApp()),
-    );
+    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
     await tester.pumpAndSettle();
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));

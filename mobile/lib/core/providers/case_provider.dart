@@ -39,12 +39,12 @@ class CaseState {
 
 class CaseNotifier extends StateNotifier<CaseState> {
   CaseNotifier()
-      : super(
-          CaseState(
-            cases: CaseModel.mockCases(),
-            activeCaseId: CaseModel.mockCases().first.id,
-          ),
-        );
+    : super(
+        CaseState(
+          cases: CaseModel.mockCases(),
+          activeCaseId: CaseModel.mockCases().first.id,
+        ),
+      );
 
   void selectCase(String id) {
     state = state.copyWith(activeCaseId: id);
@@ -64,6 +64,4 @@ class CaseNotifier extends StateNotifier<CaseState> {
 }
 
 final StateNotifierProvider<CaseNotifier, CaseState> caseProvider =
-    StateNotifierProvider<CaseNotifier, CaseState>(
-  (Ref ref) => CaseNotifier(),
-);
+    StateNotifierProvider<CaseNotifier, CaseState>((Ref ref) => CaseNotifier());

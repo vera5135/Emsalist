@@ -6,35 +6,18 @@ class CaseSummarySheet extends StatelessWidget {
   const CaseSummarySheet({super.key});
 
   static const Map<String, List<String>> _sections = <String, List<String>>{
-    'Taraflar': <String>[
-      'Davacı: Ahmet Yılmaz',
-      'Davalı: XYZ Otomotiv A.Ş.',
-    ],
+    'Taraflar': <String>['Davacı: Ahmet Yılmaz', 'Davalı: XYZ Otomotiv A.Ş.'],
     'Kronoloji': <String>[
       '12.01.2024 — Araç satın alındı',
       '03.03.2024 — Ayıp fark edildi',
       '10.03.2024 — Satıcıya ihbar edildi',
     ],
-    'Talepler': <String>[
-      'Bedel iadesi',
-      'Ayıp oranında indirim (alternatif)',
-    ],
-    'Belgeler': <String>[
-      'Satış Sözleşmesi.pdf',
-      'Servis Raporu.pdf',
-    ],
-    'Eksikler': <String>[
-      'Ayıp ihbar tarihinin belgesi',
-    ],
-    'Çelişkiler': <String>[
-      'İhbar tarihi ifadeleri arasında tutarsızlık',
-    ],
-    'Riskler': <String>[
-      'Zamanaşımı riski (yüksek)',
-    ],
-    'Süreler': <String>[
-      'Dava açma süresi: 2 yıl',
-    ],
+    'Talepler': <String>['Bedel iadesi', 'Ayıp oranında indirim (alternatif)'],
+    'Belgeler': <String>['Satış Sözleşmesi.pdf', 'Servis Raporu.pdf'],
+    'Eksikler': <String>['Ayıp ihbar tarihinin belgesi'],
+    'Çelişkiler': <String>['İhbar tarihi ifadeleri arasında tutarsızlık'],
+    'Riskler': <String>['Zamanaşımı riski (yüksek)'],
+    'Süreler': <String>['Dava açma süresi: 2 yıl'],
   };
 
   static const Map<String, IconData> _icons = <String, IconData>{
@@ -112,8 +95,9 @@ class _SummarySection extends StatelessWidget {
               const SizedBox(width: AppConstants.spacingSm),
               Text(
                 title,
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),

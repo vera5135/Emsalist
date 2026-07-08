@@ -11,7 +11,7 @@ class EmsalistComposer extends StatefulWidget {
   State<EmsalistComposer> createState() => _EmsalistComposerState();
 }
 
-enum _ComposerAction { document, photo, uyap, voice }
+enum _ComposerAction { document, photo, gallery, uyap, precedent, draft }
 
 class _EmsalistComposerState extends State<EmsalistComposer> {
   final TextEditingController _controller = TextEditingController();
@@ -55,18 +55,24 @@ class _EmsalistComposerState extends State<EmsalistComposer> {
         label = 'Belge ekleme';
         break;
       case _ComposerAction.photo:
-        label = 'Fotoğraf ekleme';
+        label = 'Fotoğraf çekme';
+        break;
+      case _ComposerAction.gallery:
+        label = 'Galeriden ekleme';
         break;
       case _ComposerAction.uyap:
-        label = 'UYAP’tan içe aktarma';
+        label = 'UYAP evrakı ekleme';
         break;
-      case _ComposerAction.voice:
-        label = 'Sesli giriş';
+      case _ComposerAction.precedent:
+        label = 'İçtihat arama';
+        break;
+      case _ComposerAction.draft:
+        label = 'Dilekçe hazırlama';
         break;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label henüz uygulanmadı')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label henüz uygulanmadı')));
   }
 
   @override
@@ -94,39 +100,55 @@ class _EmsalistComposerState extends State<EmsalistComposer> {
               onSelected: _onAddSelected,
               itemBuilder: (BuildContext ctx) =>
                   <PopupMenuEntry<_ComposerAction>>[
-                const PopupMenuItem<_ComposerAction>(
-                  value: _ComposerAction.document,
-                  child: ListTile(
-                    leading: Icon(Icons.description_outlined),
-                    title: Text('Belge Ekle'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem<_ComposerAction>(
-                  value: _ComposerAction.photo,
-                  child: ListTile(
-                    leading: Icon(Icons.photo_outlined),
-                    title: Text('Fotoğraf'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem<_ComposerAction>(
-                  value: _ComposerAction.uyap,
-                  child: ListTile(
-                    leading: Icon(Icons.gavel_outlined),
-                    title: Text('UYAP’tan Al'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem<_ComposerAction>(
-                  value: _ComposerAction.voice,
-                  child: ListTile(
-                    leading: Icon(Icons.mic_none_outlined),
-                    title: Text('Sesli Giriş'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
+                    const PopupMenuItem<_ComposerAction>(
+                      value: _ComposerAction.document,
+                      child: ListTile(
+                        leading: Icon(Icons.description_outlined),
+                        title: Text('Belge Yükle'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuItem<_ComposerAction>(
+                      value: _ComposerAction.photo,
+                      child: ListTile(
+                        leading: Icon(Icons.camera_alt_outlined),
+                        title: Text('Fotoğraf Çek'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuItem<_ComposerAction>(
+                      value: _ComposerAction.gallery,
+                      child: ListTile(
+                        leading: Icon(Icons.photo_library_outlined),
+                        title: Text('Galeriden Ekle'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuItem<_ComposerAction>(
+                      value: _ComposerAction.uyap,
+                      child: ListTile(
+                        leading: Icon(Icons.gavel_outlined),
+                        title: Text('UYAP Evrakı Ekle'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuItem<_ComposerAction>(
+                      value: _ComposerAction.precedent,
+                      child: ListTile(
+                        leading: Icon(Icons.search_outlined),
+                        title: Text('İçtihat Ara'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuItem<_ComposerAction>(
+                      value: _ComposerAction.draft,
+                      child: ListTile(
+                        leading: Icon(Icons.edit_note_outlined),
+                        title: Text('Dilekçe Hazırla'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
             ),
             const SizedBox(width: AppConstants.spacingXs),
             Expanded(
@@ -145,8 +167,9 @@ class _EmsalistComposerState extends State<EmsalistComposer> {
                     filled: true,
                     fillColor: theme.colorScheme.surfaceContainerHighest,
                     border: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(AppConstants.radiusLg),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radiusLg,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                     contentPadding: const EdgeInsets.symmetric(
