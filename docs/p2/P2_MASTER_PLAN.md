@@ -23,13 +23,18 @@ P2 başarılı sayılabilmek için kullanıcı şu uçtan uca akışı güvenli 
 ## 3. Sabit ürün kararları
 
 - Birincil dağıtım kanalı iOS App Store'dur.
-- Mobil istemci Flutter ile geliştirilecektir.
+- Mobil istemci Flutter ile, monorepo içindeki `/mobile` dizininde geliştirilecektir.
+- Production bundle ID hedefi `com.emsalist.app` olacaktır.
 - Backend FastAPI ve PostgreSQL üzerinde devam eder.
 - Ana deneyim chat-first olacaktır.
 - Varsayılan tema `ThemeMode.system`; manuel açık/koyu geçişi ayarlarda bulunur.
 - Üst çubukta kalıcı güneş/ay simgesi bulunmaz.
 - UYAP durumu kompakt bir ikonla gösterilir; yeni hareketler rozetle işaretlenir.
+- Kullanıcı her zaman bir workspace içinde çalışır; bireysel kullanıcıya personal workspace oluşturulur.
+- İlk beta belge sınırı 25 MB, soft-delete süresi 30 gündür.
+- UDF yalnız backend sandbox parser ile işlenir.
 - İlk uçtan uca pilot `ayıplı araç / tüketici hukuku` dosyasıdır.
+- Kapalı beta 15 avukatla ve ücretsiz yürütülür.
 - Android ana yayın hedefi P2 beta sonrasıdır.
 - P2.0 yalnızca planlama ve sözleşme aşamasıdır.
 
@@ -46,8 +51,8 @@ Aşamalar şu bağımlılık sırasıyla uygulanır:
 7. Hibrit arama
 8. Hukuki mesele ve delil grafiği
 9. Kaynak bağlantılı dilekçe üretimi
-10. UYAP Bridge
-11. Bildirimler, beta ve App Store hazırlığı
+10. UYAP Bridge ve bildirimler
+11. Beta ve App Store hazırlığı
 
 Semantik arama, otomasyon veya UYAP genişletmesi; kaynak doğrulama ve dosya izolasyonu tamamlanmadan öne alınamaz.
 
@@ -61,12 +66,15 @@ Semantik arama, otomasyon veya UYAP genişletmesi; kaynak doğrulama ve dosya iz
 - kullanıcı ve dosya akışları
 - mobil bilgi mimarisi
 - konuşma tasarımı
+- mobil mimari
 - veri modeli
 - API sözleşmesi
-- güvenlik/KVKK modeli
-- test stratejisi
+- güvenlik ve gizlilik modeli
+- case memory ve document pipeline
+- source/search/reasoning/drafting mimarisi
+- UYAP ve notification sınırları
+- test, observability, risk ve release stratejisi
 - kabul matrisi
-- risk kaydı
 - backlog ve bağımlılık haritası
 
 Kapanış kapısı:
@@ -75,20 +83,23 @@ Kapanış kapısı:
 - kapsam içi/dışı maddelerin onaylanması
 - pilot senaryonun ölçülebilir kabul kriterlerinin yazılması
 - Flutter ve backend sorumluluk sınırlarının belirlenmesi
+- final consistency review tamamlanması
 
 ### P2.1 — Mobil uygulama kabuğu
 
 Kapsam:
 
-- Flutter proje başlangıcı
+- `/mobile` Flutter proje başlangıcı
+- development/staging/production flavor temeli
 - iOS-first tasarım sistemi
 - otomatik/açık/koyu tema
 - ana sohbet ekranı
 - dosya drawer'ı
 - alt mesaj oluşturucu
-- UYAP durum ikonu
+- UYAP durum ikonu ve mock bottom sheet
 - ayarlar ve görünüm menüsü
 - bağlantı, boş durum ve hata ekranları
+- mobil CI ve widget/golden test altyapısı
 
 Kapanış kapısı:
 
@@ -97,24 +108,25 @@ Kapanış kapısı:
 - tema geçişlerinin test edilmesi
 - erişilebilir etiketlerin bulunması
 - mock veriyle temel navigasyonun çalışması
+- iOS simulator build'in CI'da geçmesi
 
 ### P2.2 — Kimlik, oturum ve büro bağlamı
 
 Kapsam:
 
-- giriş/çıkış
+- e-posta/parola giriş ve doğrulama
 - access/refresh token yaşam döngüsü
 - güvenli cihaz depolaması
-- oturum yenileme
-- oturum iptali
-- kullanıcı ve büro seçimi
-- yetki hatalarının kullanıcıya açıklanması
+- oturum yenileme ve iptal
+- personal/office workspace seçimi
+- cihaz oturumları
+- Apple Sign In beta öncesi
 
 Kapanış kapısı:
 
 - token sızıntısı olmaması
 - süresi dolan oturumun kontrollü yenilenmesi
-- yetkisiz dosya erişiminin engellenmesi
+- yetkisiz workspace/dosya erişiminin engellenmesi
 
 ### P2.3 — Dosya ve konuşma
 
@@ -123,8 +135,9 @@ Kapsam:
 - dosya oluşturma, listeleme, arşivleme ve silme talebi
 - aktif dosya seçimi
 - konuşma ve mesaj kalıcılığı
-- mesaj durumları: gönderiliyor, gönderildi, işleniyor, tamamlandı, başarısız
+- mesaj durumları
 - tekrar deneme ve idempotency
+- sınırlı şifreli offline cache
 
 Kapanış kapısı:
 
@@ -147,14 +160,6 @@ Temel varlıklar:
 - Risk
 - Deadline
 - LegalIssue
-
-Her kayıt için:
-
-- kaynak türü ve kaynak kimliği
-- güven skoru
-- doğrulama statüsü
-- değişiklik geçmişi
-- oluşturan/değiştiren kullanıcı
 
 Kapanış kapısı:
 
@@ -199,22 +204,12 @@ Kaynaklar:
 - doğrulanmış ikincil kaynaklar
 - kontrollü doktrin
 
-Zorunlu metadata:
-
-- kurum/mahkeme/daire
-- esas ve karar numarası
-- karar/yayım/yürürlük tarihi
-- resmî URL
-- içerik hash'i
-- alınma zamanı
-- doğrulama ve güncellik durumu
-- önceki/sonraki sürüm ilişkisi
-
 Kapanış kapısı:
 
 - doğrulanmamış kaynağın doğrulanmış görünmemesi
-- tekrar kararların birleştirilmesi
+- tekrar kararların canonical key ile birleştirilmesi
 - kullanılan kaynağın dosya ve dilekçe bağlamında izlenmesi
+- citation'ın deterministic renderer ile üretilmesi
 
 ### P2.7 — Hibrit hukuk araması
 
@@ -274,7 +269,7 @@ Kapanış kapısı:
 - doğrulanmamış emsal numarası bulunmaması
 - sonuç/talep ile açıklamalar arasında tutarlılık kontrolü
 
-### P2.10 — UYAP Bridge
+### P2.10 — UYAP Bridge ve bildirimler
 
 İlk sürüm kapsamı:
 
@@ -285,6 +280,7 @@ Kapanış kapısı:
 - yeni hareket rozeti
 - hareket kartı
 - evrakı dosyaya bağlama
+- notification outbox ve güvenli push payload
 
 İlk sürüm kapsam dışı:
 
@@ -296,13 +292,14 @@ Kapanış kapısı:
 
 - UYAP parolası veya token'ının loglanmaması
 - entegrasyonun kapatılabilir olması
-- bağlantı durumunun renk dışında ikon/metinle de açıklanması
+- bağlantı durumunun renk dışında ikon/metinle açıklanması
+- bildirim payload'ında hassas içerik bulunmaması
 
 ### P2.11 — Beta ve App Store hazırlığı
 
 Kapsam:
 
-- kapalı avukat betası
+- 15 avukatlık kapalı beta
 - crash/performance takibi
 - gerçek dosya ve büyük belge testleri
 - gizlilik metinleri
@@ -315,6 +312,7 @@ Kapanış kapısı:
 - kaynak uydurma testlerinin geçmesi
 - veri silme ve hesap kapatma sürecinin doğrulanması
 - pilot dosya akışının uçtan uca tamamlanması
+- veri bölgesi/aktarım hukuk incelemesinin tamamlanması
 
 ## 6. Pilot: Ayıplı araç dosyası
 
@@ -371,27 +369,10 @@ Bir P2 PR'ı ancak aşağıdakiler tamamlandığında kapanabilir:
 - bilinen risk ve rollback yöntemi yazıldı
 - main CI tamamen yeşil
 
-## 9. P2.0 açık kararları
+## 9. P2.0 karar durumu
 
-Aşağıdaki kararlar P2.0 kapanmadan kesinleşmelidir:
-
-1. Flutter proje dizini ve monorepo yapısı
-2. iOS bundle identifier
-3. bireysel avukat ve büro hesabı modeli
-4. ilk kimlik doğrulama yöntemi
-5. Apple ile giriş kapsamı
-6. offline önbellek sınırı
-7. silme geri alma süresi
-8. belge maksimum boyutu
-9. UDF çözümleme yaklaşımı
-10. kaynak insan inceleme süreci
-11. bildirim altyapısı
-12. DOCX şablon sahipliği
-13. yapay zekâ sağlayıcı soyutlaması
-14. veri barındırma bölgesi
-15. beta kullanıcı sayısı ve çıkış kriterleri
-16. ücretlendirme kapsamı
+Kritik başlangıç kararları `P2_DECISION_REGISTER.md` içinde kabul edilmiştir. P2.1'e bırakılan state management, router, local encrypted database, crash analytics ve sağlayıcı seçimleri uygulama düzeyi ADR/spike konularıdır; P2.0 kapsam eksikliği değildir.
 
 ## 10. P2.0 kapanış çıktısı
 
-P2.0 PR'ı; bütün plan belgelerini, karar kaydını, kabul matrisini, risk kaydını ve uygulanabilir backlog'u içermelidir. Bu PR onaylanmadan ürün kodu geliştirmesi başlamaz.
+P2.0 paketi; bütün plan belgelerini, karar kaydını, kabul matrisini, risk kaydını, final consistency review ve uygulanabilir backlog'u içerir. PR onaylanıp merge edilmeden ürün kodu geliştirmesi başlamaz.
