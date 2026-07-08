@@ -1,0 +1,2 @@
+#include "../Release.xcconfig"
+PRODUCT_BUNDLE_IDENTIFIER = com.emsalist.app.dev

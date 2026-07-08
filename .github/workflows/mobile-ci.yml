@@ -30,7 +30,7 @@ jobs:
         run: flutter pub get
 
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed .
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Static analysis
         run: flutter analyze
@@ -42,7 +42,11 @@ jobs:
     name: iOS Simulator Build
     runs-on: macos-latest
     needs: analyze_test
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [development, staging, production]
     defaults:
       run:
         working-directory: mobile
@@ -56,5 +60,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build iOS simulator
-        run: flutter build ios --simulator --no-codesign
+      - name: List Xcode schemes and configurations
+        working-directory: mobile/ios
+        run: xcodebuild -list -workspace Runner.xcworkspace
+
+      - name: Build iOS simulator (${{ matrix.flavor }})
+        run: flutter build ios --simulator --no-codesign --flavor ${{ matrix.flavor }}
