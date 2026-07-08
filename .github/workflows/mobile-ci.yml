@@ -4,9 +4,11 @@ on:
   push:
     paths:
       - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
   pull_request:
     paths:
       - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
   workflow_dispatch:
 
 jobs:
@@ -28,7 +30,7 @@ jobs:
         run: flutter pub get
 
       - name: Check formatting
-        run: flutter format --set-exit-if-changed .
+        run: dart format --output=none --set-exit-if-changed .
 
       - name: Static analysis
         run: flutter analyze
@@ -44,7 +46,6 @@ jobs:
     defaults:
       run:
         working-directory: mobile
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -57,8 +58,3 @@ jobs:
 
       - name: Build iOS simulator
         run: flutter build ios --simulator --no-codesign
-
-      - name: Report iOS build status
-        if: failure()
-        run: |
-          echo "::warning::iOS simulator build failed — this may be due to missing macOS/Xcode environment or incomplete iOS project setup"
