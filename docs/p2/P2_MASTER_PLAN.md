@@ -110,7 +110,44 @@ Kapanış kapısı:
 - mock veriyle temel navigasyonun çalışması
 - iOS simulator build'in CI'da geçmesi
 
-### P2.2 — Kimlik, oturum ve büro bağlamı
+### P2.2 — Mobil API temeli, kimlik, oturum ve büro bağlamı
+
+P2.2 iki alt dilime ayrılır. P2.2A önce uygulanır ve P2.2B'yi etkinleştiren
+altyapıyı sağlar. Faz numaralandırması değişmez; her alt dilim ayrı PR ve ayrı
+kabul kapısına sahiptir.
+
+#### P2.2A — Mobil API temeli
+
+Kapsam:
+
+- flavor'a duyarlı API yapılandırması (development/staging/production)
+- ortam ve base URL için dart-define (`APP_ENVIRONMENT`, `API_BASE_URL`)
+- production-grade Dio API client (timeout, interceptor'lar)
+- `X-Correlation-ID` üretimi ve backend `correlation_id` okuma
+- merkezî, typed hata eşleme (backend error envelope → domain exception)
+- yalnız GET için dayanıklı retry politikası (max 2, sınırlı statü kümesi)
+- güvenli loglama (production'da gövde yok; hassas header'lar hiçbir ortamda loglanmaz)
+- DTO serialization (json_serializable) — yalnız seçili sistem endpoint'leri
+- repository katmanı; UI doğrudan HTTP çağırmaz
+- en az bir gerçek read-only endpoint entegrasyonu: `GET /api/v1/meta/version`, `GET /health`
+- Sistem Durumu UI (app bar overflow menüsünden; kalıcı badge yok)
+- yalnız development flavor için localhost cleartext yapılandırması
+
+Kapsam dışı (P2.2B'ye bırakılır):
+
+- kimlik/giriş, token yaşam döngüsü, güvenli depolama, workspace, oturumlar
+- case/message/UYAP mock akışlarının gerçek backend'e bağlanması
+- tam OpenAPI mobile client codegen
+
+Kapanış kapısı:
+
+- staging/production'da `API_BASE_URL` yoksa network çağrısı yapılmaz (fail-closed)
+- token/PII/hassas header hiçbir ortamda loglanmaz
+- yazma işlemleri otomatik retry edilmez
+- mevcut P2.1 mock akışları ve testleri bozulmaz
+- generated DTO drift'i CI'da yakalanır
+
+#### P2.2B — Kimlik, oturum ve büro bağlamı
 
 Kapsam:
 
@@ -342,7 +379,8 @@ Pilot başarı kriteri:
 
 - `chore/p2.0-planning-baseline`
 - `feat/p2.1-mobile-shell`
-- `feat/p2.2-auth-session`
+- `feat/p2.2-api-foundation` (P2.2A)
+- `feat/p2.2-auth-session` (P2.2B)
 - `feat/p2.3-case-chat`
 - `feat/p2.4-case-memory`
 - `feat/p2.5-document-pipeline`
