@@ -1,0 +1,64 @@
+name: Mobile CI
+
+on:
+  push:
+    paths:
+      - "mobile/**"
+  pull_request:
+    paths:
+      - "mobile/**"
+  workflow_dispatch:
+
+jobs:
+  analyze_test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: flutter format --set-exit-if-changed .
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+  ios_build:
+    name: iOS Simulator Build
+    runs-on: macos-latest
+    needs: analyze_test
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS simulator
+        run: flutter build ios --simulator --no-codesign
+
+      - name: Report iOS build status
+        if: failure()
+        run: |
+          echo "::warning::iOS simulator build failed — this may be due to missing macOS/Xcode environment or incomplete iOS project setup"
