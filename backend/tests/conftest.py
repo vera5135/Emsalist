@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 
 
 _TEST_CASE_STORE = tempfile.TemporaryDirectory(prefix="emsalist-pytest-cases-")
@@ -51,6 +52,17 @@ def _reset_registry_per_test():
     except Exception:
         pass
     yield
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_engine_per_test():
+    """Dispose engine after each test so fresh connections use current event loop."""
+    yield
+    try:
+        from app.db.session import dispose_engine
+        await dispose_engine()
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope="session")
