@@ -20,12 +20,15 @@ Bu backlog, P2'yi aşama ve bağımlılık bazında uygulanabilir iş paketlerin
 - [x] P0 User flows
 - [x] P0 Information architecture
 - [x] P0 Conversation design
+- [x] P0 Mobile architecture
 - [x] P0 Case memory model
 - [x] P0 Document pipeline
 - [x] P0 Trusted source backbone
 - [x] P0 Search architecture
+- [x] P0 Legal reasoning model
 - [x] P0 Grounded drafting
 - [x] P0 UYAP scope
+- [x] P0 Notification architecture
 - [x] P0 API contract
 - [x] P0 Data model
 - [x] P0 Security/privacy
@@ -33,9 +36,9 @@ Bu backlog, P2'yi aşama ve bağımlılık bazında uygulanabilir iş paketlerin
 - [x] P1 Observability
 - [x] P0 Risk register
 - [x] P1 Release strategy
-- [ ] P0 Final consistency review
-- [ ] P0 Resolve/accept remaining decisions
-- [ ] P0 Mark PR ready and merge
+- [x] P0 Final consistency review
+- [x] P0 Resolve/accept remaining decisions
+- [ ] P0 Merge PR and create `p2.0-planning-complete` tag
 
 ## 4. P2.1 — Mobile shell
 
