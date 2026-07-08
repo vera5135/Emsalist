@@ -29,6 +29,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Generate code
+        run: dart run build_runner build
+
+      - name: Verify no generated code drift
+        run: git diff --exit-code -- lib
+
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
@@ -65,4 +71,4 @@ jobs:
         run: xcodebuild -list -workspace Runner.xcworkspace
 
       - name: Build iOS simulator (${{ matrix.flavor }})
-        run: flutter build ios --simulator --no-codesign --flavor ${{ matrix.flavor }}
+        run: flutter build ios --simulator --no-codesign --flavor ${{ matrix.flavor }} --dart-define=APP_ENVIRONMENT=${{ matrix.flavor }}
