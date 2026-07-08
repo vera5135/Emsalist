@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/case_provider.dart';
 import '../../features/settings/appearance_screen.dart';
+import '../../features/system/system_status_sheet.dart';
 import '../../features/uyap/uyap_sheet.dart';
 import '../../features/uyap/uyap_status_icon.dart';
 
-enum AppBarMenuAction { summary, appearance, share }
+enum AppBarMenuAction { summary, appearance, systemStatus, share }
 
 class EmsalistAppBar extends ConsumerWidget implements PreferredSizeWidget {
   const EmsalistAppBar({super.key, this.title, this.subtitle, this.onSummary});
@@ -28,6 +29,14 @@ class EmsalistAppBar extends ConsumerWidget implements PreferredSizeWidget {
           context: context,
           showDragHandle: true,
           builder: (BuildContext ctx) => const AppearancePicker(),
+        );
+        break;
+      case AppBarMenuAction.systemStatus:
+        showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (BuildContext ctx) => const SystemStatusSheet(),
         );
         break;
       case AppBarMenuAction.share:
@@ -101,6 +110,14 @@ class EmsalistAppBar extends ConsumerWidget implements PreferredSizeWidget {
               child: ListTile(
                 leading: Icon(Icons.brightness_6_outlined),
                 title: Text('Görünüm'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            const PopupMenuItem<AppBarMenuAction>(
+              value: AppBarMenuAction.systemStatus,
+              child: ListTile(
+                leading: Icon(Icons.monitor_heart_outlined),
+                title: Text('Sistem Durumu'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
