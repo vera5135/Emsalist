@@ -155,7 +155,9 @@ jobs:
           async def clean():
               maker = get_sessionmaker()
               async with maker() as db:
-                  await db.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
+                  await db.execute(text("DROP SCHEMA public CASCADE"))
+                  await db.commit()
+                  await db.execute(text("CREATE SCHEMA public"))
                   await db.commit()
               await dispose_engine()
 
