@@ -1,6 +1,6 @@
 # Emsalist P2 Planlama Alanı
 
-Bu dizin, Emsalist P2 ürün ve mimari kararlarının tek referans alanıdır.
+Bu dizin, Emsalist P2 ürün, mimari, güvenlik ve kabul kararlarının tek referans alanıdır.
 
 ## P2 amacı
 
@@ -19,28 +19,65 @@ P2 sonunda Emsalist; iOS öncelikli, chat-first çalışan, her konuşmayı bir 
 9. iPhone birincil istemcidir; Android P2 beta sonrasına bırakılır.
 10. P2.0 aşamasında ürün kodu yazılmaz; kapsam, sözleşmeler ve kabul kriterleri kilitlenir.
 
-## Planlanan dokümanlar
+## Tamamlanan P2.0 belgeleri
 
-- `P2_MASTER_PLAN.md`: ürün hedefi, aşamalar, bağımlılıklar ve kapanış kapıları
-- `P2_DECISION_REGISTER.md`: kesinleşen ve açık ürün/mimari kararları
-- `P2_ACCEPTANCE_MATRIX.md`: her P2 aşaması için ölçülebilir kabul kriterleri
-- `P2_PRODUCT_SCOPE.md`: kapsam içi ve kapsam dışı maddeler
-- `P2_USER_FLOWS.md`: uçtan uca kullanıcı akışları
-- `P2_INFORMATION_ARCHITECTURE.md`: mobil bilgi mimarisi ve ekran haritası
-- `P2_CONVERSATION_DESIGN.md`: asistan davranışı ve mesaj/kart tipleri
-- `P2_CASE_MEMORY_MODEL.md`: yapılandırılmış dosya hafızası
-- `P2_DOCUMENT_PIPELINE.md`: belge yükleme, çıkarım ve doğrulama süreci
-- `P2_SOURCE_BACKBONE.md`: güvenilir hukuk kaynağı omurgası
-- `P2_SEARCH_ARCHITECTURE.md`: hibrit arama ve kalite ölçümü
-- `P2_GROUNDED_DRAFTING.md`: kaynak bağlantılı dilekçe üretimi
-- `P2_UYAP_BRIDGE.md`: UYAP kapsamı ve güvenlik sınırları
-- `P2_API_CONTRACT.md`: mobil-backend API sözleşmesi
-- `P2_DATA_MODEL.md`: veri modeli ve ilişki sınırları
-- `P2_SECURITY_PRIVACY.md`: KVKK, gizlilik ve erişim kontrolleri
-- `P2_TEST_STRATEGY.md`: backend, mobil, güvenlik ve benchmark testleri
-- `P2_RISK_REGISTER.md`: ürün, hukuk, veri, güvenlik ve operasyon riskleri
-- `P2_BACKLOG.md`: uygulanabilir iş paketleri ve bağımlılıkları
+### Ürün ve süreç
+
+- `P2_MASTER_PLAN.md`
+- `P2_PRODUCT_SCOPE.md`
+- `P2_DECISION_REGISTER.md`
+- `P2_ACCEPTANCE_MATRIX.md`
+- `P2_USER_FLOWS.md`
+- `P2_INFORMATION_ARCHITECTURE.md`
+- `P2_CONVERSATION_DESIGN.md`
+- `P2_BACKLOG.md`
+- `P2_RELEASE_STRATEGY.md`
+
+### Mobil ve API mimarisi
+
+- `P2_MOBILE_ARCHITECTURE.md`
+- `P2_API_CONTRACT.md`
+- `P2_DATA_MODEL.md`
+- `P2_NOTIFICATION_ARCHITECTURE.md`
+
+### Hukuk dosyası, belge ve kaynak
+
+- `P2_CASE_MEMORY_MODEL.md`
+- `P2_DOCUMENT_PIPELINE.md`
+- `P2_SOURCE_BACKBONE.md`
+- `P2_SEARCH_ARCHITECTURE.md`
+- `P2_LEGAL_REASONING_MODEL.md`
+- `P2_GROUNDED_DRAFTING.md`
+- `P2_UYAP_BRIDGE.md`
+
+### Güvenlik ve kalite
+
+- `P2_SECURITY_PRIVACY.md`
+- `P2_TEST_STRATEGY.md`
+- `P2_OBSERVABILITY.md`
+- `P2_RISK_REGISTER.md`
+
+## Kabul edilmiş temel kararlar
+
+- Flutter projesi monorepo içinde `/mobile`
+- Production bundle ID hedefi `com.emsalist.app`
+- Personal ve office workspace aynı tenant modelinde
+- E-posta/parola başlangıç; Apple Sign In beta öncesi
+- Şifreli sınırlı offline cache; belge bytes varsayılan olarak offline değil
+- 30 gün soft-delete ve legal hold koruması
+- İlk beta belge sınırı 25 MB
+- UDF yalnız backend sandbox parser
+- Notification outbox + APNs/FCM adapter
+- Provider-agnostic AI katmanı
+- 15 avukatlık ücretsiz kapalı beta
+- İlk pilot ayıplı araç/tüketici hukuku
 
 ## Geliştirme kapısı
 
-`chore/p2.0-planning-baseline` PR'ı onaylanmadan Flutter projesi, yeni mobil endpoint veya P2 veri tabanı migration'ı oluşturulmaz.
+P2.0 PR'ı merge edilmeden Flutter projesi, yeni mobil endpoint veya P2 migration'ı oluşturulmaz. P2.0 merge sonrasında ilk uygulama branch'i:
+
+```text
+feat/p2.1-mobile-shell
+```
+
+İlk gerçek geliştirme yalnız mobil shell, tema, navigasyon, chat composer, dosya drawer mock'u ve UYAP durum mock'u ile sınırlıdır.
