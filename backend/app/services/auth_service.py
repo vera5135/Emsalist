@@ -36,13 +36,13 @@ def get_security_context() -> SecurityContext:
 def set_security_context(ctx): global _security_context; _security_context = ctx
 
 # -- JWT --
-def create_access_token(user_id: str, tenant_id: str, role: str, session_id: str = "", token_version: int = 0) -> str:
+def create_access_token(user_id: str, tenant_id: str, role: str, session_id: str = "", token_version: int = 0, token_type_value: str = "access") -> str:
     now = datetime.now(UTC)
     return pyjwt.encode({
         "sub": user_id, "tenant_id": tenant_id, "role": role, "session_id": session_id,
         "token_version": token_version, "jti": uuid.uuid4().hex[:12], "iss": "emsalist",
         "aud": _get_audience(), "iat": now, "nbf": now,
-        "exp": now + timedelta(minutes=ACCESS_TOKEN_MINUTES), "token_type": "access",
+        "exp": now + timedelta(minutes=ACCESS_TOKEN_MINUTES), "token_type": token_type_value,
     }, _get_jwt_secret(), algorithm="HS256")
 
 def create_refresh_token(user_id: str, session_id: str, token_family_id: str) -> str:

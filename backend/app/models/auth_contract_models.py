@@ -18,18 +18,23 @@ class UserInfo(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
+    refresh_token: str | None = None
     token_type: str = Field(default="bearer")
-    expires_in: int = Field(default=1800, description="Seconds until token expiry")
+    expires_in: int = Field(default=1800, description="Seconds until access token expiry")
+    refresh_expires_in: int | None = Field(default=None, description="Seconds until refresh token expiry")
     user: UserInfo | None = None
 
 
-class TokenRefreshRequest(BaseModel):
+class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
 class TokenRefreshResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = Field(default="bearer")
+    expires_in: int = Field(default=1800, description="Seconds until access token expiry")
+    refresh_expires_in: int = Field(default=604800, description="Seconds until refresh token expiry")
 
 
 class MeResponse(BaseModel):

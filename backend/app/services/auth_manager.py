@@ -117,6 +117,24 @@ class AuthManager:
             await AuthAuditRepository.write_event(db, ctx.tenant_id, ctx.actor_id, "", "logout_all", "success")
             await db.commit()
 
+    async def change_password(self, ctx: SecurityContext, current_password: str, new_password: str) -> None:
+        from app.db.auth_repository import UserRepository, AuthSessionRepository, AuthAuditRepository
+        from app.db.session import get_sessionmaker
+        sm = get_sessionmaker()
+        async with sm() as db:
+            user = await UserRepository.get_by_id(db, ctx.tenant_id, ctx.actor_id)
+            if not user:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+            if not user.password_hash:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password not set")
+            if not verify_password(current_password, user.password_hash):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+            hashed = hash_password(new_password)
+            await UserRepository.update_password(db, user, hashed)
+            await AuthSessionRepository.revoke_user_sessions(db, ctx.actor_id)
+            await AuthAuditRepository.write_event(db, ctx.tenant_id, ctx.actor_id, "", "password_changed", "success")
+            await db.commit()
+
 
 auth_manager = AuthManager()
 
