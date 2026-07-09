@@ -50,6 +50,7 @@ from app.routes.precedent_routes import router as precedent_router
 from app.routes.grounding_routes import router as grounding_router
 from app.routes.security_routes import router as security_router
 from app.routes.auth_routes_new import router as auth_router
+from app.routes.auth_routes_new import apple_router as apple_auth_router
 from app.routes.lifecycle_routes import router as lifecycle_router
 from app.routes.ai_run_routes import router as ai_run_router
 from app.routes.yargitay_health_routes import router as yargitay_health_router
@@ -230,6 +231,7 @@ app.include_router(precedent_router, include_in_schema=False)
 app.include_router(grounding_router, include_in_schema=False)
 app.include_router(security_router, include_in_schema=False)
 app.include_router(auth_router, include_in_schema=False)
+app.include_router(apple_auth_router, include_in_schema=False)
 app.include_router(lifecycle_router, include_in_schema=False)
 app.include_router(ai_run_router, include_in_schema=False)
 app.include_router(yargitay_health_router, include_in_schema=False)
