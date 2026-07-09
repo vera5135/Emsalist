@@ -1,11 +1,13 @@
-"""P1.12 — Authentication contract models."""
+"""P1.12 / P2.2B2A — Authentication contract models."""
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    tenant_slug: str = Field(default="local", min_length=1)
+    tenant_slug: str | None = Field(default=None)
     email: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1)
 
@@ -52,3 +54,39 @@ class MessageResponse(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1)
     new_password: str = Field(min_length=8)
+
+
+class AppleLoginRequest(BaseModel):
+    authorization_code: str = Field(min_length=1)
+    raw_nonce: str = Field(min_length=1)
+
+
+class AppleAuthenticatedResponse(BaseModel):
+    state: Literal["authenticated"] = "authenticated"
+    access_token: str
+    refresh_token: str | None = None
+    token_type: str = Field(default="bearer")
+    expires_in: int = Field(default=1800)
+    refresh_expires_in: int | None = Field(default=604800)
+    user: UserInfo | None = None
+
+
+class AppleLinkRequiredResponse(BaseModel):
+    state: Literal["link_required"] = "link_required"
+    link_ticket: str
+    link_expires_in: int = Field(default=300)
+
+
+class AppleLinkRequest(BaseModel):
+    link_ticket: str = Field(min_length=1)
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1)
+
+
+class AppleStatusResponse(BaseModel):
+    linked: bool
+    provider: str
+
+
+class AppleUnlinkRequest(BaseModel):
+    current_password: str = Field(min_length=1)

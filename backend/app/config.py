@@ -64,6 +64,18 @@ class Settings(BaseModel):
     allowed_hosts: str = ""  # comma-separated production hostnames
     cors_allow_origins: str = ""  # comma-separated CORS origins for production
     max_upload_size_bytes: int = MAX_UPLOAD_SIZE_BYTES
+    apple_sign_in_enabled: bool = False
+    apple_client_id: str = ""
+    apple_team_id: str = ""
+    apple_key_id: str = ""
+    apple_private_key_path: str = ""
+    apple_subject_pepper: str = ""
+    apple_token_endpoint: str = "https://appleid.apple.com/auth/token"
+    apple_jwks_url: str = "https://appleid.apple.com/auth/keys"
+    apple_issuer: str = "https://appleid.apple.com"
+    apple_http_timeout_seconds: int = 5
+    apple_jwks_cache_seconds: int = 3600
+    apple_link_ticket_seconds: int = 300
 
 
 def validate_production_config(settings: Settings) -> list[str]:
@@ -121,6 +133,27 @@ def validate_production_config(settings: Settings) -> list[str]:
         if origin == "*" or (origin.startswith("*.") and len(origin) > 2):
             blocking.append("CORS_ALLOW_ORIGINS wildcard ('*') uretimde kullanilamaz")
             break
+
+    if settings.apple_sign_in_enabled:
+        missing = []
+        if not settings.apple_client_id:
+            missing.append("APPLE_CLIENT_ID")
+        if not settings.apple_team_id:
+            missing.append("APPLE_TEAM_ID")
+        if not settings.apple_key_id:
+            missing.append("APPLE_KEY_ID")
+        if not settings.apple_private_key_path:
+            missing.append("APPLE_PRIVATE_KEY_PATH")
+        if not settings.apple_subject_pepper:
+            missing.append("APPLE_SUBJECT_PEPPER")
+        elif len(settings.apple_subject_pepper) < 32:
+            issues.append("APPLE_SUBJECT_PEPPER productionda en az 32 karakter olmalidir")
+        if missing:
+            blocking.append(f"Apple Sign-In enabled fakat eksik: {', '.join(missing)}")
+        if settings.apple_private_key_path:
+            pk_path = Path(settings.apple_private_key_path)
+            if not pk_path.exists():
+                blocking.append(f"APPLE_PRIVATE_KEY_PATH bulunamadi: {settings.apple_private_key_path}")
 
     if blocking:
         raise ProductionConfigError(
@@ -197,6 +230,18 @@ def get_settings() -> Settings:
         allowed_hosts=_env("ALLOWED_HOSTS", ""),
         cors_allow_origins=_env("CORS_ALLOW_ORIGINS", ""),
         max_upload_size_bytes=int(getenv("EMSALIST_MAX_UPLOAD_SIZE", str(MAX_UPLOAD_SIZE_BYTES))),
+        apple_sign_in_enabled=getenv("APPLE_SIGN_IN_ENABLED", "false").lower() in {"1", "true", "yes"},
+        apple_client_id=getenv("APPLE_CLIENT_ID", ""),
+        apple_team_id=getenv("APPLE_TEAM_ID", ""),
+        apple_key_id=getenv("APPLE_KEY_ID", ""),
+        apple_private_key_path=getenv("APPLE_PRIVATE_KEY_PATH", ""),
+        apple_subject_pepper=getenv("APPLE_SUBJECT_PEPPER", ""),
+        apple_token_endpoint=getenv("APPLE_TOKEN_ENDPOINT", "https://appleid.apple.com/auth/token"),
+        apple_jwks_url=getenv("APPLE_JWKS_URL", "https://appleid.apple.com/auth/keys"),
+        apple_issuer=getenv("APPLE_ISSUER", "https://appleid.apple.com"),
+        apple_http_timeout_seconds=int(getenv("APPLE_HTTP_TIMEOUT_SECONDS", "5")),
+        apple_jwks_cache_seconds=int(getenv("APPLE_JWKS_CACHE_SECONDS", "3600")),
+        apple_link_ticket_seconds=int(getenv("APPLE_LINK_TICKET_SECONDS", "300")),
     )
 
     if _os.environ.get("EMSALIST_SKIP_PRODUCTION_VALIDATION", "").lower() not in ("1", "true", "yes"):
