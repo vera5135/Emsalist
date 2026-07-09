@@ -313,3 +313,49 @@ CI şunları doğrular:
 - Uzun işlemler job modeli kullanır.
 - Ortak hata modeli mobilde güvenli gösterilebilir.
 - OpenAPI sözleşmesi Flutter istemci üretimine uygundur.
+
+## 25. Mevcut backend davranışı (P2.2A gerçek durum)
+
+Bu bölüm, bu belgenin geri kalanının tanımladığı **hedef** sözleşmeden farklı
+olarak, P2.2A sırasında mobil istemcinin bağlandığı **gerçek** backend
+davranışını kaydeder. Kaynak: `backend/app` ve `docs/api/openapi-v1.json`.
+
+- Canonical base path: `/api/v1`. Legacy flat alias'lar (prefix'siz) mevcut ama
+  OpenAPI şemasına dahil değildir (`include_in_schema=false`).
+- Correlation header: istek ve yanıt `X-Correlation-ID` kullanır.
+- Hata zarfı gerçek alanı: `correlation_id` (bkz. aşağıdaki delta).
+- `request_id` yalnızca ileriye dönük uyumluluk için okunur (fallback); gerçek
+  backend şu an bunu döndürmez.
+- Varsayılan auth modu `local`'dir; bu modda token gerekmez. `jwt` modu
+  `Authorization: Bearer` ile HS256 kullanır (P2.2B kapsamı).
+- CORS yalnız `GET`, `POST`, `DELETE` metotlarına izin verir; izinli header'lar
+  `Content-Type`, `Authorization`, `X-Correlation-ID`. Native mobil istemcide
+  CORS uygulanmaz; bu not webview/tarayıcı akışları içindir.
+- P2.2A'nın entegre ettiği read-only endpoint'ler:
+  - `GET /api/v1/meta/version` → `{application, version, api_version, commit, build_timestamp, environment}`
+  - `GET /health` → `{status: healthy|unhealthy|degraded, service, checks, components}` (unhealthy'de HTTP 503)
+
+### 25.1 Hedef sözleşme ile mevcut backend farkları (delta)
+
+| Konu | Hedef sözleşme (bu belge) | Mevcut backend (P2.2A) |
+| --- | --- | --- |
+| Correlation header | `X-Request-ID` | `X-Correlation-ID` |
+| Hata alanı | `error.request_id`, `error.retryable`, `error.details` | `error.correlation_id` (retryable/details yok) |
+| Auth | her istek `Bearer` | varsayılan `local` (tokensiz), opsiyonel `jwt` |
+| Cases | `POST/GET /cases`, `GET /cases/{id}` | yok; `GET /case/current`, `GET /case/state?case_id=` var |
+| Pagination | cursor (`page.next_cursor`) | ilgili read-only endpoint'lerde yok |
+| Idempotency-Key / If-Match | zorunlu (yazma) | uygulanmıyor |
+| HTTP metotları | PATCH/PUT dahil | CORS yalnız GET/POST/DELETE |
+
+Mobil istemci P2.2A'da gerçek backend davranışına uyar: `X-Correlation-ID`
+gönderir, `correlation_id` okur, `request_id`'yi yalnız fallback olarak dener.
+Backend route veya davranışı P2.2A kapsamında değiştirilmez.
+
+### 25.2 OpenAPI mobile client codegen ertelemesi
+
+Tam backend OpenAPI'sinden mobile client codegen, canonical sözleşme (cases,
+pagination, idempotency, optimistic locking) stabilize olana kadar **bilinçli
+olarak ertelenmiştir**. P2.2A yalnız seçili sistem endpoint'leri için elle
+yazılmış DTO (json_serializable) kullanır ve bu endpoint'lerin varlığını
+`docs/api/openapi-v1.json` snapshot'ına karşı bir contract test ile doğrular.
+Tam codegen drift kapısı sonraki bir faza bırakılmıştır.
