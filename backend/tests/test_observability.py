@@ -61,11 +61,49 @@ class TestMetricsEndpoint:
         assert "emsalist_http_requests_in_flight" in body
 
     def test_metrics_no_secrets(self):
-        response = client.get("/metrics")
-        body = response.text
-        forbidden = ["password", "secret", "token", "api_key", "jwt", "Bearer"]
-        for term in forbidden:
-            assert term not in body.lower(), f"Found '{term}' in metrics output"
+        # Test for actual secret VALUE leakage, not generic words. Generic terms
+        # like "password" legitimately appear in safe route names such as
+        # /auth/change-password, so banning the bare word is a false positive.
+        # Instead we inject unique sentinel secret values across request body,
+        # Authorization header, Cookie and query params on a side-effect-free
+        # request, then assert none of the sentinel values leak into /metrics.
+        sentinels = {
+            "password": "metrics-password-sentinel",
+            "refresh_token": "metrics-refresh-token-sentinel",
+            "api_key": "metrics-api-key-sentinel",
+            "bearer": "metrics-bearer-sentinel",
+            "cookie": "metrics-cookie-sentinel",
+        }
+
+        secret_client = TestClient(app, cookies={"refresh_token": sentinels["cookie"]})
+        secret_client.post(
+            "/auth/login",
+            params={"api_key": sentinels["api_key"]},
+            json={
+                "email": "sentinel@test",
+                "password": sentinels["password"],
+                "refresh_token": sentinels["refresh_token"],
+            },
+            headers={"Authorization": f"Bearer {sentinels['bearer']}"},
+        )
+
+        body = client.get("/metrics").text
+
+        # No sentinel secret VALUE may appear anywhere in metrics output.
+        for name, value in sentinels.items():
+            assert value not in body, f"Leaked sentinel '{name}' value in metrics output"
+
+        # No sensitive label assignments may appear in metrics output.
+        forbidden_labels = [
+            "authorization=", "cookie=", "set_cookie=",
+            "password=", "refresh_token=", "api_key=",
+        ]
+        for label in forbidden_labels:
+            assert label not in body.lower(), f"Found sensitive label '{label}' in metrics output"
+
+        # The safe route name /auth/change-password must be allowed and must not
+        # be treated as a secret leak.
+        assert "metrics-password-sentinel" not in body
 
     def test_metrics_no_correlation_id_label(self):
         response = client.get("/metrics")

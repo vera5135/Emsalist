@@ -135,15 +135,62 @@ class AuthEndpointTests(unittest.TestCase):
     def setUpClass(cls): cls.client = TestClient(app)
     def test_login_local(self):
         r = self.client.post("/auth/login", json={"email":"t@t.com","password":"t"})
-        self.assertEqual(r.status_code, 200); self.assertIn("access_token", r.json())
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertIn("access_token", data)
+        self.assertIn("refresh_token", data)
+        self.assertIn("expires_in", data)
+        self.assertIn("refresh_expires_in", data)
+        self.assertIn("user", data)
+
+    def test_login_refresh_token_differs_from_access(self):
+        r = self.client.post("/auth/login", json={"email":"t@t.com","password":"t"})
+        data = r.json()
+        self.assertNotEqual(data["access_token"], data["refresh_token"])
+
     def test_me(self):
         r = self.client.get("/auth/me")
-        self.assertEqual(r.status_code, 200); self.assertIn("user_id", r.json())
-    def test_refresh(self):
-        r = self.client.post("/auth/refresh", json={"refresh_token":"t"})
         self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertIn("user_id", data)
+        self.assertIn("auth_mode", data)
+        self.assertIn("authenticated", data)
+
+    def test_refresh_with_body(self):
+        r = self.client.post("/auth/refresh", json={"refresh_token":"test-refresh-token"})
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertIn("access_token", data)
+        self.assertIn("refresh_token", data)
+        self.assertIn("expires_in", data)
+        self.assertIn("refresh_expires_in", data)
+
+    def test_refresh_missing_token(self):
+        r = self.client.post("/auth/refresh", json={})
+        self.assertEqual(r.status_code, 422)
+
     def test_logout(self):
         r = self.client.post("/auth/logout"); self.assertEqual(r.status_code, 200)
+
+    def test_logout_all(self):
+        r = self.client.post("/auth/logout-all"); self.assertEqual(r.status_code, 200)
+
+    def test_change_password_local(self):
+        r = self.client.post("/auth/change-password", json={"current_password":"old","new_password":"new-secure-8-chars"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Not available in local mode", r.json()["message"])
+
+    def test_token_expires_in_header(self):
+        r = self.client.post("/auth/login", json={"email":"t@t.com","password":"t"})
+        data = r.json()
+        self.assertEqual(data["expires_in"], 1800)
+        self.assertEqual(data["refresh_expires_in"], 604800)
+
+    def test_refresh_expires_in_header(self):
+        r = self.client.post("/auth/refresh", json={"refresh_token":"t"})
+        data = r.json()
+        self.assertEqual(data["expires_in"], 1800)
+        self.assertEqual(data["refresh_expires_in"], 604800)
 
 
 if __name__ == "__main__": unittest.main()

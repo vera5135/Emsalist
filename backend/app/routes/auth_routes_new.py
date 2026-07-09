@@ -1,30 +1,47 @@
 """P1.5.6 / P1.12 — DB-backed auth routes with contract response models."""
 from __future__ import annotations
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from app.services.auth_service import SecurityContext, resolve_current_user, get_auth_mode, create_access_token, get_security_context, ACCESS_TOKEN_MINUTES
+from fastapi import APIRouter, Depends, HTTPException, status
+from app.services.auth_service import (
+    SecurityContext, resolve_current_user, get_auth_mode, create_access_token,
+    get_security_context, ACCESS_TOKEN_MINUTES, REFRESH_TOKEN_DAYS,
+    check_login_rate, reset_login_rate,
+)
 from app.services.auth_manager import auth_manager, require_authenticated
 from app.models.auth_contract_models import (
     LoginRequest, LoginResponse, UserInfo,
-    TokenRefreshResponse, MeResponse, MessageResponse,
+    RefreshRequest, TokenRefreshResponse, MeResponse, MessageResponse,
     ChangePasswordRequest,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-SET_COOKIE = 'refresh_token={token}; HttpOnly; Path=/auth; Max-Age=604800; SameSite=Lax'
+REFRESH_TOKEN_SECONDS = REFRESH_TOKEN_DAYS * 86400
 
 
 @router.post("/login", response_model=LoginResponse, operation_id="auth_login")
-async def login(body: LoginRequest, response: Response) -> LoginResponse:
+async def login(body: LoginRequest) -> LoginResponse:
     if get_auth_mode() == "local":
         ctx = get_security_context()
+        at = create_access_token(ctx.actor_id, ctx.tenant_id, ctx.role)
+        rt = create_access_token(ctx.actor_id, ctx.tenant_id, ctx.role, token_type_value="refresh")
         return LoginResponse(
-            access_token=create_access_token(ctx.actor_id, ctx.tenant_id, ctx.role),
+            access_token=at,
+            refresh_token=rt,
             token_type="bearer",
             expires_in=ACCESS_TOKEN_MINUTES * 60,
+            refresh_expires_in=REFRESH_TOKEN_SECONDS,
             user=UserInfo(id=ctx.actor_id, tenant=ctx.tenant_id, role=ctx.role),
+        )
+    # In-memory rate limit check (per tenant+email)
+    rate_key = f"login:{body.tenant_slug}:{body.email.strip().casefold()}"
+    limited, retry_after = check_login_rate(rate_key)
+    if limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please wait before retrying.",
+            headers={"Retry-After": str(retry_after)},
         )
     try:
         result = await auth_manager.login(
@@ -32,11 +49,14 @@ async def login(body: LoginRequest, response: Response) -> LoginResponse:
             email=body.email,
             password=body.password,
         )
+        reset_login_rate(rate_key)
         user_data = result.get("user", {})
         return LoginResponse(
             access_token=result["access_token"],
+            refresh_token=result.get("refresh_token"),
             token_type=result.get("token_type", "bearer"),
             expires_in=ACCESS_TOKEN_MINUTES * 60,
+            refresh_expires_in=REFRESH_TOKEN_SECONDS,
             user=UserInfo(
                 id=user_data.get("id", ""),
                 tenant=user_data.get("tenant", ""),
@@ -48,21 +68,27 @@ async def login(body: LoginRequest, response: Response) -> LoginResponse:
 
 
 @router.post("/refresh", response_model=TokenRefreshResponse, operation_id="auth_refresh")
-async def refresh(request: Request) -> TokenRefreshResponse:
+async def refresh(body: RefreshRequest) -> TokenRefreshResponse:
     if get_auth_mode() == "local":
         ctx = get_security_context()
+        at = create_access_token(ctx.actor_id, ctx.tenant_id, ctx.role)
+        rt = create_access_token(ctx.actor_id, ctx.tenant_id, ctx.role, token_type_value="refresh")
         return TokenRefreshResponse(
-            access_token=create_access_token(ctx.actor_id, ctx.tenant_id, ctx.role),
+            access_token=at,
+            refresh_token=rt,
             token_type="bearer",
+            expires_in=ACCESS_TOKEN_MINUTES * 60,
+            refresh_expires_in=REFRESH_TOKEN_SECONDS,
         )
-    rt = request.cookies.get("refresh_token") or ""
-    if not rt:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Refresh token required")
+
     try:
-        result = await auth_manager.refresh(rt)
+        result = await auth_manager.refresh(body.refresh_token)
         return TokenRefreshResponse(
             access_token=result["access_token"],
+            refresh_token=result["refresh_token"],
             token_type=result.get("token_type", "bearer"),
+            expires_in=ACCESS_TOKEN_MINUTES * 60,
+            refresh_expires_in=REFRESH_TOKEN_SECONDS,
         )
     except HTTPException:
         raise
@@ -96,7 +122,11 @@ async def logout_all(ctx: SecurityContext = Depends(resolve_current_user)) -> Me
 
 
 @router.post("/change-password", response_model=MessageResponse, operation_id="auth_change_password")
-async def change_password(body: ChangePasswordRequest, ctx: SecurityContext = Depends(resolve_current_user)) -> MessageResponse:
+async def change_password(
+    body: ChangePasswordRequest,
+    ctx: SecurityContext = Depends(resolve_current_user),
+) -> MessageResponse:
     if get_auth_mode() == "local":
         return MessageResponse(message="Not available in local mode")
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+    await auth_manager.change_password(ctx, body.current_password, body.new_password)
+    return MessageResponse(message="Password changed successfully. All sessions have been revoked; please log in again.")
