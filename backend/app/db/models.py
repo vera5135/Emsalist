@@ -308,6 +308,44 @@ class AuthSession(Base):
     )
 
 
+# -- AuthIdentity (P2.2B2A) --
+class AuthIdentity(Base):
+    __tablename__ = "auth_identities"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False, default="apple")
+    provider_subject_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    provider_audience: Mapped[str] = mapped_column(String(255), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_audience", "provider_subject_hash", name="uq_auth_identity_provider_subject"),
+        UniqueConstraint("provider", "user_id", name="uq_auth_identity_provider_user"),
+        Index("ix_auth_identity_provider_lookup", "provider", "provider_audience", "provider_subject_hash"),
+        Index("ix_auth_identity_user", "user_id"),
+        Index("ix_auth_identity_tenant_user", "tenant_id", "user_id"),
+    )
+
+
+# -- AuthLinkTicket (P2.2B2A) --
+class AuthLinkTicket(Base):
+    __tablename__ = "auth_link_tickets"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    ticket_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False, default="apple")
+    provider_subject_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    provider_audience: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        Index("ix_auth_link_ticket_hash", "ticket_hash"),
+        Index("ix_auth_link_ticket_expires", "expires_at"),
+    )
+
+
 # -- Case Members (P1.5) --
 class CaseMember(Base):
     __tablename__ = "case_members"
