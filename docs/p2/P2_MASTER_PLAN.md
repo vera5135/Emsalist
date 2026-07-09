@@ -149,21 +149,61 @@ Kapanış kapısı:
 
 #### P2.2B — Kimlik, oturum ve büro bağlamı
 
+P2.2B iki alt dilime ayrılır. P2.2B1 backend auth contract stabilizasyonunu
+sağlar; P2.2B2 mobil auth, session ve workspace UI'ını getirir.
+
+##### P2.2B1 — Backend Auth Contract Stabilization
+
 Kapsam:
 
-- e-posta/parola giriş ve doğrulama
-- access/refresh token yaşam döngüsü
-- güvenli cihaz depolaması
-- oturum yenileme ve iptal
-- personal/office workspace seçimi
-- cihaz oturumları
-- Apple Sign In beta öncesi
+- User ORM model senkronizasyonu (password_hash, failed_login_count,
+  locked_until, token_version, last_login_at, password_changed_at)
+- Alembic migration (missing auth columns)
+- Login response'da refresh_token dönüşü (gerçek token, `refresh_expires_in`)
+- Refresh request body modeli (body'den okuma, cookie fallback)
+- Refresh rotation sonrası yeni refresh token dönüşü
+- Change-password implementasyonu (501 kaldır, token_version artır)
+- Login rate limiter bağlantısı
+- Production AUTH_MODE=jwt zorunluluğu
+- Auth enpoint'lerinde güvenli loglama (password/token redaction)
+- Backend auth testleri (unit, PostgreSQL integration, contract, migration)
+- OpenAPI snapshot güncellemesi
 
 Kapanış kapısı:
 
-- token sızıntısı olmaması
-- süresi dolan oturumun kontrollü yenilenmesi
-- yetkisiz workspace/dosya erişiminin engellenmesi
+- refresh token body'den okunur, cookie fallback uyumlu
+- eski refresh token reuse'u tüm token family'yi revoke eder
+- login rate limit ve account lock çalışır
+- change-password eski token'ları geçersiz kılar
+- production AUTH_MODE=jwt olmadan başlamaz
+- password/token hiçbir log'da görünmez
+
+##### P2.2B2 — Mobile Auth & Session
+
+Kapsam:
+
+- flutter_secure_storage ile token saklama (SharedPreferences kullanılmaz)
+- AuthInterceptor (Bearer token inject)
+- TokenRefreshInterceptor (single-flight 401 → refresh → retry)
+- AuthApi / AuthRepository / SessionRepository
+- AuthStateNotifier (Riverpod)
+- App startup session restore
+- GoRouter redirect guard (unauthorized → login)
+- Login screen (email + password)
+- Workspace selection screen
+- Session expired UI
+- Settings'te "Hesap" ekranı / logout
+- Mevcut 87 test korunur
+
+Kapanış kapısı:
+
+- token flutter_secure_storage'da saklanır, loglanmaz
+- 401 → single-flight refresh → retry, döngü oluşmaz
+- refresh başarısızsa atomik temizlik + login sayfası
+- UI doğrudan Dio / secure storage kullanmaz
+- mevcut mobile testleri korunur
+
+#### P2.2C — Case & Chat (formerly P2.3)
 
 ### P2.3 — Dosya ve konuşma
 
@@ -380,8 +420,9 @@ Pilot başarı kriteri:
 - `chore/p2.0-planning-baseline`
 - `feat/p2.1-mobile-shell`
 - `feat/p2.2-api-foundation` (P2.2A)
-- `feat/p2.2-auth-session` (P2.2B)
-- `feat/p2.3-case-chat`
+- `feat/p2.2-auth-backend` (P2.2B1)
+- `feat/p2.2-auth-session` (P2.2B2)
+- `feat/p2.2c-case-chat` (P2.2C)
 - `feat/p2.4-case-memory`
 - `feat/p2.5-document-pipeline`
 - `feat/p2.6-source-backbone`
