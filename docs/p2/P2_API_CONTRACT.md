@@ -327,6 +327,109 @@ davranışını kaydeder. Kaynak: `backend/app` ve `docs/api/openapi-v1.json`.
 - `request_id` yalnızca ileriye dönük uyumluluk için okunur (fallback); gerçek
   backend şu an bunu döndürmez.
 - Varsayılan auth modu `local`'dir; bu modda token gerekmez. `jwt` modu
+  `Authorization: Bearer` ile HS256 kullanır (P2.2B1 kapsamı).
+- CORS yalnız `GET`, `POST`, `DELETE` metotlarına izin verir; izinli header'lar
+  `Content-Type`, `Authorization`, `X-Correlation-ID`. Native mobil istemcide
+  CORS uygulanmaz; bu not webview/tarayıcı akışları içindir.
+- P2.2A'nın entegre ettiği read-only endpoint'ler:
+  - `GET /api/v1/meta/version` → `{application, version, api_version, commit, build_timestamp, environment}`
+  - `GET /health` → `{status: healthy|unhealthy|degraded, service, checks, components}` (unhealthy'de HTTP 503)
+
+### 25.1 Hedef sözleşme ile mevcut backend farkları (delta)
+
+| Konu | Hedef sözleşme (bu belge) | Mevcut backend (P2.2A) |
+| --- | --- | --- |
+| Correlation header | `X-Request-ID` | `X-Correlation-ID` |
+| Hata alanı | `error.request_id`, `error.retryable`, `error.details` | `error.correlation_id` (retryable/details yok) |
+| Auth | her istek `Bearer` | varsayılan `local` (tokensiz), opsiyonel `jwt` |
+| Cases | `POST/GET /cases`, `GET /cases/{id}` | yok; `GET /case/current`, `GET /case/state?case_id=` var |
+| Pagination | cursor (`page.next_cursor`) | ilgili read-only endpoint'lerde yok |
+| Idempotency-Key / If-Match | zorunlu (yazma) | uygulanmıyor |
+| HTTP metotları | PATCH/PUT dahil | CORS yalnız GET/POST/DELETE |
+
+## 26. P2.2B1 Auth contract stabilization
+
+P2.2B1, login/refresh/change-password auth endpoint'lerini stabilize eder ve
+aşağıdaki değişiklikleri getirir:
+
+### Login response (`POST /api/v1/auth/login`)
+
+`LoginResponse` artık aşağıdaki alanları içerir:
+
+```json
+{
+  "access_token": "<JWT>",
+  "refresh_token": "<64-char-hex>",
+  "token_type": "bearer",
+  "expires_in": 1800,
+  "refresh_expires_in": 604800,
+  "user": { "id": "...", "tenant": "...", "role": "..." }
+}
+```
+
+- `refresh_token` gerçek backend refresh token'dır (64 hex karakter).
+- `refresh_expires_in` 7 gün (604800 saniye) olarak döner.
+
+### Refresh request (`POST /api/v1/auth/refresh`)
+
+Artık JSON body kabul eder:
+
+```json
+{ "refresh_token": "<64-char-hex>" }
+```
+
+Response aynı modelde döner:
+
+```json
+{
+  "access_token": "<new-JWT>",
+  "refresh_token": "<new-64-char-hex>",
+  "token_type": "bearer",
+  "expires_in": 1800,
+  "refresh_expires_in": 604800
+}
+```
+
+- Her refresh yeni bir `refresh_token` döndürür (rotation).
+- Eski refresh token yeniden kullanılırsa tüm token family revoke edilir.
+
+### Change password (`POST /api/v1/auth/change-password`)
+
+Artık çalışır (HTTP 501 kaldırıldı). Token version'ı artırır ve tüm refresh
+session'ları revoke eder. İstemci yeniden login olmak zorundadır.
+
+### Rate limiting
+
+Login endpoint'ine in-memory rate limiter bağlanmıştır: `AUTH_MODE=jwt` modunda
+5 başarısız denemeden sonra 15 dakika bloke. DB-level locking de korunur.
+
+### Production safety
+
+Production ortamında `AUTH_MODE=local` ile başlatma engellenir (mevcut
+`validate_production_config` ile).
+
+### Auth edpoint listesi
+
+| Method | Path | Auth | Response model |
+|--------|------|------|----------------|
+| `POST` | `/api/v1/auth/login` | none | `LoginResponse` |
+| `POST` | `/api/v1/auth/refresh` | none (body token) | `TokenRefreshResponse` |
+| `GET` | `/api/v1/auth/me` | Bearer | `MeResponse` |
+| `POST` | `/api/v1/auth/logout` | Bearer | `MessageResponse` |
+| `POST` | `/api/v1/auth/logout-all` | Bearer | `MessageResponse` |
+| `POST` | `/api/v1/auth/change-password` | Bearer | `MessageResponse` |
+
+Bu bölüm, bu belgenin geri kalanının tanımladığı **hedef** sözleşmeden farklı
+olarak, P2.2A sırasında mobil istemcinin bağlandığı **gerçek** backend
+davranışını kaydeder. Kaynak: `backend/app` ve `docs/api/openapi-v1.json`.
+
+- Canonical base path: `/api/v1`. Legacy flat alias'lar (prefix'siz) mevcut ama
+  OpenAPI şemasına dahil değildir (`include_in_schema=false`).
+- Correlation header: istek ve yanıt `X-Correlation-ID` kullanır.
+- Hata zarfı gerçek alanı: `correlation_id` (bkz. aşağıdaki delta).
+- `request_id` yalnızca ileriye dönük uyumluluk için okunur (fallback); gerçek
+  backend şu an bunu döndürmez.
+- Varsayılan auth modu `local`'dir; bu modda token gerekmez. `jwt` modu
   `Authorization: Bearer` ile HS256 kullanır (P2.2B kapsamı).
 - CORS yalnız `GET`, `POST`, `DELETE` metotlarına izin verir; izinli header'lar
   `Content-Type`, `Authorization`, `X-Correlation-ID`. Native mobil istemcide
