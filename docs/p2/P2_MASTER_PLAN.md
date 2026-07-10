@@ -180,10 +180,14 @@ Kapanış kapısı:
 
 ##### P2.2B2 — Mobile Auth & Session
 
-P2.2B2 iki alt dilime ayrılır:
+P2.2B2 üç alt dilime ayrılır:
 
-- **P2.2B2A — Apple Auth Backend & Account Linking** (bu dilim, backend-only)
-- **P2.2B2B — Mobile Apple Sign-In & Secure Session** (mobil UI + secure storage)
+- **P2.2B2A — Apple Auth Backend & Account Linking** (backend-only)
+- **P2.2B2B-A — Mobile auth foundation & secure session** (mobil auth altyapısı,
+  secure storage, refresh rotation, router guard, login/link UI, Apple provider
+  soyutlaması)
+- **P2.2B2B-B — Native Apple Sign-In activation** (concrete native binding, iOS
+  capability ve gerçek Apple yapılandırması)
 
 ###### P2.2B2A — Apple Auth Backend & Account Linking
 
@@ -220,22 +224,34 @@ interceptor, Riverpod AuthStateNotifier, startup session restore, GoRouter auth
 redirect, giriş/ilk bağlama/oturum sona erdi/Hesap ekranları, iOS entitlement ve
 Xcode capability, gerçek Apple Developer yapılandırması, cihaz/TestFlight E2E.
 
-###### P2.2B2B — Mobile Apple Sign-In & Secure Session
+###### P2.2B2B-A — Mobile auth foundation & secure session
 
-Kapsam:
+Durum: 🔄 In review — PR #11 (`feat/p2.2-apple-auth-mobile`), draft'tan çıkarıldı.
+Bu dilim mobil auth altyapısını ve güvenli oturumu tamamlar; native Apple
+aktivasyonu **P2.2B2B-B** olarak ayrı izlenir. Production uygulamada Apple
+butonu, concrete native provider gelene kadar gizlidir; bu dilim P2.2B2B'nin
+tamamını kapatmaz.
 
-- flutter_secure_storage ile token saklama (SharedPreferences kullanılmaz)
-- AuthInterceptor (Bearer token inject)
-- TokenRefreshInterceptor (single-flight 401 → refresh → retry)
-- AuthApi / AuthRepository / SessionRepository
-- AuthStateNotifier (Riverpod)
+Tamamlanan kapsam:
+
+- Secure token storage (flutter_secure_storage / iOS Keychain; SharedPreferences
+  kullanılmaz)
 - App startup session restore
-- GoRouter redirect guard (unauthorized → login)
-- Login screen (Apple ile Devam Et + email/şifre yedek)
-- İlk hesap bağlama ekranı (email + mevcut şifre; büro kodu yok)
-- Session expired UI
-- Settings'te "Hesap" ekranı / logout / Apple bağlantısını kaldır
-- Mevcut mobile testleri korunur
+- Refresh-token rotation (yeni refresh token eski değerin yerine atomik yazılır)
+- Single-flight refresh (paralel 401'ler tek rotasyonda birleşir)
+- Authenticated request retry (401 → refresh → tek retry, döngü yok)
+- Refresh failure logout (başarısız refresh tüm oturumu temizler → login)
+- Auth state management (Riverpod `AuthController` / `StateNotifier`)
+- GoRouter auth guards (redirect + refreshListenable; splash/login/shell)
+- Email/password login akışı
+- Apple login/link DTO, repository ve state seam'leri (discriminated union:
+  authenticated / link_required)
+- Hesap bağlama (account link) UI (email + mevcut şifre; büro kodu yok)
+- Apple status/unlink UI ve repository desteği (parola doğrulamalı, idempotent)
+- Token redaction (token'lar loglanmaz; `AuthSession.toString` ve
+  Authorization header redaksiyonu)
+- Otomatik testler (session manager, refresh interceptor, repository, controller,
+  router guard, secure store, nonce, redaction) ve mevcut testlerin korunması
 
 Kapanış kapısı:
 
@@ -244,6 +260,34 @@ Kapanış kapısı:
 - refresh başarısızsa atomik temizlik + login sayfası
 - UI doğrudan Dio / secure storage kullanmaz
 - mevcut mobile testleri korunur
+- flutter analyze/test, dart format, build_runner drift ve iOS simulator build
+  yeşil
+
+###### P2.2B2B-B — Native Apple Sign-In activation
+
+Durum: ⏳ Not started — ayrı izlenen uygulama dilimi.
+
+Kalan kapsam:
+
+- `sign_in_with_apple` package entegrasyonu
+- Concrete `AppleCredentialProvider` implementasyonu (raw nonce → SHA-256 → Apple
+  credential)
+- Xcode Signing & Capabilities wiring (Sign in with Apple capability)
+- `Runner.pbxproj` entitlement ilişkilendirmesi
+  (`CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements`)
+- Apple Developer App ID capability (3 flavor App ID'si)
+- Bundle ID, Team ID ve Service ID/Key yapılandırması
+- Fiziksel cihazda Apple login
+- Cancelled / authorized / error native credential testleri
+- TestFlight uçtan uca doğrulama
+- Apple butonunun etkinleştirilmesi (provider available olduğunda görünür)
+
+Kapanış kapısı:
+
+- gerçek cihazda Apple ile giriş, ilk bağlama, oturum geri yükleme ve unlink
+  çalışır
+- native cancel/authorized/error yolları test edilir
+- Apple butonu production yapılandırmada etkinleşir
 
 #### P2.2C — Case & Chat (formerly P2.3)
 
@@ -464,7 +508,8 @@ Pilot başarı kriteri:
 - `feat/p2.2-api-foundation` (P2.2A)
 - `feat/p2.2-auth-backend` (P2.2B1)
 - `feat/p2.2-apple-auth-backend` (P2.2B2A)
-- `feat/p2.2-auth-session` (P2.2B2B)
+- `feat/p2.2-apple-auth-mobile` (P2.2B2B-A)
+- `feat/p2.2-apple-native` (P2.2B2B-B)
 - `feat/p2.2c-case-chat` (P2.2C)
 - `feat/p2.4-case-memory`
 - `feat/p2.5-document-pipeline`

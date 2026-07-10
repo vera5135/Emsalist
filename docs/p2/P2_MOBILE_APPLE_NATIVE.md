@@ -1,6 +1,7 @@
 # P2.2B2B — Mobile Apple Sign-In: iOS Native Configuration
 
-Status: **backend-facing flow + secure session implemented; native binding pending real Apple config.**
+Status: **P2.2B2B-A (mobile auth foundation & secure session) complete; native
+binding tracked separately as P2.2B2B-B and not yet implemented.**
 
 This document lists the native iOS setup required to enable the real
 "Sign in with Apple" flow. Until these are completed and real Apple developer
