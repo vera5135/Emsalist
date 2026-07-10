@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/state_widgets.dart';
@@ -31,7 +33,19 @@ class CaseChatScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.psychology_outlined),
+            tooltip: 'Dosya Hafızası',
+            onPressed: () => context.pushNamed(
+              AppRoutes.caseMemory,
+              pathParameters: <String, String>{'caseId': caseId},
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: <Widget>[
