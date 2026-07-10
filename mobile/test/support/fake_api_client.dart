@@ -12,12 +12,32 @@ class FakeApiClient implements ApiClient {
   final Map<String, Object> _getErrors = <String, Object>{};
   final Map<String, Object> _postErrors = <String, Object>{};
 
+  /// Path -> (query key -> response), matched before the plain path response.
+  final Map<String, Map<String, Object>> _getQueryResponses =
+      <String, Map<String, Object>>{};
+
   final List<String> getPaths = <String>[];
   final List<String> postPaths = <String>[];
   final List<Object?> postBodies = <Object?>[];
 
   void whenGet(String path, Map<String, dynamic> response) {
     _getResponses[path] = response;
+    _getErrors.remove(path);
+  }
+
+  /// Registers a response for a GET to [path] where the query parameter
+  /// [queryKey] equals [queryValue] (stringified). Takes precedence over
+  /// [whenGet].
+  void whenGetWithQuery(
+    String path,
+    String queryKey,
+    Object queryValue,
+    Map<String, dynamic> response,
+  ) {
+    _getQueryResponses.putIfAbsent(
+      path,
+      () => <String, Object>{},
+    )['$queryKey=$queryValue'] = response;
   }
 
   void whenGetError(String path, Object error) {
@@ -26,6 +46,7 @@ class FakeApiClient implements ApiClient {
 
   void whenPost(String path, Map<String, dynamic> response) {
     _postResponses[path] = response;
+    _postErrors.remove(path);
   }
 
   void whenPostError(String path, Object error) {
@@ -42,6 +63,15 @@ class FakeApiClient implements ApiClient {
     final Object? error = _getErrors[path];
     if (error != null) {
       throw error;
+    }
+    final Map<String, Object>? byQuery = _getQueryResponses[path];
+    if (byQuery != null && queryParameters != null) {
+      for (final MapEntry<String, dynamic> entry in queryParameters.entries) {
+        final Object? match = byQuery['${entry.key}=${entry.value}'];
+        if (match is T) {
+          return match;
+        }
+      }
     }
     final Object? value = _getResponses[path];
     if (value is T) {
