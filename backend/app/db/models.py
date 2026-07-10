@@ -668,3 +668,237 @@ class BackupLock(Base):
     acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# P2.4 — Structured Case Memory
+# ---------------------------------------------------------------------------
+class CaseFact(Base):
+    __tablename__ = "case_facts"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    fact_type: Mapped[str] = mapped_column(String(80), default="")
+    value: Mapped[str] = mapped_column(Text, default="")
+    normalized_value: Mapped[str] = mapped_column(String(1000), default="")
+    unit: Mapped[str] = mapped_column(String(40), default="")
+    source_type: Mapped[str] = mapped_column(String(40), default="user_message")
+    source_id: Mapped[str] = mapped_column(String(64), default="")
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    verification_status: Mapped[str] = mapped_column(String(30), default="suggested")
+    importance: Mapped[str] = mapped_column(String(20), default="medium")
+    supersedes_fact_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_case_facts_tenant_case", "tenant_id", "case_id"),
+        Index("ix_case_facts_case_type", "case_id", "fact_type"),
+    )
+
+
+class TimelineEvent(Base):
+    __tablename__ = "timeline_events"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(80), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    event_date: Mapped[str] = mapped_column(String(20), default="")
+    event_time: Mapped[str] = mapped_column(String(12), default="")
+    is_approximate: Mapped[bool] = mapped_column(Boolean, default=False)
+    party_reference: Mapped[str] = mapped_column(String(200), default="")
+    legal_significance: Mapped[str] = mapped_column(Text, default="")
+    source_type: Mapped[str] = mapped_column(String(40), default="user_message")
+    source_id: Mapped[str] = mapped_column(String(64), default="")
+    verification_status: Mapped[str] = mapped_column(String(30), default="suggested")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_timeline_tenant_case", "tenant_id", "case_id"),
+        Index("ix_timeline_case_date", "case_id", "event_date"),
+    )
+
+
+class MissingInformation(Base):
+    __tablename__ = "missing_information"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    field_key: Mapped[str] = mapped_column(String(80), default="")
+    label: Mapped[str] = mapped_column(String(200), default="")
+    reason_required: Mapped[str] = mapped_column(Text, default="")
+    importance: Mapped[str] = mapped_column(String(20), default="medium")
+    related_legal_issue: Mapped[str] = mapped_column(String(200), default="")
+    expected_source: Mapped[str] = mapped_column(String(40), default="")
+    completion_condition: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    resolved_by_fact_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(40), default="system_inference")
+    source_id: Mapped[str] = mapped_column(String(64), default="")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_missing_info_tenant_case", "tenant_id", "case_id"),
+        UniqueConstraint("case_id", "field_key", name="uq_missing_info_case_field"),
+    )
+
+
+class Contradiction(Base):
+    __tablename__ = "contradictions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    contradiction_type: Mapped[str] = mapped_column(String(40), default="")
+    subject_key: Mapped[str] = mapped_column(String(120), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    fact_ids: Mapped[list] = mapped_column(JSON, default=list)
+    severity: Mapped[str] = mapped_column(String(20), default="medium")
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    resolution_fact_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    resolution_note: Mapped[str] = mapped_column(Text, default="")
+    resolved_by: Mapped[str] = mapped_column(String(32), default="")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_contradictions_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+class Risk(Base):
+    __tablename__ = "risks"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    risk_type: Mapped[str] = mapped_column(String(40), default="procedure")
+    severity: Mapped[str] = mapped_column(String(20), default="low")
+    title: Mapped[str] = mapped_column(String(300), default="")
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    affected_claim: Mapped[str] = mapped_column(String(200), default="")
+    supporting_reference: Mapped[str] = mapped_column(String(200), default="")
+    mitigation: Mapped[str] = mapped_column(Text, default="")
+    related_missing_information: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    source_type: Mapped[str] = mapped_column(String(40), default="system_inference")
+    source_id: Mapped[str] = mapped_column(String(64), default="")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_risks_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+class Claim(Base):
+    __tablename__ = "claims"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    claim_type: Mapped[str] = mapped_column(String(40), default="")
+    title: Mapped[str] = mapped_column(String(300), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    requested_relief: Mapped[str] = mapped_column(Text, default="")
+    amount: Mapped[str] = mapped_column(String(40), default="")
+    currency: Mapped[str] = mapped_column(String(8), default="")
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    source_type: Mapped[str] = mapped_column(String(40), default="user_message")
+    source_id: Mapped[str] = mapped_column(String(64), default="")
+    verification_status: Mapped[str] = mapped_column(String(30), default="suggested")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_claims_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+class Defense(Base):
+    __tablename__ = "defenses"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    claim_type: Mapped[str] = mapped_column(String(40), default="")
+    title: Mapped[str] = mapped_column(String(300), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    responds_to_claim_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    source_type: Mapped[str] = mapped_column(String(40), default="user_message")
+    source_id: Mapped[str] = mapped_column(String(64), default="")
+    verification_status: Mapped[str] = mapped_column(String(30), default="suggested")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_defenses_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+class Evidence(Base):
+    __tablename__ = "evidence"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    evidence_type: Mapped[str] = mapped_column(String(40), default="")
+    title: Mapped[str] = mapped_column(String(300), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    document_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    supports_claim_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    supports_event_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reliability_status: Mapped[str] = mapped_column(String(20), default="unassessed")
+    admissibility_status: Mapped[str] = mapped_column(String(20), default="unassessed")
+    source_type: Mapped[str] = mapped_column(String(40), default="user_message")
+    source_id: Mapped[str] = mapped_column(String(64), default="")
+    verification_status: Mapped[str] = mapped_column(String(30), default="suggested")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_evidence_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+class Deadline(Base):
+    __tablename__ = "deadlines"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    deadline_type: Mapped[str] = mapped_column(String(40), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    trigger_event_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    trigger_date: Mapped[str] = mapped_column(String(20), default="")
+    due_at: Mapped[str] = mapped_column(String(20), default="")
+    assumptions: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="proposed")
+    source_type: Mapped[str] = mapped_column(String(40), default="system_inference")
+    source_id: Mapped[str] = mapped_column(String(64), default="")
+    verification_status: Mapped[str] = mapped_column(String(30), default="suggested")
+    confirmed_by: Mapped[str] = mapped_column(String(32), default="")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_deadlines_tenant_case", "tenant_id", "case_id"),
+    )
