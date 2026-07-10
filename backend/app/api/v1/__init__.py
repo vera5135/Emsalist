@@ -53,6 +53,8 @@ from app.routes.grounding_routes import router as _grounding_router
 from app.routes.ai_run_routes import router as _ai_run_router
 from app.routes.legal_issue_graph_routes import router as _legal_issue_graph_router
 from app.routes.security_routes import router as _security_router
+from app.routes.case_chat_routes import router as _case_chat_router
+from app.routes.case_chat_routes import conversation_router as _conversation_router
 
 api_v1_router.include_router(_case_router, include_in_schema=True)
 api_v1_router.include_router(_document_router, include_in_schema=True)
@@ -74,6 +76,8 @@ api_v1_router.include_router(_grounding_router, include_in_schema=True)
 api_v1_router.include_router(_ai_run_router, include_in_schema=True)
 api_v1_router.include_router(_legal_issue_graph_router, include_in_schema=True)
 api_v1_router.include_router(_security_router, include_in_schema=True)
+api_v1_router.include_router(_case_chat_router, include_in_schema=True)
+api_v1_router.include_router(_conversation_router, include_in_schema=True)
 
 
 @api_v1_router.get(
