@@ -180,7 +180,10 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  void _replaceByClientRequestId(String clientRequestId, ChatMessage replacement) {
+  void _replaceByClientRequestId(
+    String clientRequestId,
+    ChatMessage replacement,
+  ) {
     final List<ChatMessage> updated = state.messages
         .map(
           (ChatMessage m) =>

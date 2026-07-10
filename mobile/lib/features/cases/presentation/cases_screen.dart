@@ -55,7 +55,9 @@ class CasesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<CaseItem>> active = ref.watch(activeCasesProvider);
-    final AsyncValue<List<CaseItem>> archived = ref.watch(archivedCasesProvider);
+    final AsyncValue<List<CaseItem>> archived = ref.watch(
+      archivedCasesProvider,
+    );
 
     return Scaffold(
       appBar: AppBar(

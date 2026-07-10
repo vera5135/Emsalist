@@ -9,11 +9,10 @@ final Provider<CaseApi> caseApiProvider = Provider<CaseApi>((ref) {
   return CaseApi(ref.watch(authenticatedApiClientProvider));
 });
 
-final Provider<CaseRepository> caseRepositoryProvider = Provider<CaseRepository>(
-  (ref) {
-    return CaseRepository(ref.watch(caseApiProvider));
-  },
-);
+final Provider<CaseRepository> caseRepositoryProvider =
+    Provider<CaseRepository>((ref) {
+      return CaseRepository(ref.watch(caseApiProvider));
+    });
 
 /// Active (non-archived) cases.
 final FutureProvider<List<CaseItem>> activeCasesProvider =

@@ -21,23 +21,25 @@ class CaseApi {
     int offset = 0,
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> json = await _client.getJson<Map<String, dynamic>>(
-      casesPath,
-      queryParameters: <String, dynamic>{
-        'archived': archived,
-        'limit': limit,
-        'offset': offset,
-      },
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .getJson<Map<String, dynamic>>(
+          casesPath,
+          queryParameters: <String, dynamic>{
+            'archived': archived,
+            'limit': limit,
+            'offset': offset,
+          },
+          cancelToken: cancelToken,
+        );
     return CaseListDto.fromJson(json);
   }
 
   Future<CaseDto> getCase(String caseId, {Object? cancelToken}) async {
-    final Map<String, dynamic> json = await _client.getJson<Map<String, dynamic>>(
-      '$casesPath/$caseId',
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .getJson<Map<String, dynamic>>(
+          '$casesPath/$caseId',
+          cancelToken: cancelToken,
+        );
     return CaseDto.fromJson(json);
   }
 
@@ -47,15 +49,16 @@ class CaseApi {
     String initialNarrative = '',
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      casesPath,
-      body: <String, dynamic>{
-        'title': title,
-        'legal_topic': legalTopic,
-        'initial_narrative': initialNarrative,
-      },
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          casesPath,
+          body: <String, dynamic>{
+            'title': title,
+            'legal_topic': legalTopic,
+            'initial_narrative': initialNarrative,
+          },
+          cancelToken: cancelToken,
+        );
     return CaseDto.fromJson(json);
   }
 
@@ -68,27 +71,30 @@ class CaseApi {
     final Map<String, dynamic> body = <String, dynamic>{};
     if (title != null) body['title'] = title;
     if (legalTopic != null) body['legal_topic'] = legalTopic;
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      '$casesPath/$caseId',
-      body: body,
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          '$casesPath/$caseId',
+          body: body,
+          cancelToken: cancelToken,
+        );
     return CaseDto.fromJson(json);
   }
 
   Future<CaseDto> archiveCase(String caseId, {Object? cancelToken}) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      '$casesPath/$caseId/archive',
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          '$casesPath/$caseId/archive',
+          cancelToken: cancelToken,
+        );
     return CaseDto.fromJson(json);
   }
 
   Future<CaseDto> restoreCase(String caseId, {Object? cancelToken}) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      '$casesPath/$caseId/restore',
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          '$casesPath/$caseId/restore',
+          cancelToken: cancelToken,
+        );
     return CaseDto.fromJson(json);
   }
 
@@ -96,10 +102,11 @@ class CaseApi {
     String caseId, {
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      '$casesPath/$caseId/conversations',
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          '$casesPath/$caseId/conversations',
+          cancelToken: cancelToken,
+        );
     return ConversationDto.fromJson(json);
   }
 
@@ -109,11 +116,12 @@ class CaseApi {
     int offset = 0,
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> json = await _client.getJson<Map<String, dynamic>>(
-      '/api/v1/conversations/$conversationId/messages',
-      queryParameters: <String, dynamic>{'limit': limit, 'offset': offset},
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .getJson<Map<String, dynamic>>(
+          '/api/v1/conversations/$conversationId/messages',
+          queryParameters: <String, dynamic>{'limit': limit, 'offset': offset},
+          cancelToken: cancelToken,
+        );
     return MessageListDto.fromJson(json);
   }
 
@@ -123,14 +131,15 @@ class CaseApi {
     required String clientRequestId,
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      '/api/v1/conversations/$conversationId/messages',
-      body: <String, dynamic>{
-        'content': content,
-        'client_request_id': clientRequestId,
-      },
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          '/api/v1/conversations/$conversationId/messages',
+          body: <String, dynamic>{
+            'content': content,
+            'client_request_id': clientRequestId,
+          },
+          cancelToken: cancelToken,
+        );
     return MessageDto.fromJson(json);
   }
 }

@@ -34,7 +34,8 @@ class CaseDto {
   @JsonKey(name: 'archived_at')
   final String? archivedAt;
 
-  factory CaseDto.fromJson(Map<String, dynamic> json) => _$CaseDtoFromJson(json);
+  factory CaseDto.fromJson(Map<String, dynamic> json) =>
+      _$CaseDtoFromJson(json);
 }
 
 /// Mirrors backend `CaseListResponse`.
