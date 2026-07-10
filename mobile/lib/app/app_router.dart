@@ -6,6 +6,8 @@ import '../features/auth/application/auth_state.dart';
 import '../features/auth/presentation/account_screen.dart';
 import '../features/auth/presentation/auth_loading_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/cases/presentation/case_chat_screen.dart';
+import '../features/cases/presentation/cases_screen.dart';
 
 class AppRoutes {
   const AppRoutes._();
@@ -15,6 +17,7 @@ class AppRoutes {
   static const String account = 'account';
   static const String assistant = 'assistant';
   static const String cases = 'cases';
+  static const String caseChat = 'caseChat';
   static const String sources = 'sources';
   static const String drafts = 'drafts';
 
@@ -23,6 +26,7 @@ class AppRoutes {
   static const String accountPath = '/account';
   static const String assistantPath = '/assistant';
   static const String casesPath = '/cases';
+  static const String caseChatPath = '/cases/:caseId/chat';
   static const String sourcesPath = '/sources';
   static const String draftsPath = '/drafts';
 }
@@ -114,6 +118,13 @@ GoRouter createAppRouter({
         builder: (BuildContext context, GoRouterState state) =>
             const AccountScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.caseChatPath,
+        name: AppRoutes.caseChat,
+        builder: (BuildContext context, GoRouterState state) => CaseChatScreen(
+          caseId: state.pathParameters['caseId'] ?? '',
+        ),
+      ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) {
           return _ScaffoldWithNavBar(location: state.uri.path, child: child);
@@ -129,10 +140,7 @@ GoRouter createAppRouter({
             path: AppRoutes.casesPath,
             name: AppRoutes.cases,
             builder: (BuildContext context, GoRouterState state) =>
-                const _PlaceholderScreen(
-                  title: 'Dosyalar',
-                  icon: Icons.folder_outlined,
-                ),
+                const CasesScreen(),
           ),
           GoRoute(
             path: AppRoutes.sourcesPath,
