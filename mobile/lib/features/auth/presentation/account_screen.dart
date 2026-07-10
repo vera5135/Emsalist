@@ -133,9 +133,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     final ThemeData theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Hesap')),
-      body: SafeArea(
-        child: _buildBody(theme),
-      ),
+      body: SafeArea(child: _buildBody(theme)),
     );
   }
 

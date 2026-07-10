@@ -100,10 +100,7 @@ void main() {
         ),
       );
     await tester.pumpWidget(
-      _app(
-        client: client,
-        apple: FakeAppleCredentialProvider(available: true),
-      ),
+      _app(client: client, apple: FakeAppleCredentialProvider(available: true)),
     );
     await tester.pumpAndSettle();
 
@@ -126,10 +123,7 @@ void main() {
         'link_expires_in': 300,
       });
     await tester.pumpWidget(
-      _app(
-        client: client,
-        apple: FakeAppleCredentialProvider(available: true),
-      ),
+      _app(client: client, apple: FakeAppleCredentialProvider(available: true)),
     );
     await tester.pumpAndSettle();
 

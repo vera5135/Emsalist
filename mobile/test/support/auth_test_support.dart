@@ -33,8 +33,9 @@ class FakeSecureSessionStore implements SecureSessionStore {
     required String refreshToken,
   }) async {
     final AuthSession? existing = _session;
-    _session = (existing ?? const AuthSession(accessToken: '', refreshToken: ''))
-        .copyWith(accessToken: accessToken, refreshToken: refreshToken);
+    _session =
+        (existing ?? const AuthSession(accessToken: '', refreshToken: ''))
+            .copyWith(accessToken: accessToken, refreshToken: refreshToken);
     updateTokensCount++;
   }
 

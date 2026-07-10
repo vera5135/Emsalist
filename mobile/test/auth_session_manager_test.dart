@@ -96,11 +96,13 @@ void main() {
       );
       await manager.restore();
 
-      final List<String?> results = await Future.wait<String?>(<Future<String?>>[
-        manager.refresh(),
-        manager.refresh(),
-        manager.refresh(),
-      ]);
+      final List<String?> results = await Future.wait<String?>(
+        <Future<String?>>[
+          manager.refresh(),
+          manager.refresh(),
+          manager.refresh(),
+        ],
+      );
 
       expect(results, <String?>['new-access', 'new-access', 'new-access']);
       // Only one network rotation despite three concurrent callers.
@@ -126,31 +128,35 @@ void main() {
       expect(cleared, isTrue);
     });
 
-    test('refresh with a stale previous access token reuses fresh token',
-        () async {
-      final FakeSecureSessionStore store = FakeSecureSessionStore(kTestSession);
-      final _FakeRefresher refresher = _FakeRefresher(
-        result: const RefreshedTokens(
-          accessToken: 'rotated',
-          refreshToken: 'rotated-refresh',
-        ),
-      );
-      final SessionManager manager = SessionManager(
-        store: store,
-        refresher: refresher,
-      );
-      await manager.restore();
+    test(
+      'refresh with a stale previous access token reuses fresh token',
+      () async {
+        final FakeSecureSessionStore store = FakeSecureSessionStore(
+          kTestSession,
+        );
+        final _FakeRefresher refresher = _FakeRefresher(
+          result: const RefreshedTokens(
+            accessToken: 'rotated',
+            refreshToken: 'rotated-refresh',
+          ),
+        );
+        final SessionManager manager = SessionManager(
+          store: store,
+          refresher: refresher,
+        );
+        await manager.restore();
 
-      // First refresh rotates to 'rotated'.
-      await manager.refresh(previousAccessToken: 'test-access');
-      // A late caller still holding the original token must not rotate again.
-      final String? token = await manager.refresh(
-        previousAccessToken: 'test-access',
-      );
+        // First refresh rotates to 'rotated'.
+        await manager.refresh(previousAccessToken: 'test-access');
+        // A late caller still holding the original token must not rotate again.
+        final String? token = await manager.refresh(
+          previousAccessToken: 'test-access',
+        );
 
-      expect(token, 'rotated');
-      expect(refresher.calls, 1);
-    });
+        expect(token, 'rotated');
+        expect(refresher.calls, 1);
+      },
+    );
 
     test('clear removes session and is idempotent', () async {
       final FakeSecureSessionStore store = FakeSecureSessionStore(kTestSession);

@@ -21,12 +21,11 @@ final Provider<SecureSessionStore> secureSessionStoreProvider =
     Provider<SecureSessionStore>((ref) => const FlutterSecureSessionStore());
 
 /// Refresh-token rotation client (bare Dio, no auth interceptors).
-final Provider<TokenRefresher> tokenRefresherProvider = Provider<TokenRefresher>(
-  (ref) {
-    final ApiConfig config = ref.watch(apiConfigProvider);
-    return HttpTokenRefresher(config: config);
-  },
-);
+final Provider<TokenRefresher> tokenRefresherProvider =
+    Provider<TokenRefresher>((ref) {
+      final ApiConfig config = ref.watch(apiConfigProvider);
+      return HttpTokenRefresher(config: config);
+    });
 
 /// Native Apple credential provider seam. Defaults to unavailable until the
 /// native Sign in with Apple binding is wired in (see
@@ -40,17 +39,16 @@ final Provider<AppleCredentialProvider> appleCredentialProvider =
 ///
 /// Wires [SessionManager.onSessionCleared] to the [AuthController] so a failed
 /// refresh flips the app to unauthenticated.
-final Provider<SessionManager> sessionManagerProvider = Provider<SessionManager>(
-  (ref) {
-    return SessionManager(
-      store: ref.watch(secureSessionStoreProvider),
-      refresher: ref.watch(tokenRefresherProvider),
-      onSessionCleared: () {
-        ref.read(authControllerProvider.notifier).onSessionCleared();
-      },
-    );
-  },
-);
+final Provider<SessionManager> sessionManagerProvider =
+    Provider<SessionManager>((ref) {
+      return SessionManager(
+        store: ref.watch(secureSessionStoreProvider),
+        refresher: ref.watch(tokenRefresherProvider),
+        onSessionCleared: () {
+          ref.read(authControllerProvider.notifier).onSessionCleared();
+        },
+      );
+    });
 
 /// Authenticated API client with auth (Bearer inject) + refresh (401 rotate)
 /// interceptors installed.
@@ -72,14 +70,13 @@ final Provider<AuthApi> authApiProvider = Provider<AuthApi>((ref) {
   return AuthApi(ref.watch(authenticatedApiClientProvider));
 });
 
-final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>(
-  (ref) {
-    return AuthRepository(
-      api: ref.watch(authApiProvider),
-      appleCredentialProvider: ref.watch(appleCredentialProvider),
-    );
-  },
-);
+final Provider<AuthRepository> authRepositoryProvider =
+    Provider<AuthRepository>((ref) {
+      return AuthRepository(
+        api: ref.watch(authApiProvider),
+        appleCredentialProvider: ref.watch(appleCredentialProvider),
+      );
+    });
 
 /// App-wide authentication state.
 final StateNotifierProvider<AuthController, AuthState> authControllerProvider =

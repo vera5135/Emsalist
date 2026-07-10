@@ -7,7 +7,10 @@ import '../../../core/network/interceptors/safe_logging_interceptor.dart';
 
 /// Result of a successful refresh-token rotation.
 class RefreshedTokens {
-  const RefreshedTokens({required this.accessToken, required this.refreshToken});
+  const RefreshedTokens({
+    required this.accessToken,
+    required this.refreshToken,
+  });
 
   final String accessToken;
   final String refreshToken;

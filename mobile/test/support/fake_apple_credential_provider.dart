@@ -36,9 +36,6 @@ class FakeAppleCredentialProvider implements AppleCredentialProvider {
       throw error!;
     }
     return credential ??
-        AppleCredential(
-          authorizationCode: 'auth-code',
-          rawNonce: rawNonce,
-        );
+        AppleCredential(authorizationCode: 'auth-code', rawNonce: rawNonce);
   }
 }

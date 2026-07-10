@@ -34,10 +34,7 @@ class _SeqAdapter implements HttpClientAdapter {
       throw DioException(
         requestOptions: options,
         type: DioExceptionType.badResponse,
-        response: Response<dynamic>(
-          requestOptions: options,
-          statusCode: 401,
-        ),
+        response: Response<dynamic>(requestOptions: options, statusCode: 401),
       );
     }
     return ResponseBody.fromString(

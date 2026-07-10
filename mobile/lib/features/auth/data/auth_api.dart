@@ -27,11 +27,12 @@ class AuthApi {
     required String password,
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      loginPath,
-      body: <String, dynamic>{'email': email, 'password': password},
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          loginPath,
+          body: <String, dynamic>{'email': email, 'password': password},
+          cancelToken: cancelToken,
+        );
     return LoginResponseDto.fromJson(json);
   }
 
@@ -40,14 +41,15 @@ class AuthApi {
     required String rawNonce,
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      appleLoginPath,
-      body: <String, dynamic>{
-        'authorization_code': authorizationCode,
-        'raw_nonce': rawNonce,
-      },
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          appleLoginPath,
+          body: <String, dynamic>{
+            'authorization_code': authorizationCode,
+            'raw_nonce': rawNonce,
+          },
+          cancelToken: cancelToken,
+        );
     return AppleLoginResponseDto.fromJson(json);
   }
 
@@ -57,23 +59,25 @@ class AuthApi {
     required String password,
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      appleLinkPath,
-      body: <String, dynamic>{
-        'link_ticket': linkTicket,
-        'email': email,
-        'password': password,
-      },
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          appleLinkPath,
+          body: <String, dynamic>{
+            'link_ticket': linkTicket,
+            'email': email,
+            'password': password,
+          },
+          cancelToken: cancelToken,
+        );
     return LoginResponseDto.fromJson(json);
   }
 
   Future<AppleStatusDto> appleStatus({Object? cancelToken}) async {
-    final Map<String, dynamic> json = await _client.getJson<Map<String, dynamic>>(
-      appleStatusPath,
-      cancelToken: cancelToken,
-    );
+    final Map<String, dynamic> json = await _client
+        .getJson<Map<String, dynamic>>(
+          appleStatusPath,
+          cancelToken: cancelToken,
+        );
     return AppleStatusDto.fromJson(json);
   }
 

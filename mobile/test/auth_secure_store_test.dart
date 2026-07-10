@@ -79,11 +79,7 @@ void main() {
 
   test('updateTokens replaces only the token pair', () async {
     await store.save(
-      const AuthSession(
-        accessToken: 'acc',
-        refreshToken: 'ref',
-        userId: 'u1',
-      ),
+      const AuthSession(accessToken: 'acc', refreshToken: 'ref', userId: 'u1'),
     );
 
     await store.updateTokens(accessToken: 'acc2', refreshToken: 'ref2');

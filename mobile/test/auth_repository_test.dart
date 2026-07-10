@@ -113,29 +113,34 @@ void main() {
       expect(client.postPaths, isEmpty);
     });
 
-    test('binds raw nonce SHA-256 handoff (credential sees raw nonce)',
-        () async {
-      final FakeAppleCredentialProvider apple = FakeAppleCredentialProvider();
-      final FakeApiClient client = FakeApiClient()
-        ..whenPost(AuthApi.appleLoginPath, <String, dynamic>{
-          'state': 'authenticated',
-          'access_token': 'acc',
-          'refresh_token': 'ref',
-        });
-      final AuthRepository repo = AuthRepository(
-        api: AuthApi(client),
-        appleCredentialProvider: apple,
-      );
+    test(
+      'binds raw nonce SHA-256 handoff (credential sees raw nonce)',
+      () async {
+        final FakeAppleCredentialProvider apple = FakeAppleCredentialProvider();
+        final FakeApiClient client = FakeApiClient()
+          ..whenPost(AuthApi.appleLoginPath, <String, dynamic>{
+            'state': 'authenticated',
+            'access_token': 'acc',
+            'refresh_token': 'ref',
+          });
+        final AuthRepository repo = AuthRepository(
+          api: AuthApi(client),
+          appleCredentialProvider: apple,
+        );
 
-      await repo.signInWithApple();
+        await repo.signInWithApple();
 
-      expect(apple.lastRawNonce, isNotNull);
-      expect(apple.lastRawNonce!.length, greaterThanOrEqualTo(16));
-      // The raw nonce is forwarded to the backend for binding verification.
-      final Object? body = client.postBodies.first;
-      expect(body, isA<Map<String, dynamic>>());
-      expect((body! as Map<String, dynamic>)['raw_nonce'], apple.lastRawNonce);
-    });
+        expect(apple.lastRawNonce, isNotNull);
+        expect(apple.lastRawNonce!.length, greaterThanOrEqualTo(16));
+        // The raw nonce is forwarded to the backend for binding verification.
+        final Object? body = client.postBodies.first;
+        expect(body, isA<Map<String, dynamic>>());
+        expect(
+          (body! as Map<String, dynamic>)['raw_nonce'],
+          apple.lastRawNonce,
+        );
+      },
+    );
   });
 
   group('AuthRepository — account linking', () {
@@ -144,7 +149,11 @@ void main() {
         ..whenPost(AuthApi.appleLinkPath, <String, dynamic>{
           'access_token': 'acc',
           'refresh_token': 'ref',
-          'user': <String, dynamic>{'id': 'u1', 'tenant': 't1', 'role': 'lawyer'},
+          'user': <String, dynamic>{
+            'id': 'u1',
+            'tenant': 't1',
+            'role': 'lawyer',
+          },
         });
       final AuthRepository repo = AuthRepository(
         api: AuthApi(client),
@@ -206,9 +215,7 @@ void main() {
 
     test('unlink posts current password', () async {
       final FakeApiClient client = FakeApiClient()
-        ..whenPost(AuthApi.appleUnlinkPath, <String, dynamic>{
-          'message': 'ok',
-        });
+        ..whenPost(AuthApi.appleUnlinkPath, <String, dynamic>{'message': 'ok'});
       final AuthRepository repo = AuthRepository(
         api: AuthApi(client),
         appleCredentialProvider: FakeAppleCredentialProvider(),

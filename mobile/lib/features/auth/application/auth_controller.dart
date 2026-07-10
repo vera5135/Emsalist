@@ -110,9 +110,6 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> _establish(AuthSession session) async {
     await _sessionManager.establish(session);
-    state = state.copyWith(
-      status: AuthStatus.authenticated,
-      session: session,
-    );
+    state = state.copyWith(status: AuthStatus.authenticated, session: session);
   }
 }
