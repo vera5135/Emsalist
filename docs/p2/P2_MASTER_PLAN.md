@@ -226,11 +226,11 @@ Xcode capability, gerçek Apple Developer yapılandırması, cihaz/TestFlight E2
 
 ###### P2.2B2B-A — Mobile auth foundation & secure session
 
-Durum: 🔄 In review — PR #11 (`feat/p2.2-apple-auth-mobile`), draft'tan çıkarıldı.
-Bu dilim mobil auth altyapısını ve güvenli oturumu tamamlar; native Apple
-aktivasyonu **P2.2B2B-B** olarak ayrı izlenir. Production uygulamada Apple
-butonu, concrete native provider gelene kadar gizlidir; bu dilim P2.2B2B'nin
-tamamını kapatmaz.
+Durum: ✅ Completed — PR #11 (`feat/p2.2-apple-auth-mobile`) `main`'e merge edildi
+(merge commit `07da93f`). Bu dilim mobil auth altyapısını ve güvenli oturumu
+tamamlar; native Apple aktivasyonu **P2.2B2B-B** olarak ayrı izlenir. Production
+uygulamada Apple butonu, concrete native provider gelene kadar gizlidir; bu
+dilim P2.2B2B'nin tamamını kapatmaz.
 
 Tamamlanan kapsam:
 
