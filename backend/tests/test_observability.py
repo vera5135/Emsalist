@@ -264,6 +264,29 @@ class TestKeyRedaction:
         d = redact_dict({"jwt_secret": "key123"})
         assert d["jwt_secret"] == "***"
 
+    def test_apple_sensitive_keys_redacted(self):
+        # P2.2B2A — Apple auth secrets must never appear in logs/audit.
+        d = redact_dict({
+            "authorization_code": "c-abc123",
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.payload.sig",
+            "client_secret": "es256-secret",
+            "raw_nonce": "nonce-value",
+            "nonce": "nonce-value",
+            "link_ticket": "raw-ticket-value",
+            "provider_subject_hash": "hashvalue",
+            "apple_subject_pepper": "p" * 32,
+            "safe": "ok",
+        })
+        assert d["authorization_code"] == "***"
+        assert d["id_token"] == "***"
+        assert d["client_secret"] == "***"
+        assert d["raw_nonce"] == "***"
+        assert d["nonce"] == "***"
+        assert d["link_ticket"] == "***"
+        assert d["provider_subject_hash"] == "***"
+        assert d["apple_subject_pepper"] == "***"
+        assert d["safe"] == "ok"
+
 
 class TestNestedRedaction:
     def test_nested_dict(self):
