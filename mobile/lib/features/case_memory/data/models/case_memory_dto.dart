@@ -34,7 +34,8 @@ class FactDto {
 
   final int version;
 
-  factory FactDto.fromJson(Map<String, dynamic> json) => _$FactDtoFromJson(json);
+  factory FactDto.fromJson(Map<String, dynamic> json) =>
+      _$FactDtoFromJson(json);
 }
 
 @JsonSerializable(createToJson: false)
@@ -158,7 +159,8 @@ class RiskDto {
   final String mitigation;
   final String status;
 
-  factory RiskDto.fromJson(Map<String, dynamic> json) => _$RiskDtoFromJson(json);
+  factory RiskDto.fromJson(Map<String, dynamic> json) =>
+      _$RiskDtoFromJson(json);
 }
 
 @JsonSerializable(createToJson: false)

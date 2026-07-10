@@ -40,7 +40,8 @@ class CaseMemoryScreen extends ConsumerWidget {
           ),
         ),
         body: memory.when(
-          loading: () => const LoadingWidget(message: 'Dosya hafızası yükleniyor'),
+          loading: () =>
+              const LoadingWidget(message: 'Dosya hafızası yükleniyor'),
           error: (Object error, _) => AppErrorWidget(
             message: _messageFor(error),
             onRetry: () => ref.invalidate(caseMemoryProvider(caseId)),
@@ -132,10 +133,7 @@ class _VerificationBadge extends StatelessWidget {
       children: <Widget>[
         Icon(icon, size: 14, color: color),
         const SizedBox(width: AppConstants.spacingXs),
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(color: color),
-        ),
+        Text(label, style: theme.textTheme.labelSmall?.copyWith(color: color)),
       ],
     );
   }
@@ -190,8 +188,10 @@ class _SummaryTab extends StatelessWidget {
             padding: const EdgeInsets.all(AppConstants.spacingMd),
             child: Row(
               children: <Widget>[
-                Icon(Icons.shield_outlined,
-                    color: _riskColor(context, memory.overallRiskLevel)),
+                Icon(
+                  Icons.shield_outlined,
+                  color: _riskColor(context, memory.overallRiskLevel),
+                ),
                 const SizedBox(width: AppConstants.spacingSm),
                 Text('Genel Risk: ', style: theme.textTheme.titleMedium),
                 Text(
@@ -206,20 +206,24 @@ class _SummaryTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppConstants.spacingMd),
-        _CountRow(label: 'Doğrulanan bilgi',
-            value: memory.facts.where((MemoryFact f) => f.isConfirmed).length),
+        _CountRow(
+          label: 'Doğrulanan bilgi',
+          value: memory.facts.where((MemoryFact f) => f.isConfirmed).length,
+        ),
         _CountRow(label: 'Toplam bilgi', value: memory.facts.length),
         _CountRow(label: 'Kronoloji olayı', value: memory.timeline.length),
         _CountRow(
-            label: 'Açık eksik',
-            value: memory.missingInformation
-                .where((MemoryMissing m) => !m.isResolved)
-                .length),
+          label: 'Açık eksik',
+          value: memory.missingInformation
+              .where((MemoryMissing m) => !m.isResolved)
+              .length,
+        ),
         _CountRow(
-            label: 'Açık çelişki',
-            value: memory.contradictions
-                .where((MemoryContradiction c) => c.isOpen)
-                .length),
+          label: 'Açık çelişki',
+          value: memory.contradictions
+              .where((MemoryContradiction c) => c.isOpen)
+              .length,
+        ),
         _CountRow(label: 'Risk', value: memory.risks.length),
       ],
     );
@@ -296,8 +300,12 @@ class _FactsTimelineTab extends ConsumerWidget {
     if (value != null && value.trim().isNotEmpty) {
       await ref
           .read(caseMemoryRepositoryProvider)
-          .updateFactValue(caseId, fact.id,
-              version: fact.version, value: value.trim());
+          .updateFactValue(
+            caseId,
+            fact.id,
+            version: fact.version,
+            value: value.trim(),
+          );
       ref.invalidate(caseMemoryProvider(caseId));
     }
   }
@@ -346,11 +354,21 @@ class _FactsTimelineTab extends ConsumerWidget {
                       _edit(context, ref, f);
                   }
                 },
-                itemBuilder: (BuildContext ctx) => const <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(value: 'confirm', child: Text('Doğrula')),
-                  PopupMenuItem<String>(value: 'reject', child: Text('Reddet')),
-                  PopupMenuItem<String>(value: 'edit', child: Text('Düzenle')),
-                ],
+                itemBuilder: (BuildContext ctx) =>
+                    const <PopupMenuEntry<String>>[
+                      PopupMenuItem<String>(
+                        value: 'confirm',
+                        child: Text('Doğrula'),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'reject',
+                        child: Text('Reddet'),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'edit',
+                        child: Text('Düzenle'),
+                      ),
+                    ],
               ),
             ),
           ),
@@ -384,15 +402,21 @@ class _MissingTab extends ConsumerWidget {
   final String caseId;
   final CaseMemory memory;
 
-  Future<void> _complete(BuildContext context, WidgetRef ref, String itemId) async {
+  Future<void> _complete(
+    BuildContext context,
+    WidgetRef ref,
+    String itemId,
+  ) async {
     try {
-      await ref.read(caseMemoryRepositoryProvider).resolveMissing(caseId, itemId);
+      await ref
+          .read(caseMemoryRepositoryProvider)
+          .resolveMissing(caseId, itemId);
       ref.invalidate(caseMemoryProvider(caseId));
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -474,7 +498,9 @@ class _ContradictionsTab extends ConsumerWidget {
       ),
     );
     if (chosen != null) {
-      await ref.read(caseMemoryRepositoryProvider).resolveContradiction(
+      await ref
+          .read(caseMemoryRepositoryProvider)
+          .resolveContradiction(
             caseId,
             contradiction.id,
             resolutionFactId: chosen,
@@ -497,8 +523,10 @@ class _ContradictionsTab extends ConsumerWidget {
       children: memory.contradictions.map((MemoryContradiction c) {
         return Card(
           child: ListTile(
-            leading: Icon(Icons.warning_amber_outlined,
-                color: _riskColor(context, c.severity)),
+            leading: Icon(
+              Icons.warning_amber_outlined,
+              color: _riskColor(context, c.severity),
+            ),
             title: Text(c.description),
             subtitle: Text(c.isOpen ? 'Açık' : 'Çözüldü'),
             trailing: c.isOpen
@@ -534,7 +562,10 @@ class _RisksTab extends StatelessWidget {
       children: memory.risks.map((MemoryRisk r) {
         return Card(
           child: ListTile(
-            leading: Icon(Icons.report_outlined, color: _riskColor(context, r.severity)),
+            leading: Icon(
+              Icons.report_outlined,
+              color: _riskColor(context, r.severity),
+            ),
             title: Text(r.title),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

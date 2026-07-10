@@ -33,8 +33,12 @@ class CaseMemory {
       overallRiskLevel: dto.overallRiskLevel,
       facts: dto.facts.map(MemoryFact.fromDto).toList(),
       timeline: dto.timeline.map(MemoryEvent.fromDto).toList(),
-      missingInformation: dto.missingInformation.map(MemoryMissing.fromDto).toList(),
-      contradictions: dto.contradictions.map(MemoryContradiction.fromDto).toList(),
+      missingInformation: dto.missingInformation
+          .map(MemoryMissing.fromDto)
+          .toList(),
+      contradictions: dto.contradictions
+          .map(MemoryContradiction.fromDto)
+          .toList(),
       risks: dto.risks.map(MemoryRisk.fromDto).toList(),
     );
   }
@@ -122,11 +126,8 @@ class MemoryMissing {
   final String importance;
   final String status;
 
-  bool get isResolved => const <String>{
-    'supplied',
-    'verified',
-    'waived',
-  }.contains(status);
+  bool get isResolved =>
+      const <String>{'supplied', 'verified', 'waived'}.contains(status);
 
   factory MemoryMissing.fromDto(MissingInfoDto dto) => MemoryMissing(
     id: dto.id,
@@ -156,14 +157,15 @@ class MemoryContradiction {
 
   bool get isOpen => status == 'open';
 
-  factory MemoryContradiction.fromDto(ContradictionDto dto) => MemoryContradiction(
-    id: dto.id,
-    contradictionType: dto.contradictionType,
-    description: dto.description,
-    factIds: dto.factIds,
-    severity: dto.severity,
-    status: dto.status,
-  );
+  factory MemoryContradiction.fromDto(ContradictionDto dto) =>
+      MemoryContradiction(
+        id: dto.id,
+        contradictionType: dto.contradictionType,
+        description: dto.description,
+        factIds: dto.factIds,
+        severity: dto.severity,
+        status: dto.status,
+      );
 }
 
 class MemoryRisk {

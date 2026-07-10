@@ -124,16 +124,14 @@ GoRouter createAppRouter({
       GoRoute(
         path: AppRoutes.caseChatPath,
         name: AppRoutes.caseChat,
-        builder: (BuildContext context, GoRouterState state) => CaseChatScreen(
-          caseId: state.pathParameters['caseId'] ?? '',
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            CaseChatScreen(caseId: state.pathParameters['caseId'] ?? ''),
       ),
       GoRoute(
         path: AppRoutes.caseMemoryPath,
         name: AppRoutes.caseMemory,
-        builder: (BuildContext context, GoRouterState state) => CaseMemoryScreen(
-          caseId: state.pathParameters['caseId'] ?? '',
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            CaseMemoryScreen(caseId: state.pathParameters['caseId'] ?? ''),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) {
