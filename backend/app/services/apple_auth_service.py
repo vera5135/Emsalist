@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import threading
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -54,6 +55,7 @@ def hash_apple_subject(audience: str, subject: str) -> str:
 # ---------------------------------------------------------------------------
 
 _client_secret_cache: tuple[str, str, float] | None = None
+_client_secret_lock = threading.Lock()
 
 
 def _load_private_key() -> bytes:
@@ -77,31 +79,32 @@ def generate_client_secret() -> str:
     settings = get_settings()
     now = int(time.time())
 
-    if _client_secret_cache:
-        cached_secret, _, cached_at = _client_secret_cache
-        if now - cached_at < 120:
-            return cached_secret
+    with _client_secret_lock:
+        if _client_secret_cache:
+            cached_secret, _, cached_at = _client_secret_cache
+            if now - cached_at < 120:
+                return cached_secret
 
-    private_key_bytes = _load_private_key()
-    private_key = serialization.load_pem_private_key(
-        private_key_bytes, password=None, backend=default_backend()
-    )
+        private_key_bytes = _load_private_key()
+        private_key = serialization.load_pem_private_key(
+            private_key_bytes, password=None, backend=default_backend()
+        )
 
-    exp = now + 300  # 5 minutes max, per Apple recommendation
-    payload = {
-        "iss": settings.apple_team_id,
-        "sub": settings.apple_client_id,
-        "aud": "https://appleid.apple.com",
-        "iat": now,
-        "exp": exp,
-    }
-    headers = {
-        "kid": settings.apple_key_id,
-        "alg": "ES256",
-    }
-    token = pyjwt.encode(payload, private_key, algorithm="ES256", headers=headers)
-    _client_secret_cache = (token, "", now)
-    return token
+        exp = now + 300  # 5 minutes max, per Apple recommendation
+        payload = {
+            "iss": settings.apple_team_id,
+            "sub": settings.apple_client_id,
+            "aud": "https://appleid.apple.com",
+            "iat": now,
+            "exp": exp,
+        }
+        headers = {
+            "kid": settings.apple_key_id,
+            "alg": "ES256",
+        }
+        token = pyjwt.encode(payload, private_key, algorithm="ES256", headers=headers)
+        _client_secret_cache = (token, "", now)
+        return token
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +177,7 @@ def _safe_log_apple_error(response: httpx.Response) -> None:
 # ---------------------------------------------------------------------------
 
 _jwks_cache: tuple[dict, float] | None = None
+_jwks_lock = threading.Lock()
 
 
 def _get_jwks() -> dict:
@@ -182,40 +186,42 @@ def _get_jwks() -> dict:
     settings = get_settings()
     now = time.time()
 
-    if _jwks_cache:
-        keys, cached_at = _jwks_cache
-        if now - cached_at < settings.apple_jwks_cache_seconds:
-            return keys
-
-    try:
-        with httpx.Client(timeout=settings.apple_http_timeout_seconds) as client:
-            response = client.get(settings.apple_jwks_url)
-        response.raise_for_status()
-        jwks = response.json()
-    except Exception:
+    with _jwks_lock:
         if _jwks_cache:
-            return _jwks_cache[0]
-        raise AppleAuthError("apple_authorization_failed", "Cannot fetch Apple signing keys")
+            keys, cached_at = _jwks_cache
+            if now - cached_at < settings.apple_jwks_cache_seconds:
+                return keys
 
-    _jwks_cache = (jwks, now)
-    return jwks
+        try:
+            with httpx.Client(timeout=settings.apple_http_timeout_seconds) as client:
+                response = client.get(settings.apple_jwks_url)
+            response.raise_for_status()
+            jwks = response.json()
+        except Exception:
+            if _jwks_cache:
+                return _jwks_cache[0]
+            raise AppleAuthError("apple_authorization_failed", "Cannot fetch Apple signing keys")
+
+        _jwks_cache = (jwks, now)
+        return jwks
 
 
 def _refresh_jwks_cache() -> dict:
     """Force-refresh the JWKS cache (used when kid not found)."""
     global _jwks_cache
     settings = get_settings()
-    try:
-        with httpx.Client(timeout=settings.apple_http_timeout_seconds) as client:
-            response = client.get(settings.apple_jwks_url)
-        response.raise_for_status()
-        jwks = response.json()
-    except Exception:
-        if _jwks_cache:
-            return _jwks_cache[0]
-        raise AppleAuthError("apple_authorization_failed", "Cannot refresh Apple signing keys")
-    _jwks_cache = (jwks, time.time())
-    return jwks
+    with _jwks_lock:
+        try:
+            with httpx.Client(timeout=settings.apple_http_timeout_seconds) as client:
+                response = client.get(settings.apple_jwks_url)
+            response.raise_for_status()
+            jwks = response.json()
+        except Exception:
+            if _jwks_cache:
+                return _jwks_cache[0]
+            raise AppleAuthError("apple_authorization_failed", "Cannot refresh Apple signing keys")
+        _jwks_cache = (jwks, time.time())
+        return jwks
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,18 @@ _bearer = HTTPBearer(auto_error=False)
 GENERIC_INVALID = "Giriş bilgileri doğrulanamadı."
 
 
+def _as_aware_utc(value: datetime) -> datetime:
+    """Coerce a possibly naive datetime to timezone-aware UTC.
+
+    PostgreSQL returns timezone-aware datetimes for ``DateTime(timezone=True)``
+    columns, but SQLite (used in tests) returns naive values.  Normalising here
+    keeps expiry comparisons correct on both backends.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value
+
+
 # -- Auth session manager (DB-backed) --
 class AuthManager:
     def __init__(self):
@@ -129,7 +141,7 @@ class AuthManager:
         async with sm() as db:
             refresh_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
             auth_session = await AuthSessionRepository.get_by_refresh_hash(db, refresh_hash)
-            if not auth_session or auth_session.expires_at < datetime.now(UTC):
+            if not auth_session or _as_aware_utc(auth_session.expires_at) < datetime.now(UTC):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
             if auth_session.revoked_at:
@@ -292,7 +304,7 @@ class AuthManager:
             if not ticket:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                                     detail="Invalid link ticket")
-            if ticket.expires_at < datetime.now(UTC):
+            if _as_aware_utc(ticket.expires_at) < datetime.now(UTC):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                                     detail="Link ticket expired")
             if ticket.consumed_at:
@@ -356,7 +368,11 @@ class AuthManager:
                 db, ticket.provider, ticket.provider_subject_hash,
                 ticket.provider_audience, canonical_tenant_id, user.id,
             )
-            await AuthLinkTicketRepository.consume(db, ticket)
+            consumed = await AuthLinkTicketRepository.consume(db, ticket)
+            if not consumed:
+                await db.rollback()
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                    detail="Link ticket already used")
 
             result = await self._issue_session_for_user(
                 db, user, canonical_tenant_id, "apple", ip_hash, user_agent_hash,

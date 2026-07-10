@@ -258,6 +258,22 @@ class AuthLinkTicketRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def consume(session: AsyncSession, ticket: AuthLinkTicket) -> None:
-        ticket.consumed_at = datetime.now(UTC)
+    async def consume(session: AsyncSession, ticket: AuthLinkTicket) -> bool:
+        """Atomically mark a ticket consumed.
+
+        Uses a conditional UPDATE guarded on ``consumed_at IS NULL`` so that
+        two concurrent link requests race on the database row and only one
+        observes ``rowcount == 1``.  Returns True if this caller consumed the
+        ticket, False if it had already been consumed.
+        """
+        now = datetime.now(UTC)
+        result = await session.execute(
+            update(AuthLinkTicket)
+            .where(AuthLinkTicket.id == ticket.id, AuthLinkTicket.consumed_at.is_(None))
+            .values(consumed_at=now)
+        )
         await session.flush()
+        consumed = getattr(result, "rowcount", 0) == 1
+        if consumed:
+            ticket.consumed_at = now
+        return consumed
