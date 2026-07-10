@@ -293,6 +293,11 @@ Kapanış kapısı:
 
 ### P2.3 — Dosya ve konuşma
 
+Durum: ✅ Completed — PR #12 `main`'e merge edildi (merge commit `eed3cd2`).
+Backend case CRUD + arşiv/geri yükleme + soft delete ve conversation/message
+kalıcılığı (idempotent mesaj, tenant/owner izolasyonu, IDOR koruması) ile mobil
+dosya listesi ve dosya-bazlı sohbet ekranları tamamlandı.
+
 Kapsam:
 
 - dosya oluşturma, listeleme, arşivleme ve silme talebi
