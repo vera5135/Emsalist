@@ -187,6 +187,8 @@ P2.2B2 iki alt dilime ayrılır:
 
 ###### P2.2B2A — Apple Auth Backend & Account Linking
 
+Durum: ✅ Completed — PR #10 `main`'e merge edildi (merge commit `87e07ed`).
+
 Kapsam (yalnız backend):
 
 - Ürün kararı: kullanıcıdan **büro kodu / tenant / tenant_slug / workspace
