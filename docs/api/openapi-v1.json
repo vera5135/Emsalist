@@ -780,6 +780,168 @@
         ]
       }
     },
+    "/api/v1/auth/apple/login": {
+      "post": {
+        "tags": [
+          "Apple Authentication"
+        ],
+        "summary": "Apple Login",
+        "operationId": "apple_login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AppleAuthenticatedResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AppleLinkRequiredResponse"
+                    }
+                  ],
+                  "title": "Response Apple Login"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/apple/link": {
+      "post": {
+        "tags": [
+          "Apple Authentication"
+        ],
+        "summary": "Apple Link",
+        "operationId": "apple_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/apple/status": {
+      "get": {
+        "tags": [
+          "Apple Authentication"
+        ],
+        "summary": "Apple Status",
+        "operationId": "apple_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppleStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/apple/unlink": {
+      "post": {
+        "tags": [
+          "Apple Authentication"
+        ],
+        "summary": "Apple Unlink",
+        "operationId": "apple_unlink",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleUnlinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/jobs": {
       "post": {
         "tags": [
@@ -4775,6 +4937,171 @@
         "type": "object",
         "title": "AIRunSummary"
       },
+      "AppleAuthenticatedResponse": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "const": "authenticated",
+            "title": "State",
+            "default": "authenticated"
+          },
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In",
+            "default": 1800
+          },
+          "refresh_expires_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Expires In",
+            "default": 604800
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token"
+        ],
+        "title": "AppleAuthenticatedResponse"
+      },
+      "AppleLinkRequest": {
+        "properties": {
+          "link_ticket": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Link Ticket"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "link_ticket",
+          "email",
+          "password"
+        ],
+        "title": "AppleLinkRequest"
+      },
+      "AppleLinkRequiredResponse": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "const": "link_required",
+            "title": "State",
+            "default": "link_required"
+          },
+          "link_ticket": {
+            "type": "string",
+            "title": "Link Ticket"
+          },
+          "link_expires_in": {
+            "type": "integer",
+            "title": "Link Expires In",
+            "default": 300
+          }
+        },
+        "type": "object",
+        "required": [
+          "link_ticket"
+        ],
+        "title": "AppleLinkRequiredResponse"
+      },
+      "AppleLoginRequest": {
+        "properties": {
+          "authorization_code": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Authorization Code"
+          },
+          "raw_nonce": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Raw Nonce"
+          }
+        },
+        "type": "object",
+        "required": [
+          "authorization_code",
+          "raw_nonce"
+        ],
+        "title": "AppleLoginRequest"
+      },
+      "AppleStatusResponse": {
+        "properties": {
+          "linked": {
+            "type": "boolean",
+            "title": "Linked"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          }
+        },
+        "type": "object",
+        "required": [
+          "linked",
+          "provider"
+        ],
+        "title": "AppleStatusResponse"
+      },
+      "AppleUnlinkRequest": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Current Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_password"
+        ],
+        "title": "AppleUnlinkRequest"
+      },
       "AuditedPrecedent": {
         "properties": {
           "decision_id": {
@@ -8255,10 +8582,15 @@
       "LoginRequest": {
         "properties": {
           "tenant_slug": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Tenant Slug",
-            "default": "local"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Slug"
           },
           "email": {
             "type": "string",

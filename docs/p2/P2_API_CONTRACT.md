@@ -462,3 +462,105 @@ olarak ertelenmiştir**. P2.2A yalnız seçili sistem endpoint'leri için elle
 yazılmış DTO (json_serializable) kullanır ve bu endpoint'lerin varlığını
 `docs/api/openapi-v1.json` snapshot'ına karşı bir contract test ile doğrular.
 Tam codegen drift kapısı sonraki bir faza bırakılmıştır.
+
+## 26. P2.2B2A Apple auth backend & email-only account resolution
+
+Bu bölüm P2.2B2A backend omurgasını sabitler. Mobil UI (P2.2B2B) ayrıdır.
+
+### Ürün kararı
+
+- Kullanıcıya **büro kodu, tenant, tenant_slug, workspace veya çalışma alanı
+  sorulmaz.**
+- Ana iOS giriş yöntemi: **Apple ile Devam Et.** Yedek yöntem: e-posta + şifre.
+- İlk Apple bağlantısında kullanıcıdan yalnız **e-posta + mevcut Emsalist
+  şifresi** istenir.
+- Apple hesabı otomatik yeni hesap oluşturmaz, Apple e-postasına göre otomatik
+  eşleştirilmez; yalnız mevcut ve doğrulanmış bir Emsalist hesabına bağlanır.
+
+### E-posta/şifre login (`POST /api/v1/auth/login`)
+
+`LoginRequest = { email, password, tenant_slug? }`
+
+- `email` ve `password` zorunludur.
+- `tenant_slug` yalnız **geriye dönük uyumlu, opsiyonel/deprecated** bir alandır.
+  Yeni mobil istemci göndermez ve hiçbir mobil UI'da gösterilmez.
+- `tenant_slug` **gönderilmezse**: e-posta trim+casefold ile normalize edilir,
+  tüm aktif/silinmemiş kullanıcılar arasında aranır, **tam olarak bir** kullanıcı
+  bulunursa canonical `tenant_id` `User.tenant_id` üzerinden alınır ve şifre
+  doğrulanır.
+- `tenant_slug` **gönderilirse**: `TenantRepository.get_by_slug` ile gerçek
+  `Tenant` bulunur, canonical `tenant_id` olarak **`Tenant.id`** kullanılır.
+  Slug hiçbir zaman doğrudan tenant ID gibi kullanılmaz.
+- Canonical `tenant.id`; User sorgusu, `AuthSession.tenant_id`, JWT `tenant_id`
+  claim'i, audit event ve `LoginResponse.user.tenant` alanında kullanılır.
+  `LoginResponse.user.tenant` = **canonical tenant ID** (slug değil).
+
+**Duplicate e-posta güvenlik davranışı:** dış hata mesajları hiçbir zaman
+"e-posta bulunamadı", "birden fazla hesap", "şifre yanlış", "tenant bulunamadı"
+veya "hesap pasif" durumlarını ayırt etmez. Genel mesaj: **"Giriş bilgileri
+doğrulanamadı."**, machine-readable kod: `invalid_credentials`.
+
+| Aktif kullanıcı | Davranış |
+| --- | --- |
+| 0 | generic `invalid_credentials` |
+| 1 | şifre doğrulamasına devam |
+| ≥2 | rastgele hesap seçilmez → generic (audit: `account_resolution_ambiguous`) |
+
+### Apple endpoint sözleşmeleri
+
+| Method | Path | Auth | Request | Response |
+| --- | --- | --- | --- | --- |
+| `POST` | `/api/v1/auth/apple/login` | none | `{ authorization_code, raw_nonce }` | `AppleAuthenticatedResponse` \| `AppleLinkRequiredResponse` |
+| `POST` | `/api/v1/auth/apple/link` | none | `{ link_ticket, email, password }` | `LoginResponse` |
+| `GET` | `/api/v1/auth/apple/status` | Bearer | – | `{ linked, provider }` |
+| `POST` | `/api/v1/auth/apple/unlink` | Bearer | `{ current_password }` | `MessageResponse` |
+
+`/apple/login` yanıtı `state` discriminator'lı ayrık birlik (discriminated
+union):
+
+- `state = "authenticated"` → `access_token, refresh_token, token_type,
+  expires_in (1800), refresh_expires_in (604800), user{ id, tenant, role }`.
+  **`link_ticket` bulunmaz.**
+- `state = "link_required"` → `link_ticket, link_expires_in (300)`.
+  **`access_token`/`refresh_token` bulunmaz.**
+
+`/apple/link` isteği **yalnız `link_ticket` + `email` + `password`** içerir;
+`tenant_slug` veya büro kodu **bulunmaz.** Tenant ilişkisi backend tarafından
+`User.tenant_id` üzerinden çözülür. Başarılı yanıt mevcut `LoginResponse` ile
+aynıdır. 0 kullanıcı, birden fazla kullanıcı ve yanlış şifre dışarıya aynı
+generic `invalid_credentials` hatasını verir; duplicate durumda otomatik seçim
+yapılmaz.
+
+`/apple/status` raw Apple subject, Apple e-postası veya audience döndürmez.
+
+`/apple/unlink` mevcut şifreyi doğrular, Apple identity eşlemesini kaldırır,
+`token_version`'ı artırır ve kullanıcının tüm session'larını revoke eder
+(mevcut oturum geçersiz olur; kullanıcı e-posta/şifreyle tekrar girebilir).
+Apple bağlantısı yoksa idempotent başarı: `{ "message": "Apple account is not
+linked." }`.
+
+### Apple disabled davranışı
+
+`APPLE_SIGN_IN_ENABLED=false` iken mevcut login/refresh çalışmaya devam eder,
+Apple endpoint'leri token üretmez ve dış Apple servisine ağ çağrısı yapılmaz.
+HTTP `503 Service Unavailable`, machine-readable kod `apple_sign_in_unavailable`.
+Eksik environment değişkenleri yanıtta açıklanmaz.
+
+### Güvenli hata kodları
+
+`apple_sign_in_unavailable`, `apple_authorization_failed`,
+`apple_link_ticket_invalid`, `apple_link_ticket_expired`,
+`apple_identity_conflict`, `invalid_credentials`, `account_resolution_failed`.
+Ham Apple `error_description` client'a dönmez.
+
+### Gizlilik / kalıcılık
+
+- Apple `sub` raw olarak saklanmaz: `HMAC-SHA256(key=APPLE_SUBJECT_PEPPER,
+  message="apple|<audience>|<subject>")` hex digest'i `auth_identities`'te
+  tutulur.
+- Link ticket ≥32 byte CSPRNG ile üretilir; DB'de yalnız SHA-256 hash tutulur;
+  raw ticket yalnız oluşturulurken bir kez yanıtta döner; TTL 300 sn; tek
+  kullanımlık; tüketim transaction içinde atomiktir (paralel iki istekten yalnız
+  biri başarılı).
+- Bir Apple kimliği yalnız bir kullanıcıya; bir kullanıcı yalnız bir Apple
+  kimliğine bağlanabilir.
