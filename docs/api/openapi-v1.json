@@ -5346,6 +5346,779 @@
         }
       }
     },
+    "/api/v1/cases/{case_id}/memory": {
+      "get": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Get Memory",
+        "operationId": "case_memory_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseMemoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/facts": {
+      "post": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Create Fact",
+        "operationId": "case_memory_fact_create",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/facts/{fact_id}": {
+      "patch": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Update Fact",
+        "operationId": "case_memory_fact_update",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "fact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Fact Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/facts/{fact_id}/confirm": {
+      "post": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Confirm Fact",
+        "operationId": "case_memory_fact_confirm",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "fact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Fact Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/facts/{fact_id}/reject": {
+      "post": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Reject Fact",
+        "operationId": "case_memory_fact_reject",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "fact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Fact Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/timeline": {
+      "post": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Create Timeline Event",
+        "operationId": "case_memory_timeline_create",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimelineCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineEventResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "List Timeline",
+        "operationId": "case_memory_timeline_list",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimelineEventResponse"
+                  },
+                  "title": "Response Case Memory Timeline List"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/missing-information": {
+      "post": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Create Missing Information",
+        "operationId": "case_memory_missing_create",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MissingInfoCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissingInfoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "List Missing Information",
+        "operationId": "case_memory_missing_list",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MissingInfoResponse"
+                  },
+                  "title": "Response Case Memory Missing List"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/missing-information/{item_id}/resolve": {
+      "post": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Resolve Missing Information",
+        "operationId": "case_memory_missing_resolve",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissingInfoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/contradictions": {
+      "get": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "List Contradictions",
+        "operationId": "case_memory_contradiction_list",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContradictionResponse"
+                  },
+                  "title": "Response Case Memory Contradiction List"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/contradictions/{contradiction_id}/resolve": {
+      "post": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Resolve Contradiction",
+        "operationId": "case_memory_contradiction_resolve",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "contradiction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Contradiction Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContradictionResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContradictionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/memory/risks": {
+      "post": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "Create Risk",
+        "operationId": "case_memory_risk_create",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RiskCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Case Memory"
+        ],
+        "summary": "List Risks",
+        "operationId": "case_memory_risk_list",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RiskResponse"
+                  },
+                  "title": "Response Case Memory Risk List"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meta/capabilities": {
       "get": {
         "tags": [
@@ -6475,6 +7248,66 @@
         "type": "object",
         "title": "CaseListResponse"
       },
+      "CaseMemoryResponse": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "overall_risk_level": {
+            "type": "string",
+            "title": "Overall Risk Level"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/FactResponse"
+            },
+            "type": "array",
+            "title": "Facts"
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineEventResponse"
+            },
+            "type": "array",
+            "title": "Timeline"
+          },
+          "missing_information": {
+            "items": {
+              "$ref": "#/components/schemas/MissingInfoResponse"
+            },
+            "type": "array",
+            "title": "Missing Information"
+          },
+          "contradictions": {
+            "items": {
+              "$ref": "#/components/schemas/ContradictionResponse"
+            },
+            "type": "array",
+            "title": "Contradictions"
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/RiskResponse"
+            },
+            "type": "array",
+            "title": "Risks"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "overall_risk_level"
+        ],
+        "title": "CaseMemoryResponse"
+      },
       "CaseResponse": {
         "properties": {
           "id": {
@@ -6756,6 +7589,114 @@
         },
         "type": "object",
         "title": "ClaimGroundingResult"
+      },
+      "ContradictionResolveRequest": {
+        "properties": {
+          "resolution_fact_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Resolution Fact Id"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "resolution_fact_id"
+        ],
+        "title": "ContradictionResolveRequest"
+      },
+      "ContradictionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "contradiction_type": {
+            "type": "string",
+            "title": "Contradiction Type"
+          },
+          "subject_key": {
+            "type": "string",
+            "title": "Subject Key"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fact Ids"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "resolution_fact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Fact Id"
+          },
+          "resolution_note": {
+            "type": "string",
+            "title": "Resolution Note",
+            "default": ""
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "contradiction_type",
+          "subject_key",
+          "description",
+          "severity",
+          "status",
+          "version",
+          "created_at"
+        ],
+        "title": "ContradictionResponse"
       },
       "ConversationListResponse": {
         "properties": {
@@ -8033,6 +8974,158 @@
           "verification_status"
         ],
         "title": "ExtractedFact"
+      },
+      "FactCreateRequest": {
+        "properties": {
+          "fact_type": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Fact Type"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Value",
+            "default": ""
+          },
+          "importance": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Importance",
+            "default": "medium"
+          },
+          "source_type": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Source Type",
+            "default": "user_message"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Source Id",
+            "default": ""
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "fact_type"
+        ],
+        "title": "FactCreateRequest"
+      },
+      "FactResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "fact_type": {
+            "type": "string",
+            "title": "Fact Type"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "importance": {
+            "type": "string",
+            "title": "Importance"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "verification_status": {
+            "type": "string",
+            "title": "Verification Status"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "fact_type",
+          "value",
+          "importance",
+          "source_type",
+          "source_id",
+          "confidence",
+          "verification_status",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "FactResponse"
+      },
+      "FactUpdateRequest": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "FactUpdateRequest"
       },
       "FinalPetitionDraftRequest": {
         "properties": {
@@ -9544,6 +10637,142 @@
         "type": "object",
         "title": "MessageListResponse"
       },
+      "MissingInfoCreateRequest": {
+        "properties": {
+          "field_key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Field Key"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "reason_required": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Reason Required",
+            "default": ""
+          },
+          "importance": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Importance",
+            "default": "medium"
+          },
+          "related_legal_issue": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Related Legal Issue",
+            "default": ""
+          },
+          "expected_source": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Expected Source",
+            "default": ""
+          },
+          "completion_condition": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Completion Condition"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_key",
+          "label"
+        ],
+        "title": "MissingInfoCreateRequest"
+      },
+      "MissingInfoResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "field_key": {
+            "type": "string",
+            "title": "Field Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "reason_required": {
+            "type": "string",
+            "title": "Reason Required"
+          },
+          "importance": {
+            "type": "string",
+            "title": "Importance"
+          },
+          "related_legal_issue": {
+            "type": "string",
+            "title": "Related Legal Issue"
+          },
+          "expected_source": {
+            "type": "string",
+            "title": "Expected Source"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "resolved_by_fact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By Fact Id"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "field_key",
+          "label",
+          "reason_required",
+          "importance",
+          "related_legal_issue",
+          "expected_source",
+          "status",
+          "version",
+          "created_at"
+        ],
+        "title": "MissingInfoResponse"
+      },
       "NodeCreate": {
         "properties": {
           "node_type": {
@@ -10798,6 +12027,148 @@
         ],
         "title": "ResearchYargitayResponse"
       },
+      "RiskCreateRequest": {
+        "properties": {
+          "risk_type": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Risk Type",
+            "default": "procedure"
+          },
+          "severity": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Severity",
+            "default": "low"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Rationale",
+            "default": ""
+          },
+          "affected_claim": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Affected Claim",
+            "default": ""
+          },
+          "supporting_reference": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Supporting Reference",
+            "default": ""
+          },
+          "mitigation": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Mitigation",
+            "default": ""
+          },
+          "related_missing_information": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Missing Information"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "RiskCreateRequest"
+      },
+      "RiskResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "risk_type": {
+            "type": "string",
+            "title": "Risk Type"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "affected_claim": {
+            "type": "string",
+            "title": "Affected Claim"
+          },
+          "supporting_reference": {
+            "type": "string",
+            "title": "Supporting Reference"
+          },
+          "mitigation": {
+            "type": "string",
+            "title": "Mitigation"
+          },
+          "related_missing_information": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Missing Information"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "risk_type",
+          "severity",
+          "title",
+          "rationale",
+          "affected_claim",
+          "supporting_reference",
+          "mitigation",
+          "status",
+          "version",
+          "created_at"
+        ],
+        "title": "RiskResponse"
+      },
       "SearchBuildRequest": {
         "properties": {
           "case_text": {
@@ -11120,6 +12491,136 @@
           "relevance"
         ],
         "title": "StatuteSource"
+      },
+      "TimelineCreateRequest": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Event Type",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "event_date": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Event Date",
+            "default": ""
+          },
+          "event_time": {
+            "type": "string",
+            "maxLength": 12,
+            "title": "Event Time",
+            "default": ""
+          },
+          "is_approximate": {
+            "type": "boolean",
+            "title": "Is Approximate",
+            "default": false
+          },
+          "party_reference": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Party Reference",
+            "default": ""
+          },
+          "legal_significance": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Legal Significance",
+            "default": ""
+          },
+          "source_type": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Source Type",
+            "default": "user_message"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Source Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "description"
+        ],
+        "title": "TimelineCreateRequest"
+      },
+      "TimelineEventResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "event_date": {
+            "type": "string",
+            "title": "Event Date"
+          },
+          "event_time": {
+            "type": "string",
+            "title": "Event Time"
+          },
+          "is_approximate": {
+            "type": "boolean",
+            "title": "Is Approximate"
+          },
+          "party_reference": {
+            "type": "string",
+            "title": "Party Reference"
+          },
+          "legal_significance": {
+            "type": "string",
+            "title": "Legal Significance"
+          },
+          "verification_status": {
+            "type": "string",
+            "title": "Verification Status"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "event_type",
+          "description",
+          "event_date",
+          "event_time",
+          "is_approximate",
+          "party_reference",
+          "legal_significance",
+          "verification_status",
+          "version",
+          "created_at"
+        ],
+        "title": "TimelineEventResponse"
       },
       "TokenRefreshResponse": {
         "properties": {
