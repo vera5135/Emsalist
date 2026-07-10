@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:emsalist_mobile/app/app.dart';
+
+import 'support/auth_test_support.dart';
 
 void main() {
   testWidgets('Drawer opens when hamburger tapped', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     expect(find.byType(AppBar), findsAtLeastNWidgets(1));
@@ -21,7 +21,7 @@ void main() {
   });
 
   testWidgets('Drawer lists mock cases', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final hamburger = find.byIcon(Icons.menu);
@@ -34,7 +34,7 @@ void main() {
   });
 
   testWidgets('Active case is visible in drawer', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final hamburger = find.byIcon(Icons.menu);
@@ -48,7 +48,7 @@ void main() {
   testWidgets('Drawer has search and new case button', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final hamburger = find.byIcon(Icons.menu);
@@ -60,7 +60,7 @@ void main() {
   });
 
   testWidgets('Drawer can be closed', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final hamburger = find.byIcon(Icons.menu);

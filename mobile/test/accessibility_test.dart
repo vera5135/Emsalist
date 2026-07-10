@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:emsalist_mobile/app/app.dart';
 import 'package:emsalist_mobile/design_system/components/emsalist_composer.dart';
+
+import 'support/auth_test_support.dart';
 
 void main() {
   testWidgets('App bar has Semantics label', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final appBar = find.byType(AppBar);
@@ -14,7 +14,7 @@ void main() {
   });
 
   testWidgets('Send button has Semantics label', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final sendButton = find.byIcon(Icons.send);
@@ -22,7 +22,7 @@ void main() {
   });
 
   testWidgets('UYAP icon has Semantics label', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final SemanticsHandle handle = tester.ensureSemantics();
@@ -31,7 +31,7 @@ void main() {
   });
 
   testWidgets('Drawer toggle has Semantics label', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final menuButton = find.byTooltip('Dosyalar');
@@ -39,7 +39,7 @@ void main() {
   });
 
   testWidgets('Composer has Semantics label', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final textField = find.byType(TextField);
@@ -49,7 +49,7 @@ void main() {
   });
 
   testWidgets('Critical widgets are accessible', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     await tester.binding.setSurfaceSize(const Size(375, 812));
@@ -64,7 +64,7 @@ void main() {
   testWidgets('No merge blockage for critical controls', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final SemanticsHandle handle = tester.ensureSemantics();

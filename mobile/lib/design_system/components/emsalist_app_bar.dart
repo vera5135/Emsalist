@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../app/app_router.dart';
 import '../../core/providers/case_provider.dart';
 import '../../features/settings/appearance_screen.dart';
 import '../../features/system/system_status_sheet.dart';
 import '../../features/uyap/uyap_sheet.dart';
 import '../../features/uyap/uyap_status_icon.dart';
 
-enum AppBarMenuAction { summary, appearance, systemStatus, share }
+enum AppBarMenuAction { summary, account, appearance, systemStatus, share }
 
 class EmsalistAppBar extends ConsumerWidget implements PreferredSizeWidget {
   const EmsalistAppBar({super.key, this.title, this.subtitle, this.onSummary});
@@ -23,6 +25,9 @@ class EmsalistAppBar extends ConsumerWidget implements PreferredSizeWidget {
     switch (action) {
       case AppBarMenuAction.summary:
         onSummary?.call();
+        break;
+      case AppBarMenuAction.account:
+        context.pushNamed(AppRoutes.account);
         break;
       case AppBarMenuAction.appearance:
         showModalBottomSheet<void>(
@@ -102,6 +107,14 @@ class EmsalistAppBar extends ConsumerWidget implements PreferredSizeWidget {
               child: ListTile(
                 leading: Icon(Icons.summarize_outlined),
                 title: Text('Dosya Özeti'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            const PopupMenuItem<AppBarMenuAction>(
+              value: AppBarMenuAction.account,
+              child: ListTile(
+                leading: Icon(Icons.person_outline),
+                title: Text('Hesap'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),

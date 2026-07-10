@@ -11,4 +11,15 @@ abstract class ApiClient {
     Map<String, dynamic>? queryParameters,
     Object? cancelToken,
   });
+
+  /// Performs a POST request with an optional JSON [body] and returns the
+  /// decoded JSON body.
+  ///
+  /// Throws an [ApiException] (see `api_exception.dart`) on any failure.
+  Future<T> postJson<T>(
+    String path, {
+    Object? body,
+    Map<String, dynamic>? queryParameters,
+    Object? cancelToken,
+  });
 }

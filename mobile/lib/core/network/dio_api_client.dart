@@ -18,6 +18,7 @@ class DioApiClient implements ApiClient {
     required ApiConfig config,
     Dio? dio,
     ErrorMapper errorMapper = const ErrorMapper(),
+    List<Interceptor> Function(Dio dio)? authInterceptors,
   }) : _errorMapper = errorMapper,
        _dio = dio ?? Dio() {
     _dio.options
@@ -29,8 +30,13 @@ class DioApiClient implements ApiClient {
       ..headers['Accept'] = 'application/json';
 
     final bool isDev = config.environment == AppEnvironment.development;
+    _dio.interceptors.add(CorrelationInterceptor());
+    // Auth (token inject) + refresh (401 rotation) run before retry/logging so
+    // a refreshed request is retried with the new token.
+    if (authInterceptors != null) {
+      _dio.interceptors.addAll(authInterceptors(_dio));
+    }
     _dio.interceptors.addAll(<Interceptor>[
-      CorrelationInterceptor(),
       RetryInterceptor(dio: _dio),
       SafeLoggingInterceptor(enabled: isDev, logBodies: isDev),
     ]);
@@ -48,6 +54,34 @@ class DioApiClient implements ApiClient {
     try {
       final Response<dynamic> response = await _dio.get<dynamic>(
         path,
+        queryParameters: queryParameters,
+        cancelToken: cancelToken is CancelToken ? cancelToken : null,
+      );
+      final dynamic data = response.data;
+      if (data is T) {
+        return data;
+      }
+      throw _errorMapper.unexpected();
+    } on DioException catch (error) {
+      throw _errorMapper.fromDioException(error);
+    } on ApiException {
+      rethrow;
+    } on Object {
+      throw _errorMapper.unexpected();
+    }
+  }
+
+  @override
+  Future<T> postJson<T>(
+    String path, {
+    Object? body,
+    Map<String, dynamic>? queryParameters,
+    Object? cancelToken,
+  }) async {
+    try {
+      final Response<dynamic> response = await _dio.post<dynamic>(
+        path,
+        data: body,
         queryParameters: queryParameters,
         cancelToken: cancelToken is CancelToken ? cancelToken : null,
       );

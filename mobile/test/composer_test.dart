@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:emsalist_mobile/app/app.dart';
 import 'package:emsalist_mobile/design_system/components/emsalist_composer.dart';
+
+import 'support/auth_test_support.dart';
 
 void main() {
   testWidgets('EmsalistComposer renders text field and add button', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     expect(find.byType(EmsalistComposer), findsOneWidget);
@@ -19,7 +19,7 @@ void main() {
   testWidgets('Empty message — send button disabled', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final sendButton = find.byIcon(Icons.send);
@@ -34,7 +34,7 @@ void main() {
   testWidgets('Typing enables send and clears input on send', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final textField = find.byType(TextField).first;
@@ -57,7 +57,7 @@ void main() {
   });
 
   testWidgets('+ menu shows all 6 options', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final attachButton = find.byIcon(Icons.add_circle_outline);

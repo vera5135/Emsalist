@@ -2,15 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/assistant/assistant_screen.dart';
+import '../features/auth/application/auth_state.dart';
+import '../features/auth/presentation/account_screen.dart';
+import '../features/auth/presentation/auth_loading_screen.dart';
+import '../features/auth/presentation/login_screen.dart';
 
 class AppRoutes {
   const AppRoutes._();
 
+  static const String splash = 'splash';
+  static const String login = 'login';
+  static const String account = 'account';
   static const String assistant = 'assistant';
   static const String cases = 'cases';
   static const String sources = 'sources';
   static const String drafts = 'drafts';
 
+  static const String splashPath = '/splash';
+  static const String loginPath = '/login';
+  static const String accountPath = '/account';
   static const String assistantPath = '/assistant';
   static const String casesPath = '/cases';
   static const String sourcesPath = '/sources';
@@ -58,10 +68,52 @@ const List<_NavDestination> _destinations = <_NavDestination>[
   ),
 ];
 
-GoRouter createAppRouter() {
+GoRouter createAppRouter({
+  Listenable? refreshListenable,
+  AuthStatus Function()? authStatus,
+}) {
+  final AuthStatus Function() status =
+      authStatus ?? () => AuthStatus.authenticated;
   return GoRouter(
     initialLocation: AppRoutes.assistantPath,
+    refreshListenable: refreshListenable,
+    redirect: (BuildContext context, GoRouterState state) {
+      final AuthStatus current = status();
+      final String location = state.uri.path;
+      final bool atSplash = location == AppRoutes.splashPath;
+      final bool atLogin = location == AppRoutes.loginPath;
+
+      switch (current) {
+        case AuthStatus.unknown:
+          return atSplash ? null : AppRoutes.splashPath;
+        case AuthStatus.unauthenticated:
+          return atLogin ? null : AppRoutes.loginPath;
+        case AuthStatus.authenticated:
+          if (atLogin || atSplash) {
+            return AppRoutes.assistantPath;
+          }
+          return null;
+      }
+    },
     routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.splashPath,
+        name: AppRoutes.splash,
+        builder: (BuildContext context, GoRouterState state) =>
+            const AuthLoadingScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.loginPath,
+        name: AppRoutes.login,
+        builder: (BuildContext context, GoRouterState state) =>
+            const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.accountPath,
+        name: AppRoutes.account,
+        builder: (BuildContext context, GoRouterState state) =>
+            const AccountScreen(),
+      ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) {
           return _ScaffoldWithNavBar(location: state.uri.path, child: child);
