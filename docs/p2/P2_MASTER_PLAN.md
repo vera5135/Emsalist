@@ -180,6 +180,46 @@ Kapanış kapısı:
 
 ##### P2.2B2 — Mobile Auth & Session
 
+P2.2B2 iki alt dilime ayrılır:
+
+- **P2.2B2A — Apple Auth Backend & Account Linking** (bu dilim, backend-only)
+- **P2.2B2B — Mobile Apple Sign-In & Secure Session** (mobil UI + secure storage)
+
+###### P2.2B2A — Apple Auth Backend & Account Linking
+
+Kapsam (yalnız backend):
+
+- Ürün kararı: kullanıcıdan **büro kodu / tenant / tenant_slug / workspace
+  alınmaz.** Ana yöntem Apple ile Devam Et; yedek e-posta + şifre.
+- Apple authorization-code exchange (ES256 client secret), Apple ID token +
+  nonce doğrulama (RS256, JWKS cache, unknown-kid refresh).
+- Apple `sub` gizliliği: HMAC-SHA256(pepper, "apple|aud|sub") hex digest.
+- E-posta + şifre ile **mevcut** hesabı bağlama; Apple link request yalnız
+  `link_ticket + email + password` içerir; tenant `User.tenant_id` üzerinden
+  backend tarafından çözülür.
+- **Email-only account resolution**: tenant_slug gönderilmezse aktif kullanıcı
+  araması; duplicate e-postada **otomatik seçim yapılmaz** → generic
+  `invalid_credentials`. `tenant_slug` yalnız geriye uyumlu, opsiyonel backend
+  alanıdır; mobil UI göndermez.
+- Canonical `tenant.id` düzeltmesi (slug hiçbir zaman tenant ID gibi
+  kullanılmaz).
+- AuthIdentity + AuthLinkTicket tabloları ve tek Alembic revision.
+- Standart access/refresh session issuance ortak helper ile yeniden kullanılır;
+  refresh rotation + reuse detection + token_version korunur.
+- Endpoint'ler: `/auth/apple/login`, `/auth/apple/link`, `/auth/apple/status`,
+  `/auth/apple/unlink`. `APPLE_SIGN_IN_ENABLED=false` iken 503
+  `apple_sign_in_unavailable`.
+- Audit + redaction, migration, test, OpenAPI, dokümantasyon.
+
+Kapsam dışı (P2.2B2B'ye bırakılır): mobil ekranlar, `sign_in_with_apple`, Apple
+native butonu, cihazda nonce üretimi, flutter_secure_storage, access token
+memory store, refresh token Keychain, AuthInterceptor, single-flight refresh
+interceptor, Riverpod AuthStateNotifier, startup session restore, GoRouter auth
+redirect, giriş/ilk bağlama/oturum sona erdi/Hesap ekranları, iOS entitlement ve
+Xcode capability, gerçek Apple Developer yapılandırması, cihaz/TestFlight E2E.
+
+###### P2.2B2B — Mobile Apple Sign-In & Secure Session
+
 Kapsam:
 
 - flutter_secure_storage ile token saklama (SharedPreferences kullanılmaz)
@@ -189,11 +229,11 @@ Kapsam:
 - AuthStateNotifier (Riverpod)
 - App startup session restore
 - GoRouter redirect guard (unauthorized → login)
-- Login screen (email + password)
-- Workspace selection screen
+- Login screen (Apple ile Devam Et + email/şifre yedek)
+- İlk hesap bağlama ekranı (email + mevcut şifre; büro kodu yok)
 - Session expired UI
-- Settings'te "Hesap" ekranı / logout
-- Mevcut 87 test korunur
+- Settings'te "Hesap" ekranı / logout / Apple bağlantısını kaldır
+- Mevcut mobile testleri korunur
 
 Kapanış kapısı:
 
@@ -421,7 +461,8 @@ Pilot başarı kriteri:
 - `feat/p2.1-mobile-shell`
 - `feat/p2.2-api-foundation` (P2.2A)
 - `feat/p2.2-auth-backend` (P2.2B1)
-- `feat/p2.2-auth-session` (P2.2B2)
+- `feat/p2.2-apple-auth-backend` (P2.2B2A)
+- `feat/p2.2-auth-session` (P2.2B2B)
 - `feat/p2.2c-case-chat` (P2.2C)
 - `feat/p2.4-case-memory`
 - `feat/p2.5-document-pipeline`

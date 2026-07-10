@@ -36,6 +36,7 @@ def get_version() -> dict:
 from app.routes.case_routes import router as _case_router
 from app.routes.document_routes import router as _document_router
 from app.routes.auth_routes_new import router as _auth_router
+from app.routes.auth_routes_new import apple_router as _apple_auth_router
 from app.routes.job_routes import router as _job_router
 from app.routes.lifecycle_routes import router as _lifecycle_router
 from app.routes.ai_routes import router as _ai_router
@@ -56,6 +57,7 @@ from app.routes.security_routes import router as _security_router
 api_v1_router.include_router(_case_router, include_in_schema=True)
 api_v1_router.include_router(_document_router, include_in_schema=True)
 api_v1_router.include_router(_auth_router, include_in_schema=True)
+api_v1_router.include_router(_apple_auth_router, include_in_schema=True)
 api_v1_router.include_router(_job_router, include_in_schema=True)
 api_v1_router.include_router(_lifecycle_router, include_in_schema=True)
 api_v1_router.include_router(_ai_router, include_in_schema=True)

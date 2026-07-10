@@ -1,7 +1,8 @@
-"""P1.5.6 / P1.12 — DB-backed auth routes with contract response models."""
+"""P1.5.6 / P2.2B2A — DB-backed auth routes with Apple Sign-In endpoints."""
 from __future__ import annotations
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
+from app.config import get_settings
 from app.services.auth_service import (
     SecurityContext, resolve_current_user, get_auth_mode, create_access_token,
     get_security_context, ACCESS_TOKEN_MINUTES, REFRESH_TOKEN_DAYS,
@@ -12,6 +13,8 @@ from app.models.auth_contract_models import (
     LoginRequest, LoginResponse, UserInfo,
     RefreshRequest, TokenRefreshResponse, MeResponse, MessageResponse,
     ChangePasswordRequest,
+    AppleLoginRequest, AppleAuthenticatedResponse, AppleLinkRequiredResponse,
+    AppleLinkRequest, AppleStatusResponse, AppleUnlinkRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,8 +37,7 @@ async def login(body: LoginRequest) -> LoginResponse:
             refresh_expires_in=REFRESH_TOKEN_SECONDS,
             user=UserInfo(id=ctx.actor_id, tenant=ctx.tenant_id, role=ctx.role),
         )
-    # In-memory rate limit check (per tenant+email)
-    rate_key = f"login:{body.tenant_slug}:{body.email.strip().casefold()}"
+    rate_key = f"login:{body.tenant_slug or ''}:{body.email.strip().casefold()}"
     limited, retry_after = check_login_rate(rate_key)
     if limited:
         raise HTTPException(
@@ -130,3 +132,112 @@ async def change_password(
         return MessageResponse(message="Not available in local mode")
     await auth_manager.change_password(ctx, body.current_password, body.new_password)
     return MessageResponse(message="Password changed successfully. All sessions have been revoked; please log in again.")
+
+
+# ---------------------------------------------------------------------------
+# Apple Sign-In endpoints
+# ---------------------------------------------------------------------------
+apple_router = APIRouter(prefix="/auth/apple", tags=["Apple Authentication"])
+
+
+@apple_router.post("/login", response_model=AppleAuthenticatedResponse | AppleLinkRequiredResponse, operation_id="apple_login")
+async def apple_login(body: AppleLoginRequest) -> dict:
+    settings = get_settings()
+    if get_auth_mode() == "local":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple Sign-In not available in local mode")
+
+    if not settings.apple_sign_in_enabled:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple Sign-In is currently unavailable")
+
+    rate_key = f"apple_login:{hash(body.authorization_code) % 1000000}"
+    limited, retry_after = check_login_rate(rate_key)
+    if limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Please wait before retrying.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        result = await auth_manager.apple_login(body.authorization_code, body.raw_nonce)
+        reset_login_rate(rate_key)
+        if result.get("state") == "link_required":
+            return AppleLinkRequiredResponse(
+                state="link_required",
+                link_ticket=result["link_ticket"],
+                link_expires_in=result["link_expires_in"],
+            ).model_dump()
+
+        user_data = result.get("user", {})
+        return AppleAuthenticatedResponse(
+            state="authenticated",
+            access_token=result["access_token"],
+            refresh_token=result.get("refresh_token"),
+            token_type=result.get("token_type", "bearer"),
+            expires_in=ACCESS_TOKEN_MINUTES * 60,
+            refresh_expires_in=REFRESH_TOKEN_SECONDS,
+            user=UserInfo(
+                id=user_data.get("id", ""),
+                tenant=user_data.get("tenant", ""),
+                role=user_data.get("role", "lawyer"),
+            ),
+        ).model_dump()
+    except HTTPException:
+        raise
+
+
+@apple_router.post("/link", response_model=LoginResponse, operation_id="apple_link")
+async def apple_link(body: AppleLinkRequest) -> LoginResponse:
+    settings = get_settings()
+    if get_auth_mode() == "local":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple Sign-In not available in local mode")
+
+    if not settings.apple_sign_in_enabled:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple Sign-In is currently unavailable")
+
+    rate_key = f"apple_link:{hash(body.email.strip().casefold()) % 1000000}"
+    limited, retry_after = check_login_rate(rate_key)
+    if limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Please wait before retrying.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        result = await auth_manager.apple_link(body.link_ticket, body.email, body.password)
+        reset_login_rate(rate_key)
+        user_data = result.get("user", {})
+        return LoginResponse(
+            access_token=result["access_token"],
+            refresh_token=result.get("refresh_token"),
+            token_type=result.get("token_type", "bearer"),
+            expires_in=ACCESS_TOKEN_MINUTES * 60,
+            refresh_expires_in=REFRESH_TOKEN_SECONDS,
+            user=UserInfo(
+                id=user_data.get("id", ""),
+                tenant=user_data.get("tenant", ""),
+                role=user_data.get("role", "lawyer"),
+            ),
+        )
+    except HTTPException:
+        raise
+
+
+@apple_router.get("/status", response_model=AppleStatusResponse, operation_id="apple_status")
+async def apple_status(ctx: SecurityContext = Depends(resolve_current_user)) -> AppleStatusResponse:
+    if get_auth_mode() == "local":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple Sign-In not available in local mode")
+    result = await auth_manager.apple_status(ctx)
+    return AppleStatusResponse(**result)
+
+
+@apple_router.post("/unlink", response_model=MessageResponse, operation_id="apple_unlink")
+async def apple_unlink(
+    body: AppleUnlinkRequest,
+    ctx: SecurityContext = Depends(resolve_current_user),
+) -> MessageResponse:
+    if get_auth_mode() == "local":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple Sign-In not available in local mode")
+    result = await auth_manager.apple_unlink(ctx, body.current_password)
+    return MessageResponse(**result)

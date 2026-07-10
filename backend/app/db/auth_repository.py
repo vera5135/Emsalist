@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AuthSession, CaseMember, Tenant, User
+from app.db.models import AuthIdentity, AuthLinkTicket, AuthSession, CaseMember, Tenant, User
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,13 @@ class UserRepository:
             select(User).where(User.tenant_id == tenant_id, User.email_normalized == email_normalized, User.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def find_active_by_email(session: AsyncSession, email_normalized: str) -> list[User]:
+        result = await session.execute(
+            select(User).where(User.email_normalized == email_normalized, User.deleted_at.is_(None))
+        )
+        return list(result.scalars().all())
 
     @staticmethod
     async def get_by_id(session: AsyncSession, tenant_id: str, user_id: str) -> User | None:
@@ -66,6 +73,15 @@ class UserRepository:
         if status in ("disabled", "deleted"):
             user.deleted_at = datetime.now(UTC)
         await session.flush()
+
+
+class TenantRepository:
+    @staticmethod
+    async def get_by_slug(session: AsyncSession, slug: str) -> Tenant | None:
+        result = await session.execute(
+            select(Tenant).where(Tenant.slug == slug, Tenant.deleted_at.is_(None))
+        )
+        return result.scalar_one_or_none()
 
 
 class AuthSessionRepository:
@@ -168,3 +184,96 @@ class AuthAuditRepository:
         )
         db.add(event)
         await db.flush()
+
+
+class AuthIdentityRepository:
+    @staticmethod
+    async def find_by_provider(session: AsyncSession, provider: str, audience: str, subject_hash: str) -> AuthIdentity | None:
+        result = await session.execute(
+            select(AuthIdentity).where(
+                AuthIdentity.provider == provider,
+                AuthIdentity.provider_audience == audience,
+                AuthIdentity.provider_subject_hash == subject_hash,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def find_by_user(session: AsyncSession, provider: str, user_id: str) -> AuthIdentity | None:
+        result = await session.execute(
+            select(AuthIdentity).where(
+                AuthIdentity.provider == provider,
+                AuthIdentity.user_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def create(session: AsyncSession, provider: str, subject_hash: str, audience: str, tenant_id: str, user_id: str) -> AuthIdentity:
+        identity = AuthIdentity(
+            provider=provider,
+            provider_subject_hash=subject_hash,
+            provider_audience=audience,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            created_at=datetime.now(UTC),
+            last_used_at=datetime.now(UTC),
+        )
+        session.add(identity)
+        await session.flush()
+        return identity
+
+    @staticmethod
+    async def delete(session: AsyncSession, identity: AuthIdentity) -> None:
+        await session.delete(identity)
+        await session.flush()
+
+    @staticmethod
+    async def touch_last_used(session: AsyncSession, identity: AuthIdentity) -> None:
+        identity.last_used_at = datetime.now(UTC)
+        await session.flush()
+
+
+class AuthLinkTicketRepository:
+    @staticmethod
+    async def create(session: AsyncSession, ticket_hash: str, provider: str, subject_hash: str, audience: str, ttl_seconds: int) -> AuthLinkTicket:
+        now = datetime.now(UTC)
+        ticket = AuthLinkTicket(
+            ticket_hash=ticket_hash,
+            provider=provider,
+            provider_subject_hash=subject_hash,
+            provider_audience=audience,
+            created_at=now,
+            expires_at=now + timedelta(seconds=ttl_seconds),
+        )
+        session.add(ticket)
+        await session.flush()
+        return ticket
+
+    @staticmethod
+    async def get_by_hash(session: AsyncSession, ticket_hash: str) -> AuthLinkTicket | None:
+        result = await session.execute(
+            select(AuthLinkTicket).where(AuthLinkTicket.ticket_hash == ticket_hash)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def consume(session: AsyncSession, ticket: AuthLinkTicket) -> bool:
+        """Atomically mark a ticket consumed.
+
+        Uses a conditional UPDATE guarded on ``consumed_at IS NULL`` so that
+        two concurrent link requests race on the database row and only one
+        observes ``rowcount == 1``.  Returns True if this caller consumed the
+        ticket, False if it had already been consumed.
+        """
+        now = datetime.now(UTC)
+        result = await session.execute(
+            update(AuthLinkTicket)
+            .where(AuthLinkTicket.id == ticket.id, AuthLinkTicket.consumed_at.is_(None))
+            .values(consumed_at=now)
+        )
+        await session.flush()
+        consumed = getattr(result, "rowcount", 0) == 1
+        if consumed:
+            ticket.consumed_at = now
+        return consumed
