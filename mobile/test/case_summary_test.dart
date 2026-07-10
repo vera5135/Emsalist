@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:emsalist_mobile/app/app.dart';
+
+import 'support/auth_test_support.dart';
 
 void main() {
   testWidgets('Case summary bottom sheet opens', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final caseTile = find.byTooltip('Open case summary');
@@ -18,7 +18,7 @@ void main() {
   });
 
   testWidgets('Case summary shows sections', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final caseTile = find.byTooltip('Open case summary');
@@ -34,7 +34,7 @@ void main() {
   testWidgets('Case summary bottom sheet dismisses', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final caseTile = find.byTooltip('Open case summary');
@@ -53,7 +53,7 @@ void main() {
   });
 
   testWidgets('Case summary has a title', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final caseTile = find.byTooltip('Open case summary');

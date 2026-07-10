@@ -28,7 +28,7 @@ class FlutterSecureSessionStore implements SecureSessionStore {
   final FlutterSecureStorage _storage;
 
   static const FlutterSecureStorage _defaultStorage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(),
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
 

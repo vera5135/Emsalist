@@ -28,6 +28,24 @@ class _FakeApiClient implements ApiClient {
     }
     throw StateError('No fake response for $path');
   }
+
+  @override
+  Future<T> postJson<T>(
+    String path, {
+    Object? body,
+    Map<String, dynamic>? queryParameters,
+    Object? cancelToken,
+  }) async {
+    requestedPaths.add(path);
+    if (error != null) {
+      throw error!;
+    }
+    final Object? value = responses[path];
+    if (value is T) {
+      return value;
+    }
+    throw StateError('No fake response for $path');
+  }
 }
 
 void main() {

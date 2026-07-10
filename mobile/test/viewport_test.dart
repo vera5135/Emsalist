@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:emsalist_mobile/app/app.dart';
 import 'package:emsalist_mobile/features/uyap/uyap_status_icon.dart';
+
+import 'support/auth_test_support.dart';
 
 const List<Size> _deviceSizes = <Size>[
   Size(375, 812),
@@ -16,7 +16,7 @@ Future<void> _pumpAt(WidgetTester tester, Size size) async {
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+  await tester.pumpWidget(authenticatedApp());
   await tester.pumpAndSettle();
 }
 
@@ -64,7 +64,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetViewInsets);
 
-      await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+      await tester.pumpWidget(authenticatedApp());
       await tester.pumpAndSettle();
 
       expect(find.byType(TextField), findsWidgets);
@@ -81,7 +81,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:emsalist_mobile/app/app.dart';
 import 'package:emsalist_mobile/core/providers/theme_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/auth_test_support.dart';
 
 void main() {
   setUp(() {
@@ -11,7 +12,7 @@ void main() {
   });
 
   testWidgets('Default theme mode is system', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
@@ -21,7 +22,7 @@ void main() {
   testWidgets('Switching to light theme via provider', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(
@@ -37,7 +38,7 @@ void main() {
   testWidgets('Switching to dark theme via provider', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(
@@ -53,7 +54,7 @@ void main() {
   testWidgets('Theme mode persists via provider state', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(
@@ -75,7 +76,7 @@ void main() {
   });
 
   testWidgets('MaterialApp theme is available', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));

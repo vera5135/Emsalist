@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:emsalist_mobile/app/app.dart';
 import 'package:emsalist_mobile/features/uyap/uyap_status_icon.dart';
+
+import 'support/auth_test_support.dart';
 
 void main() {
   testWidgets('UYAP icon is visible with correct default status', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     expect(find.byType(UyapStatusIcon), findsOneWidget);
   });
 
   testWidgets('UYAP bottom sheet opens on tap', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final uyapIcon = find.byType(UyapStatusIcon);
@@ -30,7 +30,7 @@ void main() {
   testWidgets('UYAP bottom sheet dismisses correctly', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: EmsalistApp()));
+    await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
     final uyapIcon = find.byType(UyapStatusIcon);
