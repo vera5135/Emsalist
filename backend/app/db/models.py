@@ -959,3 +959,155 @@ class Deadline(Base):
     __table_args__ = (
         Index("ix_deadlines_tenant_case", "tenant_id", "case_id"),
     )
+
+
+# ---------------------------------------------------------------------------
+# P2.6 — Trusted Legal Source Backbone
+# ---------------------------------------------------------------------------
+class SourceRecord(Base):
+    """Canonical legal-source identity (global, not tenant-scoped)."""
+
+    __tablename__ = "source_records"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    source_type: Mapped[str] = mapped_column(String(50), default="")
+    canonical_key: Mapped[str] = mapped_column(String(300), nullable=False)
+    title: Mapped[str] = mapped_column(String(1000), default="")
+    issuing_authority: Mapped[str] = mapped_column(String(200), default="")
+    court: Mapped[str] = mapped_column(String(120), default="")
+    chamber: Mapped[str] = mapped_column(String(120), default="")
+    case_number: Mapped[str] = mapped_column(String(80), default="")
+    decision_number: Mapped[str] = mapped_column(String(80), default="")
+    decision_date: Mapped[str] = mapped_column(String(20), default="")
+    publication_date: Mapped[str] = mapped_column(String(20), default="")
+    effective_date: Mapped[str] = mapped_column(String(20), default="")
+    repeal_date: Mapped[str] = mapped_column(String(20), default="")
+    official_url: Mapped[str] = mapped_column(String(1000), default="")
+    language: Mapped[str] = mapped_column(String(8), default="tr")
+    jurisdiction: Mapped[str] = mapped_column(String(20), default="TR")
+    verification_status: Mapped[str] = mapped_column(String(30), default="needs_review")
+    temporal_status: Mapped[str] = mapped_column(String(20), default="unknown")
+    current_version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_successful_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        UniqueConstraint("canonical_key", name="uq_source_records_canonical_key"),
+        Index("ix_source_records_type", "source_type"),
+        Index("ix_source_records_status", "verification_status"),
+    )
+
+
+class SourceVersion(Base):
+    """A specific retrieved/normalized content version of a SourceRecord."""
+
+    __tablename__ = "source_versions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    source_record_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_records.id"), nullable=False)
+    version_label: Mapped[str] = mapped_column(String(40), default="")
+    content_hash: Mapped[str] = mapped_column(String(64), default="")
+    raw_document_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    valid_from: Mapped[str] = mapped_column(String(20), default="")
+    valid_to: Mapped[str] = mapped_column(String(20), default="")
+    supersedes_version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    retrieval_method: Mapped[str] = mapped_column(String(40), default="")
+    parser_version: Mapped[str] = mapped_column(String(40), default="")
+    normalized_text: Mapped[str] = mapped_column(Text, default="")
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (
+        Index("ix_source_versions_record", "source_record_id"),
+        UniqueConstraint("source_record_id", "content_hash", name="uq_source_versions_record_hash"),
+    )
+
+
+class SourceParagraph(Base):
+    """A citable paragraph/article bound to a specific SourceVersion."""
+
+    __tablename__ = "source_paragraphs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    source_version_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_versions.id"), nullable=False)
+    paragraph_index: Mapped[int] = mapped_column(Integer, default=0)
+    heading_path: Mapped[str] = mapped_column(String(500), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    text_hash: Mapped[str] = mapped_column(String(64), default="")
+    page: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    article_number: Mapped[str] = mapped_column(String(40), default="")
+    locator_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    embedding_status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (
+        Index("ix_source_paragraphs_version", "source_version_id", "paragraph_index"),
+    )
+
+
+class SourceVerification(Base):
+    """An immutable verification event with evidence provenance."""
+
+    __tablename__ = "source_verifications"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    source_record_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_records.id"), nullable=False)
+    source_version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verification_method: Mapped[str] = mapped_column(String(40), default="")
+    verifier_type: Mapped[str] = mapped_column(String(20), default="automated")
+    verifier_user_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    evidence_url: Mapped[str] = mapped_column(String(1000), default="")
+    evidence_hash: Mapped[str] = mapped_column(String(64), default="")
+    result: Mapped[str] = mapped_column(String(30), default="")
+    notes: Mapped[str] = mapped_column(String(500), default="")
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (
+        Index("ix_source_verifications_record", "source_record_id"),
+    )
+
+
+class SourceRelationship(Base):
+    """A directed relationship between two SourceRecords."""
+
+    __tablename__ = "source_relationships"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    source_record_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_records.id"), nullable=False)
+    related_source_record_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_records.id"), nullable=False)
+    relationship_type: Mapped[str] = mapped_column(String(30), default="")
+    source_version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    evidence: Mapped[str] = mapped_column(String(500), default="")
+    verification_status: Mapped[str] = mapped_column(String(30), default="needs_review")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    __table_args__ = (
+        UniqueConstraint(
+            "source_record_id", "related_source_record_id", "relationship_type",
+            name="uq_source_rel_triplet",
+        ),
+        Index("ix_source_rel_record", "source_record_id"),
+    )
+
+
+class SourceUsage(Base):
+    """Traceability of a source's use within a tenant's case."""
+
+    __tablename__ = "source_usages"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    source_record_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_records.id"), nullable=False)
+    source_version_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_versions.id"), nullable=False)
+    source_paragraph_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    usage_type: Mapped[str] = mapped_column(String(30), default="reference")
+    target_type: Mapped[str] = mapped_column(String(30), default="case")
+    target_id: Mapped[str] = mapped_column(String(32), default="")
+    relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reason: Mapped[str] = mapped_column(String(500), default="")
+    selected_by: Mapped[str] = mapped_column(String(32), default="")
+    used_in_final_draft: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        Index("ix_source_usages_tenant_case", "tenant_id", "case_id"),
+        Index("ix_source_usages_record", "source_record_id"),
+    )
