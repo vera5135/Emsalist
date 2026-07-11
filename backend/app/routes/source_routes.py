@@ -99,7 +99,10 @@ async def _audit(db, ctx, action, metadata):
     )
 
 
-def _record_resp(r) -> SourceRecordResponse:
+async def _record_resp(db: AsyncSession, r) -> SourceRecordResponse:
+    effective_status = await resolve_version_verification_status(
+        db, r.id, r.current_version_id, r.verification_status,
+    )
     return SourceRecordResponse(
         id=r.id, source_type=r.source_type, canonical_key=r.canonical_key, title=r.title,
         issuing_authority=r.issuing_authority, court=r.court, chamber=r.chamber,
@@ -107,7 +110,7 @@ def _record_resp(r) -> SourceRecordResponse:
         decision_date=r.decision_date, publication_date=r.publication_date,
         effective_date=r.effective_date, repeal_date=r.repeal_date,
         official_url=r.official_url, jurisdiction=r.jurisdiction,
-        verification_status=r.verification_status, temporal_status=r.temporal_status,
+        verification_status=effective_status, temporal_status=r.temporal_status,
         current_version_id=r.current_version_id, version=r.version,
         created_at=_iso(r.created_at) or "", updated_at=_iso(r.updated_at) or "",
     )
@@ -148,7 +151,7 @@ async def list_sources(
         limit=limit, offset=offset,
     )
     return SourceRecordListResponse(
-        items=[_record_resp(r) for r in records], total=total, limit=limit, offset=offset,
+        items=[await _record_resp(db, r) for r in records], total=total, limit=limit, offset=offset,
         has_more=(offset + len(records)) < total,
     )
 
@@ -166,7 +169,7 @@ async def get_source(
     ctx: SecurityContext = Depends(resolve_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> SourceRecordResponse:
-    return _record_resp(await _load_source(db, source_id))
+    return await _record_resp(db, await _load_source(db, source_id))
 
 
 @router.get("/{source_id}/versions", response_model=list[SourceVersionResponse], operation_id="legal_source_versions")
@@ -288,7 +291,7 @@ async def verify_source(
                  {"resource": "source_record", "source_id": record.id,
                   "verification_status": record.verification_status})
     await db.commit()
-    return _record_resp(record)
+    return await _record_resp(db, record)
 
 
 @router.post("/{source_id}/quarantine", response_model=SourceRecordResponse, operation_id="legal_source_quarantine")
@@ -313,7 +316,7 @@ async def quarantine_source(
                  {"resource": "source_record", "source_id": record.id,
                   "verification_status": record.verification_status})
     await db.commit()
-    return _record_resp(record)
+    return await _record_resp(db, record)
 
 
 @router.post("/{source_id}/relationships", response_model=SourceRelationshipResponse, status_code=201, operation_id="legal_source_add_relationship")
@@ -522,7 +525,7 @@ async def review_get(
     ctx: SecurityContext = Depends(require_editor),
     db: AsyncSession = Depends(get_session),
 ) -> SourceRecordResponse:
-    return _record_resp(await _load_source(db, source_id))
+    return await _record_resp(db, await _load_source(db, source_id))
 
 
 @review_router.post("/{source_id}/approve", response_model=SourceRecordResponse, operation_id="source_review_approve")
@@ -544,7 +547,7 @@ async def review_approve(
                  {"resource": "source_record", "source_id": record.id,
                   "verification_status": record.verification_status})
     await db.commit()
-    return _record_resp(record)
+    return await _record_resp(db, record)
 
 
 @review_router.post("/{source_id}/quarantine", response_model=SourceRecordResponse, operation_id="source_review_quarantine")
@@ -566,7 +569,7 @@ async def review_quarantine(
                  {"resource": "source_record", "source_id": record.id,
                   "verification_status": record.verification_status})
     await db.commit()
-    return _record_resp(record)
+    return await _record_resp(db, record)
 
 
 @review_router.post("/{source_id}/resolve-conflict", response_model=SourceRecordResponse, operation_id="source_review_resolve_conflict")
@@ -592,4 +595,4 @@ async def review_resolve_conflict(
                  {"resource": "source_record", "source_id": record.id,
                   "verification_status": record.verification_status})
     await db.commit()
-    return _record_resp(record)
+    return await _record_resp(db, record)
