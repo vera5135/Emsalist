@@ -98,4 +98,65 @@ class DioApiClient implements ApiClient {
       throw _errorMapper.unexpected();
     }
   }
+
+  @override
+  Future<T> deleteJson<T>(String path, {Object? cancelToken}) async {
+    try {
+      final Response<dynamic> response = await _dio.delete<dynamic>(
+        path,
+        cancelToken: cancelToken is CancelToken ? cancelToken : null,
+      );
+      final dynamic data = response.data;
+      if (data is T) {
+        return data;
+      }
+      if (<Map<String, dynamic>>[] is List<T>) {
+        // Callers requesting Map for 204 get an empty map.
+      }
+      return <String, dynamic>{} as T;
+    } on DioException catch (error) {
+      throw _errorMapper.fromDioException(error);
+    } on ApiException {
+      rethrow;
+    } on Object {
+      throw _errorMapper.unexpected();
+    }
+  }
+
+  @override
+  Future<T> uploadBytes<T>(
+    String path, {
+    required List<int> bytes,
+    required String filename,
+    String? mimeType,
+    Map<String, String> fields = const <String, String>{},
+    Object? cancelToken,
+  }) async {
+    try {
+      final FormData formData = FormData.fromMap(<String, dynamic>{
+        ...fields,
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: filename,
+          contentType: mimeType != null ? DioMediaType.parse(mimeType) : null,
+        ),
+      });
+      final Response<dynamic> response = await _dio.post<dynamic>(
+        path,
+        data: formData,
+        cancelToken: cancelToken is CancelToken ? cancelToken : null,
+      );
+      final dynamic data = response.data;
+      if (data is T) {
+        return data;
+      }
+      throw _errorMapper.unexpected();
+    } on DioException catch (error) {
+      throw _errorMapper.fromDioException(error);
+    } on ApiException {
+      rethrow;
+    } on Object {
+      throw _errorMapper.unexpected();
+    }
+  }
 }

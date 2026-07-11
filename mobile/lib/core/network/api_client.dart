@@ -22,4 +22,22 @@ abstract class ApiClient {
     Map<String, dynamic>? queryParameters,
     Object? cancelToken,
   });
+
+  /// Performs a DELETE request and returns the decoded JSON body (or an empty
+  /// map for 204 responses).
+  Future<T> deleteJson<T>(
+    String path, {
+    Object? cancelToken,
+  });
+
+  /// Uploads raw [bytes] as a multipart/form-data file field named `file`,
+  /// with optional string [fields], returning the decoded JSON body.
+  Future<T> uploadBytes<T>(
+    String path, {
+    required List<int> bytes,
+    required String filename,
+    String? mimeType,
+    Map<String, String> fields = const <String, String>{},
+    Object? cancelToken,
+  });
 }

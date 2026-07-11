@@ -105,4 +105,47 @@ class FakeApiClient implements ApiClient {
       message: 'no fake POST',
     );
   }
+
+  final List<String> deletePaths = <String>[];
+  final List<String> uploadPaths = <String>[];
+  final List<Object?> uploadBodies = <Object?>[];
+
+  @override
+  Future<T> deleteJson<T>(String path, {Object? cancelToken}) async {
+    deletePaths.add(path);
+    final Object? error = _postErrors[path];
+    if (error != null) {
+      throw error;
+    }
+    final Object? value = _postResponses[path];
+    if (value is T) {
+      return value;
+    }
+    return <String, dynamic>{} as T;
+  }
+
+  @override
+  Future<T> uploadBytes<T>(
+    String path, {
+    required List<int> bytes,
+    required String filename,
+    String? mimeType,
+    Map<String, String> fields = const <String, String>{},
+    Object? cancelToken,
+  }) async {
+    uploadPaths.add(path);
+    uploadBodies.add(<String, dynamic>{'filename': filename, 'fields': fields});
+    final Object? error = _postErrors[path];
+    if (error != null) {
+      throw error;
+    }
+    final Object? value = _postResponses[path];
+    if (value is T) {
+      return value;
+    }
+    throw const ApiException(
+      kind: ApiErrorKind.unexpected,
+      message: 'no fake upload',
+    );
+  }
 }
