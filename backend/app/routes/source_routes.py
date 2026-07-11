@@ -357,7 +357,22 @@ async def _load_owned_case(db: AsyncSession, ctx: SecurityContext, case_id: str)
     return case
 
 
-def _usage_resp(usage, record, version, paragraph) -> SourceUsageResponse:
+async def _usage_verification_status(db, record, version_id) -> str:
+    """Resolve the verification status for the explicit source_version_id."""
+    if not version_id:
+        return record.verification_status
+    from app.services.source_ingestion_service import get_version_official_evidence
+
+    evidence = await get_version_official_evidence(db, record.id, version_id)
+    if evidence.valid:
+        return "verified_official"
+    # Fall through to record-level with effective ceiling.
+    if record.verification_status == "verified_official":
+        return "needs_review"
+    return record.verification_status
+
+
+def _usage_resp(usage, record, version, paragraph, verif_status: str) -> SourceUsageResponse:
     return SourceUsageResponse(
         id=usage.id, case_id=usage.case_id, source_record_id=usage.source_record_id,
         source_version_id=usage.source_version_id, source_paragraph_id=usage.source_paragraph_id,
@@ -369,7 +384,7 @@ def _usage_resp(usage, record, version, paragraph) -> SourceUsageResponse:
         decision_date=record.decision_date if record else "",
         case_number=record.case_number if record else "",
         decision_number=record.decision_number if record else "",
-        verification_status=record.verification_status if record else "",
+        verification_status=verif_status,
         temporal_status=record.temporal_status if record else "",
         official_url=record.official_url if record else "",
         selected_paragraph=(paragraph.text[:500] if paragraph else ""),
@@ -412,7 +427,8 @@ async def add_case_source(
                  {"resource": "source_usage", "usage_id": usage.id, "case_id": case.id,
                   "source_id": record.id, "verification_status": record.verification_status})
     await db.commit()
-    return _usage_resp(usage, record, version, paragraph)
+    verif_status = await _usage_verification_status(db, record, usage.source_version_id)
+    return _usage_resp(usage, record, version, paragraph, verif_status)
 
 
 @case_source_router.get("", response_model=SourceUsageListResponse, operation_id="case_source_list")
@@ -429,7 +445,8 @@ async def list_case_sources(
         paragraph = None
         if usage.source_paragraph_id:
             paragraph = await SourceParagraphRepository.get(db, usage.source_paragraph_id)
-        items.append(_usage_resp(usage, record, None, paragraph))
+            verif_status = await _usage_verification_status(db, record, usage.source_version_id)
+            items.append(_usage_resp(usage, record, None, paragraph, verif_status))
     return SourceUsageListResponse(items=items)
 
 

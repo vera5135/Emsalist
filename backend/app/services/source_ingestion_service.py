@@ -40,6 +40,17 @@ from app.services.source_verification import (
     can_transition,
 )
 
+OUTCOME_CREATED = "created"
+OUTCOME_NEW_VERSION = "new_version"
+OUTCOME_DUPLICATE = "duplicate"
+OUTCOME_DUPLICATE_VERIFIED = "duplicate_verified"
+OUTCOME_CONFLICT = "conflict"
+
+OUTCOMES = frozenset({
+    OUTCOME_CREATED, OUTCOME_NEW_VERSION, OUTCOME_DUPLICATE,
+    OUTCOME_DUPLICATE_VERIFIED, OUTCOME_CONFLICT,
+})
+
 PARSER_VERSION = "p2.6-ingest-3"
 
 OFFICIAL_FETCH_METHOD = "official_fetch_match"
@@ -139,6 +150,35 @@ async def get_version_official_evidence(
             return VersionEvidence.fail("evidence_url is not allowlisted official domain")
         return VersionEvidence.success(version_id, v.evidence_url, v.evidence_hash)
     return VersionEvidence.fail("no official_match verification found for this version")
+
+
+async def resolve_version_verification_status(
+    session: AsyncSession,
+    record_id: str,
+    version_id: str | None,
+    record_status: str,
+) -> str:
+    """Authoritative user-facing trust status for a specific version of a source.
+
+    - Returns the effective status for [version_id] by checking version-scoped
+      evidence. [record_status] is the fallback only when the version has no
+      version-specific evidence.
+    - This is the SINGLE function that computes what the API, SourceUsage cards
+      and index eligibility should display. Different callers must not compute
+      trust independently.
+    """
+    if not version_id:
+        # No version → fall through to record-level with effective logic.
+        if record_status == VERIFIED_OFFICIAL:
+            return NEEDS_REVIEW  # no current version, cannot be verified_official
+        return record_status
+    evidence = await get_version_official_evidence(session, record_id, version_id)
+    if evidence.valid:
+        return VERIFIED_OFFICIAL
+    # No official evidence — check the record status with effective logic.
+    if record_status == VERIFIED_OFFICIAL:
+        return NEEDS_REVIEW
+    return record_status
 
 
 def effective_verification_status(
@@ -317,7 +357,7 @@ async def _create_new_record(
         )
         await SourceRecordRepository.transition_status(session, record, VERIFIED_OFFICIAL)
         status = VERIFIED_OFFICIAL
-    return IngestResult(record.id, version.id, canonical_key, status, "created")
+    return IngestResult(record.id, version.id, canonical_key, status, OUTCOME_CREATED)
 
 
 async def _ingest_into_existing(
@@ -328,7 +368,23 @@ async def _ingest_into_existing(
     await SourceRecordRepository.mark_checked(session, record, successful=True)
     existing = await SourceVersionRepository.get_by_hash(session, record.id, content_hash)
     if existing is not None:
-        return IngestResult(record.id, existing.id, canonical_key, record.verification_status, "duplicate")
+        # Same canonical key + same content_hash → idempotent. However, if this
+        # is an official_fetch and the existing version lacks official_fetch_match
+        # evidence, produce the evidence for it (never create a duplicate version).
+        if is_official_fetch:
+            evidence = await get_version_official_evidence(session, record.id, existing.id)
+            if not evidence.valid:
+                await _produce_official_verification(
+                    session, record.id, existing.id, content_hash, official_url,
+                )
+                # If this version is the current version, promote trust.
+                if (record.current_version_id == existing.id
+                        and can_transition(record.verification_status, VERIFIED_OFFICIAL)):
+                    await SourceRecordRepository.transition_status(session, record, VERIFIED_OFFICIAL)
+            # outcome is always duplicate_verified when official_fetch matches
+            # an existing version (evidence was already there or just produced).
+            return IngestResult(record.id, existing.id, canonical_key, record.verification_status, OUTCOME_DUPLICATE_VERIFIED)
+        return IngestResult(record.id, existing.id, canonical_key, record.verification_status, OUTCOME_DUPLICATE)
 
     if _metadata_conflict(record, metadata):
         if can_transition(record.verification_status, CONFLICTING):
@@ -338,7 +394,7 @@ async def _ingest_into_existing(
             verification_method="metadata_conflict", verifier_type="automated",
             result=CONFLICTING, notes="Metadata conflict on ingestion.",
         )
-        return IngestResult(record.id, record.current_version_id or "", canonical_key, record.verification_status, "conflict")
+        return IngestResult(record.id, record.current_version_id or "", canonical_key, record.verification_status, OUTCOME_CONFLICT)
 
     version = await _create_version_with_paragraphs(
         session, record, source_type, trusted_text, content_hash,
@@ -365,7 +421,7 @@ async def _ingest_into_existing(
             await SourceRecordRepository.transition_status(session, record, NEEDS_REVIEW)
         new_status = record.verification_status
 
-    return IngestResult(record.id, version.id, canonical_key, new_status, "new_version")
+    return IngestResult(record.id, version.id, canonical_key, new_status, OUTCOME_NEW_VERSION)
 
 
 async def _produce_official_verification(session, record_id, version_id, content_hash, official_url):

@@ -473,12 +473,14 @@ async def test_foreign_case_source_usage_404(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_usage_traceability_preserved_across_new_version(client: AsyncClient):
     case_id = await _make_case(client)
-    ing = (await client.post("/api/v1/legal-sources/ingest", json=_official_decision(text="orijinal"))).json()
+    ing = (await client.post("/api/v1/legal-sources/ingest", json=_official_decision(
+        text="orijinal", chamber="13. HD", court="Yargıtay"))).json()
     sid, vid = ing["source_record_id"], ing["source_version_id"]
     usage = (await client.post(f"/api/v1/cases/{case_id}/sources", json={
         "source_record_id": sid, "source_version_id": vid})).json()
     # A new version arrives; the usage still points at the original version.
-    await client.post("/api/v1/legal-sources/ingest", json=_official_decision(text="güncellenmiş metin"))
+    await client.post("/api/v1/legal-sources/ingest", json=_official_decision(
+        text="güncellenmiş metin", chamber="13. HD", court="Yargıtay"))
     lst = await client.get(f"/api/v1/cases/{case_id}/sources")
     items = lst.json()["items"]
     assert len(items) == 1
@@ -653,6 +655,191 @@ async def test_jwt_role_boundary_lawyer_blocked():
             r = await ac.post("/api/v1/legal-sources/ingest",
                               json=_official_decision(), headers=headers)
             assert r.status_code == 403, f"lawyer must be blocked from ingest, got {r.status_code}"
+
+
+async def _jwt_client():
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app as _jwt_app
+    transport = ASGITransport(app=_jwt_app)
+    return AsyncClient(transport=transport, base_url="http://test")
+
+
+def _jwt_token(role: str) -> str:
+    from app.services.auth_service import create_access_token
+    return create_access_token(f"u-{role}", "t1", role, "s1")
+
+
+async def _jwt_post(ac, path, token, json=None):
+    from unittest.mock import patch
+
+    with patch("app.services.auth_service.get_auth_mode", return_value="jwt"), \
+         patch("app.routes.source_routes.get_auth_mode", return_value="jwt"):
+        headers = {"Authorization": f"Bearer {token}"}
+        return await ac.post(path, json=json, headers=headers)
+
+
+@pytest.mark.asyncio
+async def test_jwt_lawyer_global_source_mutations_forbidden():
+    ac = await _jwt_client()
+    try:
+        token = _jwt_token("lawyer")
+        for path, body in [
+            ("/api/v1/legal-sources/ingest", _official_decision()),
+        ]:
+            r = await _jwt_post(ac, path, token, json=body)
+            assert r.status_code == 403, f"POST {path} expected 403, got {r.status_code}"
+    finally:
+        await ac.aclose()
+
+
+@pytest.mark.asyncio
+async def test_jwt_tenant_admin_global_source_mutations_forbidden():
+    ac = await _jwt_client()
+    try:
+        token = _jwt_token("tenant_admin")
+        r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
+        assert r.status_code == 403, f"tenant_admin ingest expected 403, got {r.status_code}"
+    finally:
+        await ac.aclose()
+
+
+# --- Same-hash official fetch verification --------------------------------
+@pytest.mark.asyncio
+async def test_editor_candidate_then_exact_official_fetch_verifies_existing_version(client: AsyncClient):
+    """An editor-submitted candidate, later confirmed by an exact same-content
+    official fetch, must get verified_official status for the SAME version."""
+    from app.services.source_fetcher import FetchResult
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_editor_candidate, ingest_official_fetch
+    from app.services.source_ingestion_service import resolve_version_verification_status
+
+    sm = get_sessionmaker()
+
+    # 1. Editor submits a candidate.
+    async with sm() as db:
+        result = await ingest_editor_candidate(
+            db,
+            metadata={"source_type": "legislation", "title": "TBK",
+                      "issuing_authority": "TBMM", "number": "6098", "publication_date": "2011-02-04",
+                      "effective_date": "2012-07-01"},
+            raw_text="Madde 219\nAyıplı malın iadesi.",
+        )
+        await db.commit()
+    assert result.outcome == "created"
+    assert result.verification_status == "needs_review"
+    rec_id = result.source_record_id
+    v1_id = result.source_version_id
+
+    # 2. Official fetch returns exact same text.
+    async with sm() as db:
+        result2 = await ingest_official_fetch(
+            db,
+            metadata={"source_type": "legislation", "title": "TBK",
+                      "issuing_authority": "TBMM", "number": "6098", "publication_date": "2011-02-04",
+                      "effective_date": "2012-07-01"},
+            fetch_result=FetchResult(
+                final_url="https://mevzuat.gov.tr/6098",
+                status_code=200,
+                content="Madde 219\nAyıplı malın iadesi.".encode(),
+                content_type="text/html",
+            ),
+        )
+        await db.commit()
+    assert result2.outcome == "duplicate_verified"
+    assert result2.source_record_id == rec_id
+    assert result2.source_version_id == v1_id
+    assert result2.verification_status == "verified_official"
+
+    # Version count must stay 1.
+    versions = await client.get(f"/api/v1/legal-sources/{rec_id}/versions")
+    assert len(versions.json()) == 1
+
+    # The existing version now has official evidence.
+    from app.services.source_ingestion_service import get_version_official_evidence
+    async with sm() as db:
+        ev = await get_version_official_evidence(db, rec_id, v1_id)
+    assert ev.valid
+
+    # resolve_version_verification_status must return verified_official for v1.
+    async with sm() as db:
+        status = await resolve_version_verification_status(db, rec_id, v1_id, "needs_review")
+    assert status == "verified_official"
+
+
+@pytest.mark.asyncio
+async def test_repeated_exact_official_fetch_is_idempotent(client: AsyncClient):
+    from app.services.source_fetcher import FetchResult
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_official_fetch
+
+    sm = get_sessionmaker()
+    final_result = None
+    for _i in range(2):
+        async with sm() as db:
+            final_result = await ingest_official_fetch(
+                db,
+                metadata={"source_type": "legislation", "title": "TBK",
+                          "issuing_authority": "TBMM", "number": "6099", "publication_date": "2011-02-04",
+                          "effective_date": "2012-07-01"},
+                fetch_result=FetchResult(
+                    final_url="https://mevzuat.gov.tr/6099",
+                    status_code=200, content=b"Idempotent test content.",
+                    content_type="text/html",
+                ),
+            )
+            await db.commit()
+    assert final_result is not None
+    assert final_result.outcome == "duplicate_verified"  # second call, already has evidence
+    versions = await client.get(f"/api/v1/legal-sources/{final_result.source_record_id}/versions")
+    assert len(versions.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_usage_of_verified_old_version_keeps_status_after_unverified_new_version(client: AsyncClient):
+    """SourceUsage bound to an old verified version stays verified_even when
+    a newer, unverified version becomes current."""
+    case_id = await _make_case(client)
+    from app.services.source_fetcher import FetchResult
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_official_fetch, ingest_editor_candidate
+
+    sm = get_sessionmaker()
+    async with sm() as db:
+        v1 = await ingest_official_fetch(
+            db,
+            metadata={"source_type": "supreme_court_decision",
+                      "title": "Usage Provenance Test",
+                      "court": "Yargıtay", "chamber": "13. HD",
+                      "case_number": "2020/777", "decision_number": "2021/888",
+                      "decision_date": "2021-01-01"},
+            fetch_result=FetchResult(
+                final_url="https://karararama.yargitay.gov.tr/x",
+                status_code=200, content=b"USAGE PROVENANCE V1 OFFICIAL",
+                content_type="text/html",
+            ),
+        )
+        await db.commit()
+    rec_id = v1.source_record_id
+    v1_id = v1.source_version_id
+
+    await client.post(f"/api/v1/cases/{case_id}/sources", json={
+        "source_record_id": rec_id, "source_version_id": v1_id,
+        "reason": "test",
+    })
+
+    # v2 unverified editor candidate current
+    await client.post("/api/v1/legal-sources/ingest", json=_official_decision(
+        text="USAGE PROVENANCE V2 UNVERIFIED",
+        case_number="2020/777", decision_number="2021/888", decision_date="2021-01-01",
+        court="Yargıtay", chamber="13. HD", issuing_authority="",
+    ))
+
+    usage_list = await client.get(f"/api/v1/cases/{case_id}/sources")
+    items = usage_list.json()["items"]
+    assert len(items) == 1
+    # Usage bound to v1 must show verified_official (v1 has fetch evidence).
+    assert items[0]["verification_status"] == "verified_official"
+    assert items[0]["source_version_id"] == v1_id
 
 
 @pytest.mark.asyncio
