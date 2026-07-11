@@ -160,6 +160,24 @@ Streaming sonraki aşamada SSE veya WebSocket ile eklenebilir; ilk sözleşme po
 
 Upload session response signed target veya API upload URL'si döndürür.
 
+### 11.1 P2.5 uygulanan endpoint'ler (case-scoped, authenticated)
+
+İlk sürümde tek-atışlık multipart upload uygulanmıştır (chunked/parts ve
+analysis-runs ileri sürüm). Tümü tenant + case-owner scoped; foreign/unknown
+kaynak `404` döner:
+
+- `POST /api/v1/cases/{case_id}/documents` (multipart/form-data, alan `file`, opsiyonel `document_type`) → 201; aynı hash aynı case'de → `409` (`X-Duplicate-Document-Id`)
+- `GET /api/v1/cases/{case_id}/documents`
+- `GET /api/v1/cases/{case_id}/documents/{document_id}`
+- `DELETE /api/v1/cases/{case_id}/documents/{document_id}` (soft delete, 204)
+- `GET /api/v1/cases/{case_id}/documents/{document_id}/content` (authenticated download)
+- `POST /api/v1/cases/{case_id}/documents/{document_id}/retry`
+- `GET /api/v1/cases/{case_id}/documents/{document_id}/pages`
+- `GET /api/v1/cases/{case_id}/documents/{document_id}/analysis`
+- `POST /api/v1/cases/{case_id}/documents/{document_id}/type`
+- `POST /api/v1/cases/{case_id}/documents/{document_id}/extractions/{extraction_id}/confirm`
+- `POST /api/v1/cases/{case_id}/documents/{document_id}/extractions/{extraction_id}/reject`
+
 ## 12. Legal sources ve search
 
 - POST `/search/legal`

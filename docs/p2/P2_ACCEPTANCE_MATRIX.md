@@ -63,15 +63,22 @@ Bu matris her P2 aşamasının ölçülebilir kapanış kriterlerini tanımlar. 
 
 ## P2.5 — Belge hattı
 
+Durum: ✅ Uygulandı (P2.5). Kanıtlar `backend/tests/test_document_pipeline_routes.py`
+(23 test) ve mobil `document_repository_test.dart` / `documents_screen_test.dart`
+(13 test). Gerçek format matrisi ve kapsam dışı için `P2_DOCUMENT_PIPELINE.md §19`.
+
 | Kriter | Öncelik | Kanıt |
 |---|---:|---|
-| Desteklenen formatlar doğrulanıyor | Kritik | upload tests |
-| Boyut, MIME, hash ve path traversal kontrolleri var | Kritik | security tests |
-| Tekrar belge tespit ediliyor | Yüksek | dedupe test |
-| Analiz asenkron ve durum izlenebilir | Kritik | job integration |
-| Çıkarılan her bilgi sayfa/paragraf konumuna bağlı | Kritik | extraction test |
-| Kullanıcı doğrulama/reddetme yapabiliyor | Kritik | API/mobile test |
-| Okunamayan/eksik sayfa açıkça işaretleniyor | Yüksek | fixture test |
+| Desteklenen formatlar doğrulanıyor (gerçek parser bazında) | Kritik | test_document_pipeline_routes: pdf/txt/docx/udf/image |
+| Boyut, MIME magic-byte, hash ve path traversal kontrolleri var | Kritik | mime_spoof / zero_byte / path_traversal / unsupported_extension testleri |
+| Tekrar belge tespit ediliyor (aynı case, 409); farklı tenant sızıntısı yok | Yüksek | duplicate_same_case / same_hash_different_case testleri |
+| Analiz durumu izlenebilir (state machine); geçersiz geçiş engellenir | Kritik | retry / state transitions |
+| Çıkarılan her bilgi sayfa konumuna bağlı (PDF gerçek sayfa) | Kritik | extraction_provenance testi |
+| Kullanıcı doğrulama/reddetme yapabiliyor → P2.4 document_verified fact | Kritik | confirm/reject → CaseFact + contradiction testleri |
+| Okunamayan/görsel belge açıkça işaretleniyor (uydurma yok) | Yüksek | image upload_only / udf binary unsupported |
+
+Not: Analiz P2.5'te senkron yürütülür (arka plan job kuyruğu ileri sürüm);
+gerçek OCR ve chunked upload kapsam dışıdır.
 
 ## P2.6 — Kaynak omurgası
 

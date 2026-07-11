@@ -332,3 +332,66 @@ Belge metni talimat değil veridir.
 - Kullanıcı doğrulaması case memory'de kaynaklı fact üretir.
 - Karantinadaki belge normal kullanıcı tarafından indirilemez.
 - Farklı tenant belgesi hash veya kimlikle keşfedilemez.
+
+## 19. P2.5 uygulanan davranış (implemented)
+
+Bu bölüm, tasarımın hangi kısmının **gerçekten** kodlandığını dürüstçe kaydeder.
+Belirtilmeyen tasarım maddeleri (chunked upload, gerçek OCR, virüs tarayıcı,
+signed URL object storage, analysis-run sürümleme) ileri sürümlere bırakılmıştır.
+
+### 19.1 Canonical model kararı
+
+DB `documents` tablosu canonical modeldir ve P2.5 alanlarıyla genişletilmiştir
+(`safe_filename, extension, document_type_source, analysis_status, support_level,
+page_count, extracted_text_available, failure_code, uploaded_by, version`). Yeni
+`document_pages` ve `document_extractions` tabloları eklenmiştir. Eski dosya
+tabanlı `DocumentIntakeService` + `/documents/upload` rotası dormant bırakılmış,
+regresyon önlemek için değiştirilmemiştir. P2.5 rotaları P2.3 sahipli-case
+altında çalışır: `/api/v1/cases/{case_id}/documents`.
+
+### 19.2 Gerçek format destek matrisi
+
+| Format | Upload | Text extraction | Page provenance | Analysis (deterministic) |
+|--------|--------|-----------------|-----------------|--------------------------|
+| PDF | ✅ | ✅ (pypdf, sayfa bazlı) | ✅ gerçek sayfa no | ✅ |
+| TXT | ✅ | ✅ (çok-kodlamalı) | tek mantıksal sayfa | ✅ |
+| DOCX | ✅ | ✅ (paragraf) | ❌ sahte sayfa üretilmez | ✅ |
+| UDF | ✅ | ⚠️ yalnız okunabilir XML/TXT içeren arşivde; aksi halde `unsupported` | tek mantıksal sayfa | ⚠️ |
+| JPG/JPEG | ✅ | ❌ OCR yok → `unsupported` (upload_only) | ❌ | ❌ |
+| PNG | ✅ | ❌ OCR yok → `unsupported` (upload_only) | ❌ | ❌ |
+
+Support seviyeleri: PDF/DOCX/UDF = `text_extraction_only`, TXT = `fully_supported`,
+JPG/JPEG/PNG = `upload_only`. Görsel belgeler için OCR **yapılmış gibi
+davranılmaz**; belge kartı oluşur ama `extracted_text_available=false` ve durum
+`unsupported` olur.
+
+### 19.3 Durum makinesi (uygulanan)
+
+`uploading → queued → processing → (analyzed | awaiting_confirmation |
+unsupported | failed | quarantined)`; `deleted` terminaldir. Geçersiz geçişler
+engellenir (ör. `quarantined → analyzed` yok; `deleted` yeniden işlenemez;
+`failed → queued` retry ile mümkündür). Geçişler audit üretir.
+
+### 19.4 Çıkarım → case memory (P2.4) entegrasyonu
+
+`document_extractions` kayıtları `detected` olarak üretilir. Kullanıcı onayı:
+`document_verified` `verification_status` ile bir `CaseFact` oluşturur ve P2.4
+`detect_for_fact_type` çelişki motoru çalışır. Reddetme kaydı `rejected` yapar,
+silmez, memory fact üretmez. P2.4 doğrulama/çelişki kuralları bypass edilmez.
+
+### 19.5 Deterministic extractor kapsamı
+
+Yalnız kural tabanlı, yüksek güvenli kalıplar: tarih, tutar+para birimi, plaka,
+VIN/şasi, esas/karar numarası. Taraf, talep, savunma ve hukuki sonuç çıkarımı
+**yapılmaz** (doğrulanmış analyzer yok). LLM kullanılmaz. Belge içeriği
+uydurulmaz.
+
+### 19.6 Bilinen eksikler / rollback
+
+- Gerçek OCR, chundked upload, virüs tarayıcı, signed-URL object storage ve
+  DocumentAnalysisRun sürümleme kapsam dışıdır.
+- Mobil dosya seçici (native `file_picker`) henüz yok; upload akışı in-app metin
+  belgesiyle uçtan uca çalışır ve native picker sonradan seam üzerinden eklenir.
+- Rollback: migration `87be64670347` tek adımda `downgrade -1` ile geri alınır;
+  yeni rotalar router mount kaldırılarak devre dışı bırakılabilir; eski dosya
+  tabanlı `/documents/upload` etkilenmez.
