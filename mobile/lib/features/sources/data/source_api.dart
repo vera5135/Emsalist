@@ -22,20 +22,27 @@ class SourceApi {
       'offset': offset,
     };
     if (sourceType != null) query['source_type'] = sourceType;
-    if (verificationStatus != null) query['verification_status'] = verificationStatus;
-    final Map<String, dynamic> json = await _client.getJson<Map<String, dynamic>>(
-      sourcesPath,
-      queryParameters: query,
-      cancelToken: cancelToken,
-    );
+    if (verificationStatus != null) {
+      query['verification_status'] = verificationStatus;
+    }
+    final Map<String, dynamic> json = await _client
+        .getJson<Map<String, dynamic>>(
+          sourcesPath,
+          queryParameters: query,
+          cancelToken: cancelToken,
+        );
     return SourceRecordListDto.fromJson(json);
   }
 
-  Future<SourceRecordDto> getSource(String sourceId, {Object? cancelToken}) async {
-    final Map<String, dynamic> json = await _client.getJson<Map<String, dynamic>>(
-      '$sourcesPath/$sourceId',
-      cancelToken: cancelToken,
-    );
+  Future<SourceRecordDto> getSource(
+    String sourceId, {
+    Object? cancelToken,
+  }) async {
+    final Map<String, dynamic> json = await _client
+        .getJson<Map<String, dynamic>>(
+          '$sourcesPath/$sourceId',
+          cancelToken: cancelToken,
+        );
     return SourceRecordDto.fromJson(json);
   }
 
@@ -48,26 +55,32 @@ class SourceApi {
       cancelToken: cancelToken,
     );
     return json
-        .map((dynamic e) => SourceParagraphDto.fromJson(e as Map<String, dynamic>))
+        .map(
+          (dynamic e) => SourceParagraphDto.fromJson(e as Map<String, dynamic>),
+        )
         .toList();
   }
 
-  Future<OfficialTrackingListDto> officialTracking({Object? cancelToken}) async {
-    final Map<String, dynamic> json = await _client.getJson<Map<String, dynamic>>(
-      trackingPath,
-      cancelToken: cancelToken,
-    );
+  Future<OfficialTrackingListDto> officialTracking({
+    Object? cancelToken,
+  }) async {
+    final Map<String, dynamic> json = await _client
+        .getJson<Map<String, dynamic>>(trackingPath, cancelToken: cancelToken);
     return OfficialTrackingListDto.fromJson(json);
   }
 
   // --- Case source usage --------------------------------------------------
   String _caseBase(String caseId) => '/api/v1/cases/$caseId/sources';
 
-  Future<SourceUsageListDto> listCaseSources(String caseId, {Object? cancelToken}) async {
-    final Map<String, dynamic> json = await _client.getJson<Map<String, dynamic>>(
-      _caseBase(caseId),
-      cancelToken: cancelToken,
-    );
+  Future<SourceUsageListDto> listCaseSources(
+    String caseId, {
+    Object? cancelToken,
+  }) async {
+    final Map<String, dynamic> json = await _client
+        .getJson<Map<String, dynamic>>(
+          _caseBase(caseId),
+          cancelToken: cancelToken,
+        );
     return SourceUsageListDto.fromJson(json);
   }
 
@@ -78,19 +91,23 @@ class SourceApi {
     String? sourceParagraphId,
     String reason = '',
   }) async {
-    final Map<String, dynamic> json = await _client.postJson<Map<String, dynamic>>(
-      _caseBase(caseId),
-      body: <String, dynamic>{
-        'source_record_id': sourceRecordId,
-        'source_version_id': sourceVersionId,
-        if (sourceParagraphId != null) 'source_paragraph_id': sourceParagraphId,
-        'reason': reason,
-      },
-    );
+    final Map<String, dynamic> json = await _client
+        .postJson<Map<String, dynamic>>(
+          _caseBase(caseId),
+          body: <String, dynamic>{
+            'source_record_id': sourceRecordId,
+            'source_version_id': sourceVersionId,
+            if (sourceParagraphId != null)
+              'source_paragraph_id': sourceParagraphId,
+            'reason': reason,
+          },
+        );
     return SourceUsageDto.fromJson(json);
   }
 
   Future<void> removeCaseSource(String caseId, String usageId) async {
-    await _client.deleteJson<Map<String, dynamic>>('${_caseBase(caseId)}/$usageId');
+    await _client.deleteJson<Map<String, dynamic>>(
+      '${_caseBase(caseId)}/$usageId',
+    );
   }
 }
