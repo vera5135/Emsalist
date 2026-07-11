@@ -13,7 +13,9 @@ const String _caseId = 'c1';
 Widget _host(FakeApiClient client, {Widget? home}) {
   return ProviderScope(
     overrides: <Override>[
-      sourceRepositoryProvider.overrideWithValue(SourceRepository(SourceApi(client))),
+      sourceRepositoryProvider.overrideWithValue(
+        SourceRepository(SourceApi(client)),
+      ),
     ],
     child: MaterialApp(home: home ?? const SourcesScreen()),
   );
@@ -41,7 +43,9 @@ void main() {
   testWidgets('sources list empty state', (WidgetTester tester) async {
     final FakeApiClient client = FakeApiClient()
       ..whenGet(SourceApi.sourcesPath, <String, dynamic>{
-        'items': <dynamic>[], 'total': 0, 'has_more': false,
+        'items': <dynamic>[],
+        'total': 0,
+        'has_more': false,
       });
     await tester.pumpWidget(_host(client));
     await tester.pumpAndSettle();
@@ -56,10 +60,14 @@ void main() {
     expect(find.text('Tekrar Dene'), findsOneWidget);
   });
 
-  testWidgets('official verified card shows user-facing badge', (WidgetTester tester) async {
+  testWidgets('official verified card shows user-facing badge', (
+    WidgetTester tester,
+  ) async {
     final FakeApiClient client = FakeApiClient()
       ..whenGet(SourceApi.sourcesPath, <String, dynamic>{
-        'items': <dynamic>[_record()], 'total': 1, 'has_more': false,
+        'items': <dynamic>[_record()],
+        'total': 1,
+        'has_more': false,
       });
     await tester.pumpWidget(_host(client));
     await tester.pumpAndSettle();
@@ -67,10 +75,14 @@ void main() {
     expect(find.text('Resmî kaynaktan doğrulandı'), findsOneWidget);
   });
 
-  testWidgets('conflicting card shows conflicting label, no snake_case', (WidgetTester tester) async {
+  testWidgets('conflicting card shows conflicting label, no snake_case', (
+    WidgetTester tester,
+  ) async {
     final FakeApiClient client = FakeApiClient()
       ..whenGet(SourceApi.sourcesPath, <String, dynamic>{
-        'items': <dynamic>[_record(status: 'conflicting')], 'total': 1, 'has_more': false,
+        'items': <dynamic>[_record(status: 'conflicting')],
+        'total': 1,
+        'has_more': false,
       });
     await tester.pumpWidget(_host(client));
     await tester.pumpAndSettle();
@@ -78,7 +90,9 @@ void main() {
     expect(find.textContaining('conflicting'), findsNothing);
   });
 
-  testWidgets('official tracking screen renders affected case count', (WidgetTester tester) async {
+  testWidgets('official tracking screen renders affected case count', (
+    WidgetTester tester,
+  ) async {
     final FakeApiClient client = FakeApiClient()
       ..whenGet(SourceApi.trackingPath, <String, dynamic>{
         'items': <dynamic>[
@@ -93,7 +107,9 @@ void main() {
           },
         ],
       });
-    await tester.pumpWidget(_host(client, home: const OfficialTrackingScreen()));
+    await tester.pumpWidget(
+      _host(client, home: const OfficialTrackingScreen()),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Türk Borçlar Kanunu'), findsOneWidget);
     expect(find.text('Yeni sürüm mevcut'), findsOneWidget);
@@ -101,7 +117,9 @@ void main() {
     expect(find.text('Yeniden inceleme gerekli'), findsOneWidget);
   });
 
-  testWidgets('case sources list shows usage without fake draft flag', (WidgetTester tester) async {
+  testWidgets('case sources list shows usage without fake draft flag', (
+    WidgetTester tester,
+  ) async {
     final FakeApiClient client = FakeApiClient()
       ..whenGet('/api/v1/cases/$_caseId/sources', <String, dynamic>{
         'items': <dynamic>[
@@ -117,7 +135,9 @@ void main() {
           },
         ],
       });
-    await tester.pumpWidget(_host(client, home: const CaseSourcesScreen(caseId: _caseId)));
+    await tester.pumpWidget(
+      _host(client, home: const CaseSourcesScreen(caseId: _caseId)),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Yargıtay 13. HD'), findsOneWidget);
     expect(find.textContaining('İade dayanağı'), findsOneWidget);
@@ -127,8 +147,12 @@ void main() {
 
   testWidgets('case sources empty state', (WidgetTester tester) async {
     final FakeApiClient client = FakeApiClient()
-      ..whenGet('/api/v1/cases/$_caseId/sources', <String, dynamic>{'items': <dynamic>[]});
-    await tester.pumpWidget(_host(client, home: const CaseSourcesScreen(caseId: _caseId)));
+      ..whenGet('/api/v1/cases/$_caseId/sources', <String, dynamic>{
+        'items': <dynamic>[],
+      });
+    await tester.pumpWidget(
+      _host(client, home: const CaseSourcesScreen(caseId: _caseId)),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Bu dosyada kaynak yok'), findsOneWidget);
   });

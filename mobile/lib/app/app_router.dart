@@ -142,16 +142,14 @@ GoRouter createAppRouter({
       GoRoute(
         path: AppRoutes.caseDocumentsPath,
         name: AppRoutes.caseDocuments,
-        builder: (BuildContext context, GoRouterState state) => DocumentsScreen(
-          caseId: state.pathParameters['caseId'] ?? '',
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            DocumentsScreen(caseId: state.pathParameters['caseId'] ?? ''),
       ),
       GoRoute(
         path: AppRoutes.caseSourcesPath,
         name: AppRoutes.caseSources,
-        builder: (BuildContext context, GoRouterState state) => CaseSourcesScreen(
-          caseId: state.pathParameters['caseId'] ?? '',
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            CaseSourcesScreen(caseId: state.pathParameters['caseId'] ?? ''),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) {

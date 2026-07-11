@@ -15,7 +15,9 @@ class SourcesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<SourceRecordItem>> sources = ref.watch(sourcesProvider);
+    final AsyncValue<List<SourceRecordItem>> sources = ref.watch(
+      sourcesProvider,
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kaynaklar'),
@@ -39,7 +41,9 @@ class SourcesScreen extends ConsumerWidget {
       body: sources.when(
         loading: () => const LoadingWidget(message: 'Kaynaklar yükleniyor'),
         error: (Object error, _) => AppErrorWidget(
-          message: error is ApiException ? error.message : 'Kaynaklar yüklenemedi.',
+          message: error is ApiException
+              ? error.message
+              : 'Kaynaklar yüklenemedi.',
           onRetry: () => ref.invalidate(sourcesProvider),
         ),
         data: (List<SourceRecordItem> items) {
@@ -137,13 +141,20 @@ class SourceCard extends StatelessWidget {
                   child: Text(
                     item.badge,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: verificationColor(context, item.verificationStatus),
+                      color: verificationColor(
+                        context,
+                        item.verificationStatus,
+                      ),
                     ),
                   ),
                 ),
                 if (item.isOfficial) ...<Widget>[
                   const SizedBox(width: AppConstants.spacingSm),
-                  Icon(Icons.gavel_outlined, size: 12, color: theme.colorScheme.primary),
+                  Icon(
+                    Icons.gavel_outlined,
+                    size: 12,
+                    color: theme.colorScheme.primary,
+                  ),
                 ],
               ],
             ),
@@ -151,7 +162,8 @@ class SourceCard extends StatelessWidget {
         ),
         onTap: () => Navigator.of(context).push<void>(
           MaterialPageRoute<void>(
-            builder: (BuildContext ctx) => SourceDetailScreen(sourceId: item.id),
+            builder: (BuildContext ctx) =>
+                SourceDetailScreen(sourceId: item.id),
           ),
         ),
       ),
@@ -192,21 +204,37 @@ class SourceDetailScreen extends ConsumerWidget {
               const SizedBox(height: AppConstants.spacingSm),
               Row(
                 children: <Widget>[
-                  Icon(verificationIcon(item.verificationStatus),
-                      size: 16, color: verificationColor(context, item.verificationStatus)),
+                  Icon(
+                    verificationIcon(item.verificationStatus),
+                    size: 16,
+                    color: verificationColor(context, item.verificationStatus),
+                  ),
                   const SizedBox(width: AppConstants.spacingXs),
-                  Text(item.badge,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                          color: verificationColor(context, item.verificationStatus))),
+                  Text(
+                    item.badge,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: verificationColor(
+                        context,
+                        item.verificationStatus,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              Text('Güncellik: ${temporalStatusLabel(item.temporalStatus)}',
-                  style: theme.textTheme.bodySmall),
+              Text(
+                'Güncellik: ${temporalStatusLabel(item.temporalStatus)}',
+                style: theme.textTheme.bodySmall,
+              ),
               if (item.caseNumber.isNotEmpty)
-                Text('Esas/Karar: ${item.caseNumber} / ${item.decisionNumber}',
-                    style: theme.textTheme.bodySmall),
+                Text(
+                  'Esas/Karar: ${item.caseNumber} / ${item.decisionNumber}',
+                  style: theme.textTheme.bodySmall,
+                ),
               const Divider(height: AppConstants.spacingLg),
-              Text('Atıf Yapılabilir Bölümler', style: theme.textTheme.titleMedium),
+              Text(
+                'Atıf Yapılabilir Bölümler',
+                style: theme.textTheme.titleMedium,
+              ),
               const SizedBox(height: AppConstants.spacingSm),
               paras.when(
                 loading: () => const Padding(
@@ -222,7 +250,9 @@ class SourceDetailScreen extends ConsumerWidget {
                     children: list.map((SourceParagraphItem p) {
                       final String label = p.articleNumber.isNotEmpty
                           ? 'Madde ${p.articleNumber}'
-                          : (p.page != null ? 'Sayfa ${p.page}' : 'Bölüm ${p.paragraphIndex}');
+                          : (p.page != null
+                                ? 'Sayfa ${p.page}'
+                                : 'Bölüm ${p.paragraphIndex}');
                       return Card(
                         child: ListTile(
                           title: Text(label, style: theme.textTheme.labelLarge),
@@ -252,14 +282,18 @@ class OfficialTrackingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
-    final AsyncValue<List<OfficialTrackingItem>> tracking =
-        ref.watch(officialTrackingProvider);
+    final AsyncValue<List<OfficialTrackingItem>> tracking = ref.watch(
+      officialTrackingProvider,
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('Resmî Kaynak Takibi')),
       body: tracking.when(
-        loading: () => const LoadingWidget(message: 'Takip bilgileri yükleniyor'),
+        loading: () =>
+            const LoadingWidget(message: 'Takip bilgileri yükleniyor'),
         error: (Object e, _) => AppErrorWidget(
-          message: e is ApiException ? e.message : 'Takip bilgileri yüklenemedi.',
+          message: e is ApiException
+              ? e.message
+              : 'Takip bilgileri yüklenemedi.',
           onRetry: () => ref.invalidate(officialTrackingProvider),
         ),
         data: (List<OfficialTrackingItem> items) {
@@ -282,25 +316,41 @@ class OfficialTrackingScreen extends ConsumerWidget {
                 return Card(
                   child: ListTile(
                     leading: Icon(
-                      t.requiresReview ? Icons.rate_review_outlined : Icons.check_circle_outline,
-                      color: t.requiresReview ? theme.colorScheme.error : theme.colorScheme.primary,
+                      t.requiresReview
+                          ? Icons.rate_review_outlined
+                          : Icons.check_circle_outline,
+                      color: t.requiresReview
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.primary,
                     ),
                     title: Text(t.displayTitle),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(t.lastCheckedAt == null
-                            ? 'Henüz kontrol edilmedi'
-                            : 'Son kontrol: ${t.lastCheckedAt}'),
+                        Text(
+                          t.lastCheckedAt == null
+                              ? 'Henüz kontrol edilmedi'
+                              : 'Son kontrol: ${t.lastCheckedAt}',
+                        ),
                         if (t.newVersionDetected)
-                          Text('Yeni sürüm mevcut',
-                              style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.error)),
+                          Text(
+                            'Yeni sürüm mevcut',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
                         if (t.affectedCaseCount > 0)
-                          Text('Etkilenen dosya: ${t.affectedCaseCount}',
-                              style: theme.textTheme.labelSmall),
+                          Text(
+                            'Etkilenen dosya: ${t.affectedCaseCount}',
+                            style: theme.textTheme.labelSmall,
+                          ),
                         if (t.requiresReview)
-                          Text('Yeniden inceleme gerekli',
-                              style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.error)),
+                          Text(
+                            'Yeniden inceleme gerekli',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -328,8 +378,9 @@ class CaseSourcesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
-    final AsyncValue<List<CaseSourceUsage>> usages =
-        ref.watch(caseSourcesProvider(caseId));
+    final AsyncValue<List<CaseSourceUsage>> usages = ref.watch(
+      caseSourcesProvider(caseId),
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('Dosyada Kullanılan Kaynaklar')),
       body: usages.when(
@@ -342,7 +393,8 @@ class CaseSourcesScreen extends ConsumerWidget {
           if (items.isEmpty) {
             return const EmptyWidget(
               title: 'Bu dosyada kaynak yok',
-              message: 'Doğrulanmış kaynaklar dosyaya eklendikçe burada görünür.',
+              message:
+                  'Doğrulanmış kaynaklar dosyaya eklendikçe burada görünür.',
               icon: Icons.link_outlined,
             );
           }
@@ -362,23 +414,44 @@ class CaseSourcesScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         if (u.reason.isNotEmpty)
-                          Text('Neden: ${u.reason}', style: theme.textTheme.bodySmall),
+                          Text(
+                            'Neden: ${u.reason}',
+                            style: theme.textTheme.bodySmall,
+                          ),
                         if (u.selectedParagraph.isNotEmpty)
-                          Text(u.selectedParagraph,
-                              maxLines: 3, overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall),
+                          Text(
+                            u.selectedParagraph,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall,
+                          ),
                         const SizedBox(height: AppConstants.spacingXs),
                         Row(
                           children: <Widget>[
-                            Icon(verificationIcon(u.verificationStatus),
-                                size: 14, color: verificationColor(context, u.verificationStatus)),
+                            Icon(
+                              verificationIcon(u.verificationStatus),
+                              size: 14,
+                              color: verificationColor(
+                                context,
+                                u.verificationStatus,
+                              ),
+                            ),
                             const SizedBox(width: AppConstants.spacingXs),
-                            Flexible(child: Text(u.badge, style: theme.textTheme.labelSmall)),
+                            Flexible(
+                              child: Text(
+                                u.badge,
+                                style: theme.textTheme.labelSmall,
+                              ),
+                            ),
                           ],
                         ),
                         if (u.usedInFinalDraft)
-                          Text('Dilekçede kullanıldı',
-                              style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary)),
+                          Text(
+                            'Dilekçede kullanıldı',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
                       ],
                     ),
                     trailing: IconButton(

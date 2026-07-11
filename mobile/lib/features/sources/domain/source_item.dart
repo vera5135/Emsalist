@@ -110,13 +110,14 @@ class SourceParagraphItem {
   final String articleNumber;
   final int? page;
 
-  factory SourceParagraphItem.fromDto(SourceParagraphDto dto) => SourceParagraphItem(
-    id: dto.id,
-    paragraphIndex: dto.paragraphIndex,
-    text: dto.text,
-    articleNumber: dto.articleNumber,
-    page: dto.page,
-  );
+  factory SourceParagraphItem.fromDto(SourceParagraphDto dto) =>
+      SourceParagraphItem(
+        id: dto.id,
+        paragraphIndex: dto.paragraphIndex,
+        text: dto.text,
+        articleNumber: dto.articleNumber,
+        page: dto.page,
+      );
 }
 
 class CaseSourceUsage {
@@ -147,7 +148,8 @@ class CaseSourceUsage {
   final String officialUrl;
 
   String get badge => verificationBadgeLabel(verificationStatus);
-  String get displayTitle => sourceTitle.trim().isEmpty ? 'İsimsiz kaynak' : sourceTitle;
+  String get displayTitle =>
+      sourceTitle.trim().isEmpty ? 'İsimsiz kaynak' : sourceTitle;
 
   factory CaseSourceUsage.fromDto(SourceUsageDto dto) => CaseSourceUsage(
     id: dto.id,
@@ -191,16 +193,17 @@ class OfficialTrackingItem {
 
   String get displayTitle => title.trim().isEmpty ? 'İsimsiz kaynak' : title;
 
-  factory OfficialTrackingItem.fromDto(OfficialTrackingDto dto) => OfficialTrackingItem(
-    sourceId: dto.sourceId,
-    title: dto.title,
-    sourceType: dto.sourceType,
-    lastCheckedAt: dto.lastSuccessfulCheckAt ?? dto.lastCheckedAt,
-    temporalStatus: dto.temporalStatus,
-    verificationStatus: dto.verificationStatus,
-    newVersionDetected: dto.newVersionDetected,
-    changeSummary: dto.changeSummary,
-    affectedCaseCount: dto.affectedCaseCount,
-    requiresReview: dto.requiresReview,
-  );
+  factory OfficialTrackingItem.fromDto(OfficialTrackingDto dto) =>
+      OfficialTrackingItem(
+        sourceId: dto.sourceId,
+        title: dto.title,
+        sourceType: dto.sourceType,
+        lastCheckedAt: dto.lastSuccessfulCheckAt ?? dto.lastCheckedAt,
+        temporalStatus: dto.temporalStatus,
+        verificationStatus: dto.verificationStatus,
+        newVersionDetected: dto.newVersionDetected,
+        changeSummary: dto.changeSummary,
+        affectedCaseCount: dto.affectedCaseCount,
+        requiresReview: dto.requiresReview,
+      );
 }

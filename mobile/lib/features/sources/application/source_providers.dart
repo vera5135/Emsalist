@@ -22,7 +22,10 @@ final FutureProvider<List<SourceRecordItem>> sourcesProvider =
 
 /// Sources used within a specific case.
 final FutureProviderFamily<List<CaseSourceUsage>, String> caseSourcesProvider =
-    FutureProvider.family<List<CaseSourceUsage>, String>((ref, String caseId) async {
+    FutureProvider.family<List<CaseSourceUsage>, String>((
+      ref,
+      String caseId,
+    ) async {
       return ref.watch(sourceRepositoryProvider).caseSources(caseId);
     });
 

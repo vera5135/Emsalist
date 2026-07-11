@@ -7,7 +7,8 @@ import 'support/fake_api_client.dart';
 
 const String _caseId = 'c1';
 
-SourceRepository _repo(FakeApiClient client) => SourceRepository(SourceApi(client));
+SourceRepository _repo(FakeApiClient client) =>
+    SourceRepository(SourceApi(client));
 
 Map<String, dynamic> _record({
   String id = 's1',
@@ -46,7 +47,10 @@ void main() {
   });
 
   test('verification badge labels are user-facing (no snake_case)', () {
-    expect(verificationBadgeLabel('verified_official'), 'Resmî kaynaktan doğrulandı');
+    expect(
+      verificationBadgeLabel('verified_official'),
+      'Resmî kaynaktan doğrulandı',
+    );
     expect(verificationBadgeLabel('needs_review'), 'İnceleme gerekli');
     expect(verificationBadgeLabel('conflicting'), 'Çelişkili kaynak');
     expect(verificationBadgeLabel('quarantined'), 'Kullanıma kapalı');
