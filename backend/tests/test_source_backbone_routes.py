@@ -680,71 +680,173 @@ async def _jwt_post(ac, path, token, json=None):
 
 @pytest.mark.asyncio
 async def test_jwt_lawyer_global_source_mutations_forbidden():
+    """lawyer role: 4 forbidden mutations, each with exact 403 on a REAL seed record."""
+    from app.services.source_fetcher import FetchResult
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_official_fetch
+
+    # Seed a valid source record via internal service so it exists.
+    sm = get_sessionmaker()
+    async with sm() as db:
+        result = await ingest_official_fetch(
+            db,
+            metadata={"source_type": "supreme_court_decision",
+                      "title": "JWT Lawyer Test",
+                      "court": "Yargıtay", "chamber": "13. HD",
+                      "case_number": "2020/jwt1", "decision_number": "2021/jwt1",
+                      "decision_date": "2021-01-01"},
+            fetch_result=FetchResult(
+                final_url="https://karararama.yargitay.gov.tr/x",
+                status_code=200, content=b"jwt lawyer test content",
+                content_type="text/html",
+            ),
+        )
+        await db.commit()
+    sid = result.source_record_id
+
     ac = await _jwt_client()
     try:
         token = _jwt_token("lawyer")
-        for path, body in [
-            ("/api/v1/legal-sources/ingest", _official_decision()),
-        ]:
-            r = await _jwt_post(ac, path, token, json=body)
-            assert r.status_code == 403, f"POST {path} expected 403, got {r.status_code}"
-    finally:
-        await ac.aclose()
-
-
-@pytest.mark.asyncio
-async def test_jwt_lawyer_full_mutation_matrix_forbidden():
-    ac = await _jwt_client()
-    try:
-        token = _jwt_token("lawyer")
-        # Ingest
+        # 1. ingest
         r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
-        assert r.status_code == 403, f"lawyer ingest got {r.status_code}"
-        # Verify (needs a record; use any non-existent ID to get 404/403)
-        r2 = await _jwt_post(ac, "/api/v1/legal-sources/nope/verify", token,
-                              json={"target_status": "editor_verified"})
-        assert r2.status_code in (403, 404), f"lawyer verify got {r2.status_code}"
-        # Quarantine
-        r3 = await _jwt_post(ac, "/api/v1/legal-sources/nope/quarantine", token)
-        assert r3.status_code in (403, 404), f"lawyer quarantine got {r3.status_code}"
-        # Review
-        r4 = await _jwt_post(ac, "/api/v1/source-review/nope/approve", token)
-        assert r4.status_code in (403, 404), f"lawyer review got {r4.status_code}"
+        assert r.status_code == 403, f"lawyer ingest: expected 403, got {r.status_code}"
+        # 2. verify
+        r = await _jwt_post(ac, f"/api/v1/legal-sources/{sid}/verify", token,
+                            json={"target_status": "editor_verified"})
+        assert r.status_code == 403, f"lawyer verify: expected 403, got {r.status_code}"
+        # 3. quarantine
+        r = await _jwt_post(ac, f"/api/v1/legal-sources/{sid}/quarantine", token)
+        assert r.status_code == 403, f"lawyer quarantine: expected 403, got {r.status_code}"
+        # 4. review approve
+        r = await _jwt_post(ac, f"/api/v1/source-review/{sid}/approve", token)
+        assert r.status_code == 403, f"lawyer review: expected 403, got {r.status_code}"
     finally:
         await ac.aclose()
 
 
 @pytest.mark.asyncio
 async def test_jwt_tenant_admin_global_source_mutations_forbidden():
+    from app.services.source_fetcher import FetchResult
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_official_fetch
+
+    sm = get_sessionmaker()
+    async with sm() as db:
+        result = await ingest_official_fetch(
+            db,
+            metadata={"source_type": "supreme_court_decision",
+                      "title": "JWT TA Test",
+                      "court": "Yargıtay", "chamber": "13. HD",
+                      "case_number": "2020/jwt2", "decision_number": "2021/jwt2",
+                      "decision_date": "2021-01-01"},
+            fetch_result=FetchResult(
+                final_url="https://karararama.yargitay.gov.tr/x",
+                status_code=200, content=b"jwt ta test content",
+                content_type="text/html",
+            ),
+        )
+        await db.commit()
+    sid = result.source_record_id
+
     ac = await _jwt_client()
     try:
         token = _jwt_token("tenant_admin")
         r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
-        assert r.status_code == 403, f"tenant_admin ingest expected 403, got {r.status_code}"
+        assert r.status_code == 403, f"ta ingest: expected 403, got {r.status_code}"
+        r = await _jwt_post(ac, f"/api/v1/legal-sources/{sid}/verify", token,
+                            json={"target_status": "editor_verified"})
+        assert r.status_code == 403, f"ta verify: expected 403, got {r.status_code}"
+        r = await _jwt_post(ac, f"/api/v1/legal-sources/{sid}/quarantine", token)
+        assert r.status_code == 403, f"ta quarantine: expected 403, got {r.status_code}"
+        r = await _jwt_post(ac, f"/api/v1/source-review/{sid}/approve", token)
+        assert r.status_code == 403, f"ta review: expected 403, got {r.status_code}"
     finally:
         await ac.aclose()
 
 
 @pytest.mark.asyncio
 async def test_jwt_editor_global_source_mutations_allowed():
+    from app.services.source_fetcher import FetchResult
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_editor_candidate, ingest_official_fetch
+
+    # Seed a needs_review record (verify target must be needs_review).
+    sm = get_sessionmaker()
+    async with sm() as db:
+        result = await ingest_editor_candidate(
+            db,
+            metadata={"source_type": "legislation", "title": "JWT Editor Test",
+                      "issuing_authority": "TBMM", "number": "jwt-editor-1", "publication_date": "2021-01-01",
+                      "effective_date": "2022-01-01"},
+            raw_text="JWT editor submission content.",
+        )
+        await db.commit()
+    sid = result.source_record_id
+
     ac = await _jwt_client()
     try:
         token = _jwt_token("editor")
+        # 1. ingest
         r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
-        assert r.status_code == 201, f"editor ingest expected 201, got {r.status_code}"
+        assert r.status_code == 201, f"editor ingest: expected 201, got {r.status_code}"
+        # 2. verify editor_verified
+        r = await _jwt_post(ac, f"/api/v1/legal-sources/{sid}/verify", token,
+                            json={"target_status": "editor_verified"})
+        assert r.status_code == 200, f"editor verify: expected 200, got {r.status_code}"
+        # 3. quarantine — needs a new source not already quarantined
+        r = await _jwt_post(ac, f"/api/v1/legal-sources/{sid}/quarantine", token)
+        assert r.status_code == 200, f"editor quarantine: expected 200, got {r.status_code}"
+        # 4. review approve — needs a needs_review source in review queue.
+        # The seeded sid is already in needs_review (editor_verified took it out).
+        # Create a fresh needs_review for approve test.
+        async with sm() as db:
+            r2 = await ingest_editor_candidate(
+                db,
+                metadata={"source_type": "legislation", "title": "JWT Editor Review Test",
+                          "issuing_authority": "TBMM", "number": "jwt-editor-2", "publication_date": "2021-01-01",
+                          "effective_date": "2022-01-01"},
+                raw_text="Review test candidate.",
+            )
+            await db.commit()
+        rev_id = r2.source_record_id
+        r = await _jwt_post(ac, f"/api/v1/source-review/{rev_id}/approve", token)
+        assert r.status_code == 200, f"editor review: expected 200, got {r.status_code}"
     finally:
         await ac.aclose()
 
 
 @pytest.mark.asyncio
 async def test_jwt_admin_global_source_mutations_allowed():
+    from app.services.source_fetcher import FetchResult
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_official_fetch
+
+    async with get_sessionmaker()() as db:
+        result = await ingest_official_fetch(
+            db,
+            metadata={"source_type": "supreme_court_decision",
+                      "title": "JWT Admin Test",
+                      "court": "Yargıtay", "chamber": "13. HD",
+                      "case_number": "2020/jwt4", "decision_number": "2021/jwt4",
+                      "decision_date": "2021-01-01"},
+            fetch_result=FetchResult(
+                final_url="https://karararama.yargitay.gov.tr/x",
+                status_code=200, content=b"jwt admin test content",
+                content_type="text/html",
+            ),
+        )
+        await db.commit()
+
     ac = await _jwt_client()
     try:
         token = _jwt_token("admin")
         r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
-        assert r.status_code == 201, f"admin ingest expected 201, got {r.status_code}"
+        assert r.status_code == 201, f"admin ingest: expected 201, got {r.status_code}"
     finally:
         await ac.aclose()
+
+
+# --- Remove redundant single-endpoint JWT tests (covered by above) -------
 
 
 # --- Same-hash official fetch verification --------------------------------

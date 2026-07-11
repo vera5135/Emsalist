@@ -483,19 +483,22 @@ async def official_tracking(
         if r.current_version_id:
             cur = await SourceVersionRepository.get(db, r.current_version_id)
             fingerprint = (cur.content_hash[:12] if cur else "")
+        eff = await resolve_version_verification_status(
+            db, r.id, r.current_version_id, r.verification_status,
+        )
         items.append(OfficialTrackingItem(
             source_id=r.id, title=r.title, source_type=r.source_type,
             official_url=r.official_url, last_checked_at=_iso(r.last_checked_at),
             last_successful_check_at=_iso(r.last_successful_check_at),
             content_fingerprint=fingerprint, temporal_status=r.temporal_status,
-            verification_status=r.verification_status,
+            verification_status=eff,
             new_version_detected=new_version,
             latest_version_id=(versions[-1].id if versions else None),
             change_summary=None,
             affected_case_count=len(affected_cases),
-            affected_draft_count=0,  # drafting (P2.9) not implemented
+            affected_draft_count=0,
             affected_draft_supported=False,
-            requires_review=r.verification_status in ("needs_review", "conflicting"),
+            requires_review=eff in ("needs_review", "conflicting"),
         ))
     return OfficialTrackingResponse(items=items)
 
@@ -508,15 +511,18 @@ async def review_list(
     ctx: SecurityContext = Depends(require_editor),
     db: AsyncSession = Depends(get_session),
 ) -> SourceReviewListResponse:
-    records = await SourceRecordRepository.list_needs_review(db)
-    return SourceReviewListResponse(items=[
-        SourceReviewItem(
-            source_id=r.id, title=r.title, source_type=r.source_type,
-            verification_status=r.verification_status, canonical_key=r.canonical_key,
-            updated_at=_iso(r.updated_at) or "",
+    raw_records = await SourceRecordRepository.list_needs_review(db)
+    items: list[SourceReviewItem] = []
+    for r in raw_records:
+        eff = await resolve_version_verification_status(
+            db, r.id, r.current_version_id, r.verification_status,
         )
-        for r in records
-    ])
+        items.append(SourceReviewItem(
+            source_id=r.id, title=r.title, source_type=r.source_type,
+            verification_status=eff, canonical_key=r.canonical_key,
+            updated_at=_iso(r.updated_at) or "",
+        ))
+    return SourceReviewListResponse(items=items)
 
 
 @review_router.get("/{source_id}", response_model=SourceRecordResponse, operation_id="source_review_get")
