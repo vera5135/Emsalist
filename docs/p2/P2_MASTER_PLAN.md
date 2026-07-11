@@ -315,6 +315,19 @@ Kapanış kapısı:
 
 ### P2.4 — Yapılandırılmış dosya hafızası
 
+Durum: ✅ Completed — PR #13 `main`'e merge edildi (merge commit `abae18d`).
+DB-backed CaseFact, TimelineEvent, MissingInformation, Contradiction, Risk
+(+ Claim/Defense/Evidence/Deadline tabloları) doğrulama statüleri, deterministic
+çelişki tespiti, somut-değer bazlı eksik-bilgi tamamlama, risk kuralları,
+optimistic locking (version/409) ve mobil dosya hafızası ekranı ile tamamlandı.
+
+Ertelenen kapsam (deferred): **Claim, Defense, Evidence ve Deadline** veri
+modeli + ORM tabloları + migration olarak hazırdır; ancak bunlara ait
+**dedicated CRUD endpoint'leri ve mobil kullanıcı akışları bu dilimde yer
+almaz** ve bilinçli olarak sonraki dilime bırakılmıştır (şema hazır, kırıcı
+migration gerektirmez). Fact, timeline, missing-information, contradiction ve
+risk tam olarak (API + mobil) uygulanmıştır.
+
 Temel varlıklar:
 
 - CaseParty
@@ -336,6 +349,8 @@ Kapanış kapısı:
 - kritik eksikler tamamlanmadan genel riskin düşük gösterilmemesi
 
 ### P2.5 — Belge işleme hattı
+
+Durum: ⏳ Not started.
 
 Formatlar:
 
