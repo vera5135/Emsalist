@@ -341,3 +341,88 @@ bulunmalıdır.
 - Eski mevzuat güncelmiş gibi kullanılmaz.
 - Nihai dilekçedeki citation'lar SourceRecord üzerinden üretilir.
 - Kaynağın hangi dosya, mesele ve paragrafta kullanıldığı izlenir.
+
+## 18. P2.6 uygulanan davranış (implemented)
+
+Bu bölüm gerçekte kodlanan davranışı kaydeder. Belirtilmeyen tasarım maddeleri
+(embedding üretimi, semantic ranking, gerçek Playwright canlı fetch entegrasyonu,
+konsolide sürüm otomasyonu, destructive admin merge) ileri sürümlere bırakılmıştır.
+
+### 18.1 Canonical model kararı
+
+Net-new DB tabloları: `source_records`, `source_versions`, `source_paragraphs`,
+`source_verifications`, `source_relationships`, `source_usages`. Mevcut
+`Precedent`/`LegalGroundOrm`/`LegalIssueNode` case-scoped türetilmiş
+snapshot'lardır ve dokunulmadı (farklı mimari katman, çakışma yok). Vector/Chroma
+katmanı türetilmiştir; P2.6 yalnız P2.7'nin tüketeceği
+`source_index_eligibility` seam'ini sağlar, embedding üretmez.
+
+### 18.2 Provider / kaynak destek matrisi (gerçek)
+
+| Provider / Source type | Gerçek fetch | Parse metadata | Text | Paragraph provenance | Verification evidence |
+|---|---|---|---|---|---|
+| Mevzuat (legislation) | Seam (fixture/editor submit) | ✅ canonical key | ✅ normalize | ✅ madde no bazlı | ✅ resmi domain+hash |
+| Yargıtay kararı (supreme_court_decision) | Seam (fixture/editor submit; canlı Playwright scraper ayrı/dormant) | ✅ canonical key | ✅ normalize | ✅ bölüm bazlı (sahte sayfa yok) | ✅ resmi domain+hash |
+| Diğer resmi türler | Seam | ✅ | ✅ | ✅ | koşullu |
+| Doktrin / user_uploaded | Seam | title-hash key | ✅ | bölüm bazlı | needs_review |
+
+Not: P2.6 canlı dış network fetch'i CI için zorunlu değildir. Secure fetcher
+(`source_fetcher`) tam SSRF korumasıyla hazırdır ve enjekte edilebilir resolver/
+transport ile deterministik test edilir; gerçek Yargıtay Playwright scraper'ı
+mevcut ancak bu dilimin canonical hattına bağlanmadı. Fixture'lar production
+source olduğunu iddia etmez.
+
+### 18.3 Canonical key
+
+Deterministic, merkezi (`source_canonical_key`). İçtihat:
+`type|court|chamber|case_no|decision_no|date`; mevzuat:
+`type|authority|number|date`. Türkçe NFKC/casefold + E./K. + tarih normalizasyonu.
+Eşdeğer varyantlar (Yargıtay 13.HD E.2020/123 K.2021/456 vs YARGITAY 13 HD
+2020-123 2021-456) aynı key'e gider; gerçekten farklı numara/tarih birleşmez.
+
+### 18.4 Versiyonlama
+
+Aynı canonical key + aynı content_hash → idempotent (yeni sürüm yok). Aynı key +
+farklı content → yeni SourceVersion, eski `superseded` işaretlenir ama silinmez.
+Aynı key + kritik metadata çelişkisi → `conflicting`, sessiz merge yok.
+
+### 18.5 Doğrulama state machine
+
+`verified_official` yalnız resmi allowlisted URL + başarılı retrieval + content
+hash ile verilir (URL'de 'gov' geçmesi yeterli değil). `quarantined →
+verified_official` doğrudan geçiş yok. `conflicting` yalnız review ile çözülür.
+Normal lawyer tenant kullanıcısı global source'u verify/quarantine edemez
+(`require_editor` seam; jwt modunda editor/admin rolü zorunlu, local modda mevcut
+kod tabanıyla uyumlu bypass).
+
+### 18.6 Temporal validity
+
+`evaluate_source_validity(...)` → valid | not_yet_effective | expired | repealed
+| superseded | unknown. Tarih bilinmiyorsa `valid` uydurulmaz.
+
+### 18.7 SSRF / ingestion güvenliği
+
+`source_fetcher.validate_url` yalnız http/https; credentials reddi; domain
+allowlist; localhost/loopback/private/link-local/reserved (IPv4+IPv6); metadata
+endpoint; IP literal fail-closed; DNS çözümündeki her IP doğrulanır (rebinding);
+her redirect hop'unda yeniden doğrulama; redirect loop/max hop; response size +
+content-type allowlist. 'Başarıyla indirildi' ≠ 'doğrulandı'.
+
+### 18.8 SourceUsage traceability
+
+Tenant+case-owner scoped; foreign case/usage → 404; source/version ve
+version/paragraph bütünlüğü doğrulanır; conflicting/quarantined kaynak normal
+kullanıcı tarafından trusted usage olarak eklenemez; `used_in_final_draft` P2.9
+gelene kadar sahte true yapılmaz; `relevance_score` fabricate edilmez; yeni
+sürüm eski usage'ı silmez (izlenebilirlik korunur).
+
+### 18.9 Bilinen eksikler / rollback
+
+- Embedding/semantic index üretilmez (P2.7).
+- Canlı resmi fetch bu hattın parçası değil (seam + dormant scraper).
+- Destructive admin merge yok; yalnız review/conflict seam.
+- Editor/admin mobil review ekranı P2.6'da yok; backend/API + testler yeterli
+  (final raporda belirtildi).
+- Rollback: migration `ce94808703a4` tek adımda `downgrade -1`; router mount
+  kaldırılarak yeni endpoint'ler devre dışı bırakılabilir; eski legacy source
+  yolları etkilenmez.

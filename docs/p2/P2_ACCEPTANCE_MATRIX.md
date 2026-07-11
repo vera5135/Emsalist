@@ -82,15 +82,26 @@ gerçek OCR ve chunked upload kapsam dışıdır.
 
 ## P2.6 — Kaynak omurgası
 
+Durum: ✅ Uygulandı (P2.6). Kanıtlar `backend/tests/test_source_backbone_services.py`
+(26 test) + `test_source_backbone_routes.py` (20 test) ve mobil
+`source_repository_test.dart` / `sources_screen_test.dart` (14 test). Gerçek
+provider/adapter matrisi, SSRF kontrolleri ve kapsam dışı için
+`P2_SOURCE_BACKBONE.md §18`.
+
 | Kriter | Öncelik | Kanıt |
 |---|---:|---|
-| Resmî kaynak metadata modeli tamam | Kritik | DB/API schema |
-| İçerik hash ve retrieval zamanı tutuluyor | Kritik | ingestion test |
-| Doğrulama/güncellik statüsü mevcut | Kritik | API test |
-| Tekrar kararlar canonical key ile birleştiriliyor | Kritik | dedupe test |
-| Eski/yürürlükten kalkmış kaynak işaretleniyor | Kritik | version test |
-| Kaynak kullanım izi dosya ve dilekçeye bağlanıyor | Kritik | traceability test |
-| Doğrulanmamış kaynak doğrulanmış etiketi alamıyor | Kritik | rule test |
+| Resmî kaynak metadata modeli tamam (SourceRecord/Version/Paragraph/Verification/Relationship/Usage) | Kritik | migration ce94808703a4 + schema tests |
+| İçerik hash ve retrieval zamanı tutuluyor | Kritik | ingestion idempotent/new-version tests |
+| Doğrulama/güncellik statüsü + state machine | Kritik | verification SM + temporal tests |
+| Tekrar kararlar canonical key ile birleştiriliyor | Kritik | canonical-key equivalent-variant tests |
+| Eski/yürürlükten kalkmış kaynak işaretleniyor; olay tarihiyle validity | Kritik | temporal validity tests |
+| Kaynak kullanım izi dosya ve paragrafa bağlanıyor; yeni sürümde korunuyor | Kritik | usage traceability tests |
+| Doğrulanmamış kaynak verified_official olamıyor; SSRF fail-closed | Kritik | verify-official-requires-evidence + SSRF matrix |
+| Çelişkili/karantina kaynak dosyaya trusted eklenemiyor; foreign case/usage 404 | Kritik | usage block + IDOR tests |
+
+Not: Embedding/semantic index (P2.7) ve canlı resmi fetch entegrasyonu bu
+dilimin acceptance koşulu değildir; secure fetcher SSRF korumasıyla hazır ve
+deterministik test edilir.
 
 ## P2.7 — Hibrit arama
 
