@@ -64,7 +64,10 @@ case_source_router = APIRouter(prefix="/cases/{case_id}/sources", tags=["Case So
 tracking_router = APIRouter(prefix="/official-source-tracking", tags=["Official Source Tracking"])
 review_router = APIRouter(prefix="/source-review", tags=["Source Review"])
 
-_EDITOR_ROLES = frozenset({"editor", "admin", "tenant_admin"})
+# P2.6 trust boundary: only editor/admin may mutate global legal sources.
+# tenant_admin is a per-tenant role that cannot ingest/verify/quarantine/review
+# global canonical sources — it operates only within its own tenant/case scope.
+_EDITOR_ROLES = frozenset({"editor", "admin"})
 
 
 def _iso(dt) -> str | None:
@@ -256,14 +259,20 @@ async def verify_source(
     record = await _load_source(db, source_id)
     if body.target_status not in VERIFICATION_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
-    # verified_official requires official-domain evidence, not just an editor click.
+    # verified_official requires version-scoped official-match evidence.
+    # An editor click alone (body.target_status == VERIFIED_OFFICIAL) is insufficient;
+    # only the official_fetch ingestion path produces the required evidence.
     if body.target_status == VERIFIED_OFFICIAL:
-        from app.services.source_ingestion_service import _official_domain
+        from app.services.source_ingestion_service import _version_has_verification_evidence
 
-        if not (record.official_url and _official_domain(record.official_url)):
+        has_evidence = await _version_has_verification_evidence(
+            db, record.id, record.current_version_id or ""
+        )
+        if not has_evidence:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="verified_official yalnız resmi allowlisted kaynak için verilebilir.",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="verified_official yalnız resmî fetch kanıtıyla verilebilir. "
+                       "Editor click yeterli değildir; lütfen editor_verified kullanın.",
             )
     try:
         await SourceRecordRepository.transition_status(db, record, body.target_status)

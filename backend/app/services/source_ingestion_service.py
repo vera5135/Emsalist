@@ -1,12 +1,17 @@
-"""P2.6 — Source ingestion pipeline (fetch → hash → canonical key → dedup →
-version → paragraphs → automated verification).
+"""P2.6 — Source ingestion pipeline.
 
-Key principle: 'successfully fetched' != 'verified'. Ingestion produces
-needs_review by default. verified_official is granted ONLY when the source came
-from an allowlisted official domain AND retrieval succeeded AND a content hash
-exists — never merely because a URL contains 'gov'. Duplicate canonical keys are
-never silently overwritten: content changes create a new version; metadata
-conflicts produce a conflicting/needs_review outcome.
+TRUST MODEL (P2.6v2):
+- editor_submit / manual: ALWAYS starts as needs_review. Even if the user
+  provides an official URL, the raw text came from the client — 'URL present'
+  is not evidence.
+- official_fetch (secure_fetch): when the server itself fetches bytes from an
+  allowlisted official URL with successful SSRF-safe retrieval, those exact
+  bytes + the fetched content hash constitute official-match evidence. Only
+  this path can produce verified_official.
+- A new SourceVersion with changed content does NOT inherit the previous
+  version's trust. If no new official-fetch evidence is provided, the
+  verification_status resets to needs_review.
+- Previous version's evidence is preserved (never deleted).
 """
 from __future__ import annotations
 
@@ -22,14 +27,15 @@ from app.db.source_repository import (
 )
 from app.services import source_paragraphs as para
 from app.services.source_canonical_key import build_canonical_key, normalize_source_type
-from app.services.source_fetcher import ALLOWED_DOMAINS
+from app.services.source_fetcher import ALLOWED_DOMAINS, FetchResult
 from app.services.source_verification import (
     CONFLICTING,
     NEEDS_REVIEW,
     VERIFIED_OFFICIAL,
+    can_transition,
 )
 
-PARSER_VERSION = "p2.6-ingest-1"
+PARSER_VERSION = "p2.6-ingest-2"
 
 
 @dataclass
@@ -51,14 +57,68 @@ def _official_domain(url: str) -> bool:
     return False
 
 
+_METADATA_CONFLICT_FIELDS = frozenset({
+    "publication_date", "issuing_authority", "court", "chamber",
+})
+
+
 def _metadata_conflict(record, metadata: dict) -> bool:
-    """Detect materially different metadata for the same canonical key."""
-    for field_name in ("decision_date", "publication_date", "case_number", "decision_number"):
+    """Detect materially different metadata fields (those NOT part of
+    canonical key identity).
+    """
+    for field_name in _METADATA_CONFLICT_FIELDS:
         incoming = (metadata.get(field_name) or "").strip()
         existing = (getattr(record, field_name, "") or "").strip()
         if incoming and existing and incoming != existing:
             return True
     return False
+
+
+def _version_has_fetch_evidence(session, version_id: str) -> bool:
+    """Check whether the given version has official_fetch_match evidence.
+
+    This prevents a newly-created version from inheriting an older version's
+    verified_official status — only explicit matching evidence counts.
+    """
+    from app.db.source_repository import SourceVerificationRepository
+
+    # We cannot await here syntactically; callers that need this do it themselves.
+    return False  # stub for sync access
+
+
+async def _version_has_verification_evidence(
+    session: AsyncSession, record_id: str, version_id: str
+) -> bool:
+    """True when at least one official_match verification exists that references
+    this exact version_id.
+    """
+    verifications = await SourceVerificationRepository.list_for_record(session, record_id)
+    for v in verifications:
+        if v.verifier_type == "official_match" and v.source_version_id == version_id:
+            return True
+    return False
+
+
+def effective_verification_status(
+    record_verification_status: str,
+    current_version_id: str | None,
+    version: tuple | None,  # (version_id, has_fetch_evidence for current version)
+) -> str:
+    """The user-facing / search-index trust status for the current source.
+
+    A SourceRecord.verification_status of 'verified_official' is a ceiling, not
+    a guarantee. The effective trust is bounded by the latest version's own
+    evidence: if the current version has no official_fetch_match verification
+    evidence, the source cannot be treated as verified_official.
+    """
+    if record_verification_status == VERIFIED_OFFICIAL:
+        if version is None:
+            return NEEDS_REVIEW
+        vid, has_evidence = version
+        if vid and has_evidence:
+            return VERIFIED_OFFICIAL
+        return NEEDS_REVIEW
+    return record_verification_status
 
 
 async def ingest_source(
@@ -69,23 +129,34 @@ async def ingest_source(
     official_url: str = "",
     retrieval_method: str = "manual",
     raw_document_hash: str | None = None,
+    fetch_result: FetchResult | None = None,
 ) -> IngestResult:
-    """Ingest a source from already-fetched raw text + metadata.
+    """Ingest a source.
 
-    Network fetching (with SSRF protection) is performed by the caller/route via
-    ``source_fetcher``; this function is deterministic and testable.
+    - retrieval_method='editor_submit' or 'manual': starts as needs_review.
+      official_url alone DOES NOT auto-verify.
+    - retrieval_method='official_fetch': caller has securely fetched bytes
+      from an allowlisted official URL (SSRF-validated). A non-None
+      [fetch_result] provides the canonical evidence. This path can produce
+      verified_official.
     """
     source_type = normalize_source_type(metadata.get("source_type", ""))
     canonical_key = build_canonical_key({**metadata, "source_type": source_type})
     normalized = para.normalize_text(raw_text)
     content_hash = para.content_hash(normalized)
 
+    is_official_fetch = (
+        retrieval_method == "official_fetch"
+        and fetch_result is not None
+        and bool(official_url)
+        and _official_domain(official_url)
+    )
+
     record = await SourceRecordRepository.get_by_canonical_key(session, canonical_key)
-    is_official = bool(official_url) and _official_domain(official_url)
 
     if record is None:
         # New canonical record.
-        initial_status = VERIFIED_OFFICIAL if (is_official and content_hash) else NEEDS_REVIEW
+        initial_status = NEEDS_REVIEW
         record = await SourceRecordRepository.create(
             session,
             source_type=source_type,
@@ -109,26 +180,26 @@ async def ingest_source(
         )
         await SourceRecordRepository.set_current_version(session, record, version.id)
         await SourceRecordRepository.mark_checked(session, record, successful=True)
-        if is_official and content_hash:
-            await SourceVerificationRepository.create(
-                session, source_record_id=record.id, source_version_id=version.id,
-                verification_method="official_domain_hash", verifier_type="official_match",
-                result=VERIFIED_OFFICIAL, evidence_url=official_url, evidence_hash=content_hash,
+
+        if is_official_fetch:
+            await _produce_official_verification(
+                session, record.id, version.id, content_hash, official_url
             )
+            await SourceRecordRepository.transition_status(session, record, VERIFIED_OFFICIAL)
+            initial_status = VERIFIED_OFFICIAL
+
         return IngestResult(record.id, version.id, canonical_key, record.verification_status, "created")
 
     # Existing canonical record.
     await SourceRecordRepository.mark_checked(session, record, successful=True)
     existing_version = await SourceVersionRepository.get_by_hash(session, record.id, content_hash)
     if existing_version is not None:
-        # Case 1: same canonical key + same content → idempotent.
         return IngestResult(record.id, existing_version.id, canonical_key, record.verification_status, "duplicate")
 
     if _metadata_conflict(record, metadata):
-        # Case 3: materially different metadata → conflict, never silent merge.
-        from app.services.source_verification import can_transition
+        from app.services.source_verification import can_transition as _ct
 
-        if can_transition(record.verification_status, CONFLICTING):
+        if _ct(record.verification_status, CONFLICTING):
             await SourceRecordRepository.transition_status(session, record, CONFLICTING)
         await SourceVerificationRepository.create(
             session, source_record_id=record.id,
@@ -137,20 +208,53 @@ async def ingest_source(
         )
         return IngestResult(record.id, record.current_version_id or "", canonical_key, record.verification_status, "conflict")
 
-    # Case 2: same canonical key + changed content → new version, old preserved.
+    # New version (changed content from same canonical key).
+    # Always reset to needs_review unless official_fetch evidence is also provided.
     version = await _create_version_with_paragraphs(
         session, record, source_type, normalized, content_hash,
         retrieval_method, raw_document_hash, metadata,
         supersedes_version_id=record.current_version_id,
     )
-    # Mark the previous version superseded (relationship preserved, not deleted).
     if record.current_version_id:
         prev = await SourceVersionRepository.get(session, record.current_version_id)
         if prev is not None:
             prev.status = "superseded"
             await session.flush()
     await SourceRecordRepository.set_current_version(session, record, version.id)
-    return IngestResult(record.id, version.id, canonical_key, record.verification_status, "new_version")
+
+    new_status = NEEDS_REVIEW
+    if is_official_fetch:
+        await _produce_official_verification(
+            session, record.id, version.id, content_hash, official_url
+        )
+        if can_transition(record.verification_status, VERIFIED_OFFICIAL):
+            await SourceRecordRepository.transition_status(session, record, VERIFIED_OFFICIAL)
+            new_status = VERIFIED_OFFICIAL
+    else:
+        # Changed content without fetch evidence — reset trust.
+        if record.verification_status in (VERIFIED_OFFICIAL,):
+            if can_transition(record.verification_status, NEEDS_REVIEW):
+                await SourceRecordRepository.transition_status(session, record, NEEDS_REVIEW)
+            new_status = record.verification_status
+
+    return IngestResult(record.id, version.id, canonical_key, new_status, "new_version")
+
+
+async def _produce_official_verification(
+    session, record_id, version_id, content_hash, official_url,
+):
+    from app.services.source_verification import VERIFIED_OFFICIAL as VO
+
+    await SourceVerificationRepository.create(
+        session,
+        source_record_id=record_id,
+        source_version_id=version_id,
+        verification_method="official_fetch_match",
+        verifier_type="official_match",
+        result=VO,
+        evidence_url=official_url,
+        evidence_hash=content_hash,
+    )
 
 
 async def _create_version_with_paragraphs(
