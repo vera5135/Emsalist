@@ -25,6 +25,12 @@ class FakeApiClient implements ApiClient {
     _getErrors.remove(path);
   }
 
+  /// Registers a raw (e.g. JSON array) response for a GET to [path].
+  void whenGetRaw(String path, Object response) {
+    _getResponses[path] = response;
+    _getErrors.remove(path);
+  }
+
   /// Registers a response for a GET to [path] where the query parameter
   /// [queryKey] equals [queryValue] (stringified). Takes precedence over
   /// [whenGet].
