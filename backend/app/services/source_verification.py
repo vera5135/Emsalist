@@ -67,7 +67,12 @@ class IndexEligibility:
 
 
 def index_eligibility(verification_status: str) -> IndexEligibility:
-    """Deterministic P2.7-consumable eligibility. No embeddings produced here."""
+    """Deterministic P2.7-consumable eligibility (raw status).
+
+    For DB-backed effective index eligibility that resolves per-version trust,
+    use ``index_eligibility_for_source`` which takes a session and resolves
+    the effective current-version status.
+    """
     if verification_status in (VERIFIED_OFFICIAL, EDITOR_VERIFIED):
         return IndexEligibility(True, "full_weight")
     if verification_status == VERIFIED_SECONDARY:

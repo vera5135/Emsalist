@@ -693,12 +693,56 @@ async def test_jwt_lawyer_global_source_mutations_forbidden():
 
 
 @pytest.mark.asyncio
+async def test_jwt_lawyer_full_mutation_matrix_forbidden():
+    ac = await _jwt_client()
+    try:
+        token = _jwt_token("lawyer")
+        # Ingest
+        r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
+        assert r.status_code == 403, f"lawyer ingest got {r.status_code}"
+        # Verify (needs a record; use any non-existent ID to get 404/403)
+        r2 = await _jwt_post(ac, "/api/v1/legal-sources/nope/verify", token,
+                              json={"target_status": "editor_verified"})
+        assert r2.status_code in (403, 404), f"lawyer verify got {r2.status_code}"
+        # Quarantine
+        r3 = await _jwt_post(ac, "/api/v1/legal-sources/nope/quarantine", token)
+        assert r3.status_code in (403, 404), f"lawyer quarantine got {r3.status_code}"
+        # Review
+        r4 = await _jwt_post(ac, "/api/v1/source-review/nope/approve", token)
+        assert r4.status_code in (403, 404), f"lawyer review got {r4.status_code}"
+    finally:
+        await ac.aclose()
+
+
+@pytest.mark.asyncio
 async def test_jwt_tenant_admin_global_source_mutations_forbidden():
     ac = await _jwt_client()
     try:
         token = _jwt_token("tenant_admin")
         r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
         assert r.status_code == 403, f"tenant_admin ingest expected 403, got {r.status_code}"
+    finally:
+        await ac.aclose()
+
+
+@pytest.mark.asyncio
+async def test_jwt_editor_global_source_mutations_allowed():
+    ac = await _jwt_client()
+    try:
+        token = _jwt_token("editor")
+        r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
+        assert r.status_code == 201, f"editor ingest expected 201, got {r.status_code}"
+    finally:
+        await ac.aclose()
+
+
+@pytest.mark.asyncio
+async def test_jwt_admin_global_source_mutations_allowed():
+    ac = await _jwt_client()
+    try:
+        token = _jwt_token("admin")
+        r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
+        assert r.status_code == 201, f"admin ingest expected 201, got {r.status_code}"
     finally:
         await ac.aclose()
 
