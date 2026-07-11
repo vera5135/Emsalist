@@ -56,6 +56,7 @@ from app.routes.security_routes import router as _security_router
 from app.routes.case_chat_routes import router as _case_chat_router
 from app.routes.case_chat_routes import conversation_router as _conversation_router
 from app.routes.case_memory_routes import router as _case_memory_router
+from app.routes.document_pipeline_routes import router as _document_pipeline_router
 
 api_v1_router.include_router(_case_router, include_in_schema=True)
 api_v1_router.include_router(_document_router, include_in_schema=True)
@@ -80,6 +81,7 @@ api_v1_router.include_router(_security_router, include_in_schema=True)
 api_v1_router.include_router(_case_chat_router, include_in_schema=True)
 api_v1_router.include_router(_conversation_router, include_in_schema=True)
 api_v1_router.include_router(_case_memory_router, include_in_schema=True)
+api_v1_router.include_router(_document_pipeline_router, include_in_schema=True)
 
 
 @api_v1_router.get(
