@@ -10,6 +10,7 @@ import '../features/cases/presentation/case_chat_screen.dart';
 import '../features/cases/presentation/cases_screen.dart';
 import '../features/case_memory/presentation/case_memory_screen.dart';
 import '../features/documents/presentation/documents_screen.dart';
+import '../features/sources/presentation/sources_screen.dart';
 
 class AppRoutes {
   const AppRoutes._();
@@ -22,6 +23,7 @@ class AppRoutes {
   static const String caseChat = 'caseChat';
   static const String caseMemory = 'caseMemory';
   static const String caseDocuments = 'caseDocuments';
+  static const String caseSources = 'caseSources';
   static const String sources = 'sources';
   static const String drafts = 'drafts';
 
@@ -33,6 +35,7 @@ class AppRoutes {
   static const String caseChatPath = '/cases/:caseId/chat';
   static const String caseMemoryPath = '/cases/:caseId/memory';
   static const String caseDocumentsPath = '/cases/:caseId/documents';
+  static const String caseSourcesPath = '/cases/:caseId/sources';
   static const String sourcesPath = '/sources';
   static const String draftsPath = '/drafts';
 }
@@ -139,8 +142,16 @@ GoRouter createAppRouter({
       GoRoute(
         path: AppRoutes.caseDocumentsPath,
         name: AppRoutes.caseDocuments,
-        builder: (BuildContext context, GoRouterState state) =>
-            DocumentsScreen(caseId: state.pathParameters['caseId'] ?? ''),
+        builder: (BuildContext context, GoRouterState state) => DocumentsScreen(
+          caseId: state.pathParameters['caseId'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.caseSourcesPath,
+        name: AppRoutes.caseSources,
+        builder: (BuildContext context, GoRouterState state) => CaseSourcesScreen(
+          caseId: state.pathParameters['caseId'] ?? '',
+        ),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) {
@@ -163,10 +174,7 @@ GoRouter createAppRouter({
             path: AppRoutes.sourcesPath,
             name: AppRoutes.sources,
             builder: (BuildContext context, GoRouterState state) =>
-                const _PlaceholderScreen(
-                  title: 'Kaynaklar',
-                  icon: Icons.menu_book_outlined,
-                ),
+                const SourcesScreen(),
           ),
           GoRoute(
             path: AppRoutes.draftsPath,
