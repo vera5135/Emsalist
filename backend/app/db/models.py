@@ -134,16 +134,73 @@ class Document(Base):
     case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
     tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(500), default="")
+    safe_filename: Mapped[str] = mapped_column(String(500), default="")
     storage_key: Mapped[str] = mapped_column(String(500), default="")
     mime_type: Mapped[str] = mapped_column(String(100), default="")
+    extension: Mapped[str] = mapped_column(String(16), default="")
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     sha256: Mapped[str] = mapped_column(String(64), default="")
     document_type: Mapped[str] = mapped_column(String(100), default="")
-    status: Mapped[str] = mapped_column(String(20), default="active")
+    document_type_source: Mapped[str] = mapped_column(String(20), default="suggested")
+    status: Mapped[str] = mapped_column(String(30), default="active")
+    analysis_status: Mapped[str] = mapped_column(String(30), default="pending")
+    support_level: Mapped[str] = mapped_column(String(30), default="")
+    page_count: Mapped[int] = mapped_column(Integer, default=0)
+    extracted_text_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    failure_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    uploaded_by: Mapped[str] = mapped_column(String(32), default="")
+    version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    __table_args__ = (Index("ix_documents_case_sha256", "case_id", "sha256"),)
+    __table_args__ = (
+        Index("ix_documents_case_sha256", "case_id", "sha256"),
+        Index("ix_documents_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+# -- Document Pages (P2.5) --
+class DocumentPage(Base):
+    __tablename__ = "document_pages"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    document_id: Mapped[str] = mapped_column(String(32), ForeignKey("documents.id"), nullable=False)
+    page_number: Mapped[int] = mapped_column(Integer, default=0)
+    text: Mapped[str] = mapped_column(Text, default="")
+    text_hash: Mapped[str] = mapped_column(String(64), default="")
+    extraction_status: Mapped[str] = mapped_column(String(20), default="extracted")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (
+        Index("ix_document_pages_doc", "document_id", "page_number"),
+    )
+
+
+# -- Document Extractions (P2.5) --
+class DocumentExtraction(Base):
+    __tablename__ = "document_extractions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    document_id: Mapped[str] = mapped_column(String(32), ForeignKey("documents.id"), nullable=False)
+    extraction_type: Mapped[str] = mapped_column(String(40), default="")
+    field_key: Mapped[str] = mapped_column(String(80), default="")
+    value: Mapped[str] = mapped_column(Text, default="")
+    normalized_value: Mapped[str] = mapped_column(String(1000), default="")
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    text_span: Mapped[str] = mapped_column(String(80), default="")
+    source_quote_hash: Mapped[str] = mapped_column(String(64), default="")
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    verification_status: Mapped[str] = mapped_column(String(30), default="detected")
+    memory_fact_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        Index("ix_doc_extractions_document", "document_id"),
+        Index("ix_doc_extractions_tenant_case", "tenant_id", "case_id"),
+    )
 
 
 # -- Document Facts --
