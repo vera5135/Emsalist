@@ -11,6 +11,7 @@ from app.services.source_canonical_key import (
     normalize_source_type,
 )
 from app.services.source_fetcher import SourceFetchError, validate_url
+from app.services.source_ingestion_service import effective_verification_status
 from app.services.source_verification import (
     can_transition,
     evaluate_source_validity,
@@ -208,3 +209,33 @@ def test_fetch_redirect_to_private_ip_blocked():
         fetch_source("https://yargitay.gov.tr/x", resolver=_resolver("93.184.216.34"), transport=transport)
     # The redirect target is not allowlisted → blocked on the next hop.
     assert e.value.code == "domain_not_allowed"
+
+
+# --- Effective verification status (version-scoped trust) -------------------
+def test_effective_verified_official_with_valid_evidence():
+    assert effective_verification_status(
+        "verified_official", "v1", ("v1", True)
+    ) == "verified_official"
+
+
+def test_effective_verified_official_without_fetch_evidence_resets():
+    """A verified_official record whose current version lacks official_fetch_match
+    evidence must be treated as needs_review."""
+    assert effective_verification_status(
+        "verified_official", "v2", ("v2", False)
+    ) == "needs_review"
+
+
+def test_effective_verified_official_with_no_current_version():
+    assert effective_verification_status(
+        "verified_official", None, None
+    ) == "needs_review"
+
+
+def test_effective_preserves_non_verified_statuses():
+    assert effective_verification_status(
+        "conflicting", "v1", ("v1", False)
+    ) == "conflicting"
+    assert effective_verification_status(
+        "editor_verified", "v1", ("v1", False)
+    ) == "editor_verified"
