@@ -8,6 +8,7 @@ import '../features/auth/presentation/auth_loading_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/cases/presentation/case_chat_screen.dart';
 import '../features/cases/presentation/cases_screen.dart';
+import '../features/case_memory/presentation/case_memory_screen.dart';
 
 class AppRoutes {
   const AppRoutes._();
@@ -18,6 +19,7 @@ class AppRoutes {
   static const String assistant = 'assistant';
   static const String cases = 'cases';
   static const String caseChat = 'caseChat';
+  static const String caseMemory = 'caseMemory';
   static const String sources = 'sources';
   static const String drafts = 'drafts';
 
@@ -27,6 +29,7 @@ class AppRoutes {
   static const String assistantPath = '/assistant';
   static const String casesPath = '/cases';
   static const String caseChatPath = '/cases/:caseId/chat';
+  static const String caseMemoryPath = '/cases/:caseId/memory';
   static const String sourcesPath = '/sources';
   static const String draftsPath = '/drafts';
 }
@@ -123,6 +126,12 @@ GoRouter createAppRouter({
         name: AppRoutes.caseChat,
         builder: (BuildContext context, GoRouterState state) =>
             CaseChatScreen(caseId: state.pathParameters['caseId'] ?? ''),
+      ),
+      GoRoute(
+        path: AppRoutes.caseMemoryPath,
+        name: AppRoutes.caseMemory,
+        builder: (BuildContext context, GoRouterState state) =>
+            CaseMemoryScreen(caseId: state.pathParameters['caseId'] ?? ''),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) {
