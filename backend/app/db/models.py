@@ -142,7 +142,7 @@ class Document(Base):
     sha256: Mapped[str] = mapped_column(String(64), default="")
     document_type: Mapped[str] = mapped_column(String(100), default="")
     document_type_source: Mapped[str] = mapped_column(String(20), default="suggested")
-    status: Mapped[str] = mapped_column(String(20), default="active")
+    status: Mapped[str] = mapped_column(String(30), default="active")
     analysis_status: Mapped[str] = mapped_column(String(30), default="pending")
     support_level: Mapped[str] = mapped_column(String(30), default="")
     page_count: Mapped[int] = mapped_column(Integer, default=0)
