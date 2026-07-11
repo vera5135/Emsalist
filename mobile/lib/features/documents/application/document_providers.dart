@@ -16,7 +16,10 @@ final Provider<DocumentRepository> documentRepositoryProvider =
 
 /// Documents for a case; refetched per case id.
 final FutureProviderFamily<List<DocumentItem>, String> documentsProvider =
-    FutureProvider.family<List<DocumentItem>, String>((ref, String caseId) async {
+    FutureProvider.family<List<DocumentItem>, String>((
+      ref,
+      String caseId,
+    ) async {
       return ref.watch(documentRepositoryProvider).listDocuments(caseId);
     });
 

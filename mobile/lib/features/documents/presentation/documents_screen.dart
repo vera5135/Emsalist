@@ -31,7 +31,9 @@ class DocumentsScreen extends ConsumerWidget {
       return;
     }
     try {
-      await ref.read(documentRepositoryProvider).upload(
+      await ref
+          .read(documentRepositoryProvider)
+          .upload(
             caseId,
             bytes: note.bytes,
             filename: note.filename,
@@ -46,20 +48,24 @@ class DocumentsScreen extends ConsumerWidget {
       }
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } on Object {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Belge yüklenemedi.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Belge yüklenemedi.')));
       }
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<DocumentItem>> docs = ref.watch(documentsProvider(caseId));
+    final AsyncValue<List<DocumentItem>> docs = ref.watch(
+      documentsProvider(caseId),
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text('Belgeler'),
@@ -206,7 +212,10 @@ class _DocumentCard extends ConsumerWidget {
           itemBuilder: (BuildContext ctx) => <PopupMenuEntry<String>>[
             const PopupMenuItem<String>(value: 'open', child: Text('İncele')),
             if (document.isFailed || document.isUnsupported)
-              const PopupMenuItem<String>(value: 'retry', child: Text('Yeniden dene')),
+              const PopupMenuItem<String>(
+                value: 'retry',
+                child: Text('Yeniden dene'),
+              ),
             const PopupMenuItem<String>(value: 'delete', child: Text('Sil')),
           ],
         ),
@@ -314,11 +323,10 @@ class _UploadSheetState extends State<_UploadSheet> {
                 return;
               }
               final String name = _nameController.text.trim();
-              final String filename =
-                  '${name.isEmpty ? 'belge' : name}.txt';
-              Navigator.of(context).pop(
-                _NoteUpload(bytes: body.codeUnits, filename: filename),
-              );
+              final String filename = '${name.isEmpty ? 'belge' : name}.txt';
+              Navigator.of(
+                context,
+              ).pop(_NoteUpload(bytes: body.codeUnits, filename: filename));
             },
             child: const Text('Yükle'),
           ),
@@ -359,8 +367,9 @@ class DocumentAnalysisScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
-    final AsyncValue<DocumentAnalysis> analysis =
-        ref.watch(documentAnalysisProvider(_key));
+    final AsyncValue<DocumentAnalysis> analysis = ref.watch(
+      documentAnalysisProvider(_key),
+    );
     return Scaffold(
       appBar: AppBar(title: Text(document.displayName)),
       body: analysis.when(
@@ -390,7 +399,9 @@ class DocumentAnalysisScreen extends ConsumerWidget {
                 const Divider(),
                 if (data.extractions.isEmpty)
                   const Padding(
-                    padding: EdgeInsets.symmetric(vertical: AppConstants.spacingLg),
+                    padding: EdgeInsets.symmetric(
+                      vertical: AppConstants.spacingLg,
+                    ),
                     child: EmptyWidget(
                       title: 'Çıkarılan bilgi yok',
                       message: 'Bu belgeden onaylanacak bilgi bulunamadı.',
@@ -398,7 +409,10 @@ class DocumentAnalysisScreen extends ConsumerWidget {
                     ),
                   )
                 else ...<Widget>[
-                  Text('Çıkarılan Bilgiler', style: theme.textTheme.titleMedium),
+                  Text(
+                    'Çıkarılan Bilgiler',
+                    style: theme.textTheme.titleMedium,
+                  ),
                   const SizedBox(height: AppConstants.spacingSm),
                   ...data.extractions.map(
                     (DocumentExtractionItem e) => Card(

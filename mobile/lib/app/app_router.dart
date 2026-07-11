@@ -133,16 +133,14 @@ GoRouter createAppRouter({
       GoRoute(
         path: AppRoutes.caseMemoryPath,
         name: AppRoutes.caseMemory,
-        builder: (BuildContext context, GoRouterState state) => CaseMemoryScreen(
-          caseId: state.pathParameters['caseId'] ?? '',
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            CaseMemoryScreen(caseId: state.pathParameters['caseId'] ?? ''),
       ),
       GoRoute(
         path: AppRoutes.caseDocumentsPath,
         name: AppRoutes.caseDocuments,
-        builder: (BuildContext context, GoRouterState state) => DocumentsScreen(
-          caseId: state.pathParameters['caseId'] ?? '',
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            DocumentsScreen(caseId: state.pathParameters['caseId'] ?? ''),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) {

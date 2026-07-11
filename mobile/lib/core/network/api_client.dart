@@ -25,10 +25,7 @@ abstract class ApiClient {
 
   /// Performs a DELETE request and returns the decoded JSON body (or an empty
   /// map for 204 responses).
-  Future<T> deleteJson<T>(
-    String path, {
-    Object? cancelToken,
-  });
+  Future<T> deleteJson<T>(String path, {Object? cancelToken});
 
   /// Uploads raw [bytes] as a multipart/form-data file field named `file`,
   /// with optional string [fields], returning the decoded JSON body.
