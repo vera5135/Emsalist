@@ -350,7 +350,28 @@ Kapanış kapısı:
 
 ### P2.5 — Belge işleme hattı
 
-Durum: ⏳ Not started.
+Durum: ✅ Completed — PR #14 `main`'e merge edildi (merge commit `b86bf18`).
+Canonical DB Document + DocumentPage + DocumentExtraction; güvenli upload
+(magic-byte/MIME doğrulama, path traversal koruması, server-generated storage
+key), SHA-256 duplicate (aynı case 409, cross-tenant non-disclosure), durum
+makinesi, gerçek parser tabanlı metin/sayfa çıkarımı, deterministic extraction
+provenance ve P2.4 memory entegrasyonu (confirm → document_verified CaseFact +
+çelişki motoru) ile tamamlandı.
+
+Bilinen kapsam sınırları (kabul bloğu değil):
+
+- **Native mobile file picker yok**: mobil upload akışı şimdilik in-app metin
+  belgesi ile uçtan uca çalışır; gerçek PDF/DOCX/UDF/görsel seçimi bir seam
+  üzerinden sonraki dilime bırakılmıştır (deferred mobil entegrasyon borcu).
+- **OCR yok**: JPG/JPEG/PNG `upload_only`; görsel belgeler OCR yapılmış gibi
+  gösterilmez.
+- **Senkron analiz**: metin çıkarımı upload isteği içinde yürütülür; arka plan
+  job kuyruğu ileri sürümdedir.
+- **UDF yalnız okunabilir-XML arşivi**: gerçek ikili UDF `unsupported` döner;
+  içerik uydurulmaz.
+- Chunked upload, virüs tarayıcı, signed-URL object storage ve
+  DocumentAnalysisRun sürümleme kapsam dışıdır.
+  Gerçek format destek matrisi ve rollback: `P2_DOCUMENT_PIPELINE.md §19`.
 
 Formatlar:
 
@@ -375,6 +396,8 @@ Kapanış kapısı:
 - aynı belgenin tekrar yüklenmesinin yönetilmesi
 
 ### P2.6 — Güvenilir hukuk kaynağı omurgası
+
+Durum: ⏳ Not started.
 
 Kaynaklar:
 
