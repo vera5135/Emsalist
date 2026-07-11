@@ -6769,6 +6769,945 @@
         }
       }
     },
+    "/api/v1/legal-sources": {
+      "get": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "List Sources",
+        "operationId": "legal_source_list",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "name": "verification_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verification Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecordListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal-sources/{source_id}": {
+      "get": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "Get Source",
+        "operationId": "legal_source_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal-sources/{source_id}/versions": {
+      "get": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "List Versions",
+        "operationId": "legal_source_versions",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceVersionResponse"
+                  },
+                  "title": "Response Legal Source Versions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal-sources/{source_id}/paragraphs": {
+      "get": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "List Paragraphs",
+        "operationId": "legal_source_paragraphs",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceParagraphResponse"
+                  },
+                  "title": "Response Legal Source Paragraphs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal-sources/{source_id}/relationships": {
+      "get": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "List Relationships",
+        "operationId": "legal_source_relationships",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceRelationshipResponse"
+                  },
+                  "title": "Response Legal Source Relationships"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "Add Relationship",
+        "operationId": "legal_source_add_relationship",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceRelationshipCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRelationshipResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal-sources/ingest": {
+      "post": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "Ingest",
+        "operationId": "legal_source_ingest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceIngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceIngestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/legal-sources/{source_id}/verify": {
+      "post": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "Verify Source",
+        "operationId": "legal_source_verify",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceVerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal-sources/{source_id}/quarantine": {
+      "post": {
+        "tags": [
+          "Legal Sources"
+        ],
+        "summary": "Quarantine Source",
+        "operationId": "legal_source_quarantine",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/sources": {
+      "post": {
+        "tags": [
+          "Case Sources"
+        ],
+        "summary": "Add Case Source",
+        "operationId": "case_source_add",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceUsageCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceUsageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Case Sources"
+        ],
+        "summary": "List Case Sources",
+        "operationId": "case_source_list",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceUsageListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/sources/{usage_id}": {
+      "delete": {
+        "tags": [
+          "Case Sources"
+        ],
+        "summary": "Remove Case Source",
+        "operationId": "case_source_remove",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "usage_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Usage Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/official-source-tracking": {
+      "get": {
+        "tags": [
+          "Official Source Tracking"
+        ],
+        "summary": "Official Tracking",
+        "operationId": "official_source_tracking",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfficialTrackingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source-review": {
+      "get": {
+        "tags": [
+          "Source Review"
+        ],
+        "summary": "Review List",
+        "operationId": "source_review_list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceReviewListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/source-review/{source_id}": {
+      "get": {
+        "tags": [
+          "Source Review"
+        ],
+        "summary": "Review Get",
+        "operationId": "source_review_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source-review/{source_id}/approve": {
+      "post": {
+        "tags": [
+          "Source Review"
+        ],
+        "summary": "Review Approve",
+        "operationId": "source_review_approve",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source-review/{source_id}/quarantine": {
+      "post": {
+        "tags": [
+          "Source Review"
+        ],
+        "summary": "Review Quarantine",
+        "operationId": "source_review_quarantine",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source-review/{source_id}/resolve-conflict": {
+      "post": {
+        "tags": [
+          "Source Review"
+        ],
+        "summary": "Review Resolve Conflict",
+        "operationId": "source_review_resolve_conflict",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveConflictRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meta/capabilities": {
       "get": {
         "tags": [
@@ -11889,6 +12828,131 @@
         "type": "object",
         "title": "NodeUpdate"
       },
+      "OfficialTrackingItem": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "official_url": {
+            "type": "string",
+            "title": "Official Url"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          },
+          "last_successful_check_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Successful Check At"
+          },
+          "content_fingerprint": {
+            "type": "string",
+            "title": "Content Fingerprint",
+            "default": ""
+          },
+          "temporal_status": {
+            "type": "string",
+            "title": "Temporal Status",
+            "default": ""
+          },
+          "verification_status": {
+            "type": "string",
+            "title": "Verification Status",
+            "default": ""
+          },
+          "new_version_detected": {
+            "type": "boolean",
+            "title": "New Version Detected",
+            "default": false
+          },
+          "latest_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version Id"
+          },
+          "change_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Summary"
+          },
+          "affected_case_count": {
+            "type": "integer",
+            "title": "Affected Case Count",
+            "default": 0
+          },
+          "affected_draft_count": {
+            "type": "integer",
+            "title": "Affected Draft Count",
+            "default": 0
+          },
+          "affected_draft_supported": {
+            "type": "boolean",
+            "title": "Affected Draft Supported",
+            "default": false
+          },
+          "requires_review": {
+            "type": "boolean",
+            "title": "Requires Review",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "title",
+          "source_type",
+          "official_url"
+        ],
+        "title": "OfficialTrackingItem"
+      },
+      "OfficialTrackingResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OfficialTrackingItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "OfficialTrackingResponse"
+      },
       "PetitionDraftRequest": {
         "properties": {
           "case_id": {
@@ -13023,6 +14087,24 @@
         ],
         "title": "ResearchYargitayResponse"
       },
+      "ResolveConflictRequest": {
+        "properties": {
+          "target_status": {
+            "type": "string",
+            "maxLength": 30,
+            "title": "Target Status",
+            "default": "editor_verified"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Notes",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ResolveConflictRequest"
+      },
       "RiskCreateRequest": {
         "properties": {
           "risk_type": {
@@ -13414,6 +14496,333 @@
         ],
         "title": "SourceAuditResponse"
       },
+      "SourceIngestRequest": {
+        "properties": {
+          "source_type": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Source Type"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Title",
+            "default": ""
+          },
+          "raw_text": {
+            "type": "string",
+            "maxLength": 5000000,
+            "minLength": 1,
+            "title": "Raw Text"
+          },
+          "official_url": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Official Url",
+            "default": ""
+          },
+          "issuing_authority": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Issuing Authority",
+            "default": ""
+          },
+          "court": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Court",
+            "default": ""
+          },
+          "chamber": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Chamber",
+            "default": ""
+          },
+          "case_number": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Case Number",
+            "default": ""
+          },
+          "decision_number": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Decision Number",
+            "default": ""
+          },
+          "decision_date": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Decision Date",
+            "default": ""
+          },
+          "publication_date": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Publication Date",
+            "default": ""
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Number",
+            "default": ""
+          },
+          "effective_date": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Effective Date",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_type",
+          "raw_text"
+        ],
+        "title": "SourceIngestRequest"
+      },
+      "SourceIngestResponse": {
+        "properties": {
+          "source_record_id": {
+            "type": "string",
+            "title": "Source Record Id"
+          },
+          "source_version_id": {
+            "type": "string",
+            "title": "Source Version Id"
+          },
+          "canonical_key": {
+            "type": "string",
+            "title": "Canonical Key"
+          },
+          "verification_status": {
+            "type": "string",
+            "title": "Verification Status"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_record_id",
+          "source_version_id",
+          "canonical_key",
+          "verification_status",
+          "outcome"
+        ],
+        "title": "SourceIngestResponse"
+      },
+      "SourceParagraphResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source_version_id": {
+            "type": "string",
+            "title": "Source Version Id"
+          },
+          "paragraph_index": {
+            "type": "integer",
+            "title": "Paragraph Index"
+          },
+          "heading_path": {
+            "type": "string",
+            "title": "Heading Path"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "article_number": {
+            "type": "string",
+            "title": "Article Number"
+          },
+          "embedding_status": {
+            "type": "string",
+            "title": "Embedding Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source_version_id",
+          "paragraph_index",
+          "heading_path",
+          "text",
+          "article_number",
+          "embedding_status"
+        ],
+        "title": "SourceParagraphResponse"
+      },
+      "SourceRecordListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRecordResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 50
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "default": 0
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SourceRecordListResponse"
+      },
+      "SourceRecordResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "canonical_key": {
+            "type": "string",
+            "title": "Canonical Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "issuing_authority": {
+            "type": "string",
+            "title": "Issuing Authority"
+          },
+          "court": {
+            "type": "string",
+            "title": "Court"
+          },
+          "chamber": {
+            "type": "string",
+            "title": "Chamber"
+          },
+          "case_number": {
+            "type": "string",
+            "title": "Case Number"
+          },
+          "decision_number": {
+            "type": "string",
+            "title": "Decision Number"
+          },
+          "decision_date": {
+            "type": "string",
+            "title": "Decision Date"
+          },
+          "publication_date": {
+            "type": "string",
+            "title": "Publication Date"
+          },
+          "effective_date": {
+            "type": "string",
+            "title": "Effective Date"
+          },
+          "repeal_date": {
+            "type": "string",
+            "title": "Repeal Date"
+          },
+          "official_url": {
+            "type": "string",
+            "title": "Official Url"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "title": "Jurisdiction"
+          },
+          "verification_status": {
+            "type": "string",
+            "title": "Verification Status"
+          },
+          "temporal_status": {
+            "type": "string",
+            "title": "Temporal Status"
+          },
+          "current_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source_type",
+          "canonical_key",
+          "title",
+          "issuing_authority",
+          "court",
+          "chamber",
+          "case_number",
+          "decision_number",
+          "decision_date",
+          "publication_date",
+          "effective_date",
+          "repeal_date",
+          "official_url",
+          "jurisdiction",
+          "verification_status",
+          "temporal_status",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SourceRecordResponse"
+      },
       "SourceRef": {
         "properties": {
           "source_ref_id": {
@@ -13464,6 +14873,398 @@
         },
         "type": "object",
         "title": "SourceRef"
+      },
+      "SourceRelationshipCreateRequest": {
+        "properties": {
+          "related_source_record_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Related Source Record Id"
+          },
+          "relationship_type": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Relationship Type"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Evidence",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "related_source_record_id",
+          "relationship_type"
+        ],
+        "title": "SourceRelationshipCreateRequest"
+      },
+      "SourceRelationshipResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source_record_id": {
+            "type": "string",
+            "title": "Source Record Id"
+          },
+          "related_source_record_id": {
+            "type": "string",
+            "title": "Related Source Record Id"
+          },
+          "relationship_type": {
+            "type": "string",
+            "title": "Relationship Type"
+          },
+          "verification_status": {
+            "type": "string",
+            "title": "Verification Status"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source_record_id",
+          "related_source_record_id",
+          "relationship_type",
+          "verification_status",
+          "created_at"
+        ],
+        "title": "SourceRelationshipResponse"
+      },
+      "SourceReviewItem": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "verification_status": {
+            "type": "string",
+            "title": "Verification Status"
+          },
+          "canonical_key": {
+            "type": "string",
+            "title": "Canonical Key"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "title",
+          "source_type",
+          "verification_status",
+          "canonical_key",
+          "updated_at"
+        ],
+        "title": "SourceReviewItem"
+      },
+      "SourceReviewListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SourceReviewItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "SourceReviewListResponse"
+      },
+      "SourceUsageCreateRequest": {
+        "properties": {
+          "source_record_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Record Id"
+          },
+          "source_version_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Version Id"
+          },
+          "source_paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Paragraph Id"
+          },
+          "usage_type": {
+            "type": "string",
+            "maxLength": 30,
+            "title": "Usage Type",
+            "default": "reference"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_record_id",
+          "source_version_id"
+        ],
+        "title": "SourceUsageCreateRequest"
+      },
+      "SourceUsageListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SourceUsageResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "SourceUsageListResponse"
+      },
+      "SourceUsageResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "source_record_id": {
+            "type": "string",
+            "title": "Source Record Id"
+          },
+          "source_version_id": {
+            "type": "string",
+            "title": "Source Version Id"
+          },
+          "source_paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Paragraph Id"
+          },
+          "usage_type": {
+            "type": "string",
+            "title": "Usage Type"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "relevance_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relevance Score"
+          },
+          "used_in_final_draft": {
+            "type": "boolean",
+            "title": "Used In Final Draft"
+          },
+          "source_title": {
+            "type": "string",
+            "title": "Source Title",
+            "default": ""
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type",
+            "default": ""
+          },
+          "court": {
+            "type": "string",
+            "title": "Court",
+            "default": ""
+          },
+          "decision_date": {
+            "type": "string",
+            "title": "Decision Date",
+            "default": ""
+          },
+          "case_number": {
+            "type": "string",
+            "title": "Case Number",
+            "default": ""
+          },
+          "decision_number": {
+            "type": "string",
+            "title": "Decision Number",
+            "default": ""
+          },
+          "verification_status": {
+            "type": "string",
+            "title": "Verification Status",
+            "default": ""
+          },
+          "temporal_status": {
+            "type": "string",
+            "title": "Temporal Status",
+            "default": ""
+          },
+          "official_url": {
+            "type": "string",
+            "title": "Official Url",
+            "default": ""
+          },
+          "selected_paragraph": {
+            "type": "string",
+            "title": "Selected Paragraph",
+            "default": ""
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "source_record_id",
+          "source_version_id",
+          "usage_type",
+          "reason",
+          "used_in_final_draft"
+        ],
+        "title": "SourceUsageResponse"
+      },
+      "SourceVerifyRequest": {
+        "properties": {
+          "target_status": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Target Status"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Notes",
+            "default": ""
+          },
+          "evidence_url": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Evidence Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_status"
+        ],
+        "title": "SourceVerifyRequest"
+      },
+      "SourceVersionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source_record_id": {
+            "type": "string",
+            "title": "Source Record Id"
+          },
+          "version_label": {
+            "type": "string",
+            "title": "Version Label"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "retrieval_method": {
+            "type": "string",
+            "title": "Retrieval Method"
+          },
+          "parser_version": {
+            "type": "string",
+            "title": "Parser Version"
+          },
+          "valid_from": {
+            "type": "string",
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "type": "string",
+            "title": "Valid To"
+          },
+          "supersedes_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Version Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "retrieved_at": {
+            "type": "string",
+            "title": "Retrieved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source_record_id",
+          "version_label",
+          "content_hash",
+          "retrieval_method",
+          "parser_version",
+          "valid_from",
+          "valid_to",
+          "status",
+          "retrieved_at"
+        ],
+        "title": "SourceVersionResponse"
       },
       "StatuteSource": {
         "properties": {
