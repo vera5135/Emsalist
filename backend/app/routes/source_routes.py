@@ -47,7 +47,7 @@ from app.models.source_models import (
     SourceVersionResponse,
 )
 from app.services.auth_service import SecurityContext, get_auth_mode, resolve_current_user
-from app.services.source_ingestion_service import ingest_source
+from app.services.source_ingestion_service import ingest_editor_candidate, get_version_official_evidence
 from app.services.source_verification import (
     BLOCKED_FOR_USAGE,
     EDITOR_VERIFIED,
@@ -231,9 +231,8 @@ async def ingest(
 
     metadata = body.model_dump()
     try:
-        result = await ingest_source(
-            db, metadata=metadata, raw_text=body.raw_text,
-            official_url=body.official_url, retrieval_method="editor_submit",
+        result = await ingest_editor_candidate(
+            db, metadata=metadata, raw_text=body.raw_text, official_url=body.official_url,
         )
     except CanonicalKeyError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -260,19 +259,16 @@ async def verify_source(
     if body.target_status not in VERIFICATION_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
     # verified_official requires version-scoped official-match evidence.
-    # An editor click alone (body.target_status == VERIFIED_OFFICIAL) is insufficient;
-    # only the official_fetch ingestion path produces the required evidence.
+    # An editor click alone is insufficient; only the official_fetch path
+    # produces the required evidence with exact content_hash match.
     if body.target_status == VERIFIED_OFFICIAL:
-        from app.services.source_ingestion_service import _version_has_verification_evidence
-
-        has_evidence = await _version_has_verification_evidence(
+        evidence = await get_version_official_evidence(
             db, record.id, record.current_version_id or ""
         )
-        if not has_evidence:
+        if not evidence.valid:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="verified_official yalnız resmî fetch kanıtıyla verilebilir. "
-                       "Editor click yeterli değildir; lütfen editor_verified kullanın.",
+                detail=f"verified_official yalnız resmî fetch kanıtıyla verilebilir. {evidence.failure_reason}",
             )
     try:
         await SourceRecordRepository.transition_status(db, record, body.target_status)

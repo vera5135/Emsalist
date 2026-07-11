@@ -214,7 +214,7 @@ def test_fetch_redirect_to_private_ip_blocked():
 # --- Effective verification status (version-scoped trust) -------------------
 def test_effective_verified_official_with_valid_evidence():
     assert effective_verification_status(
-        "verified_official", "v1", ("v1", True)
+        "verified_official", "v1", True
     ) == "verified_official"
 
 
@@ -222,20 +222,20 @@ def test_effective_verified_official_without_fetch_evidence_resets():
     """A verified_official record whose current version lacks official_fetch_match
     evidence must be treated as needs_review."""
     assert effective_verification_status(
-        "verified_official", "v2", ("v2", False)
+        "verified_official", "v2", False
     ) == "needs_review"
 
 
 def test_effective_verified_official_with_no_current_version():
     assert effective_verification_status(
-        "verified_official", None, None
+        "verified_official", None, False
     ) == "needs_review"
 
 
 def test_effective_preserves_non_verified_statuses():
     assert effective_verification_status(
-        "conflicting", "v1", ("v1", False)
+        "conflicting", "v1", False
     ) == "conflicting"
     assert effective_verification_status(
-        "editor_verified", "v1", ("v1", False)
+        "editor_verified", "v1", False
     ) == "editor_verified"

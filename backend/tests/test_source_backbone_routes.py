@@ -135,22 +135,16 @@ async def test_editor_submit_with_official_url_is_needs_review(client: AsyncClie
 
 @pytest.mark.asyncio
 async def test_secure_official_fetch_creates_verified_official(client: AsyncClient):
-    """Official fetch path: when the server securely fetches bytes from a
-    real allowlisted URL, the evidence record carries the exact version's
-    content_hash as a verifier — only this path produces verified_official."""
+    """Official fetch path: the server's own fetched bytes are the canonical
+    content. The caller-supplied raw_text is NOT used — this test passes
+    ONLY to the ingest_official_fetch function, proving content isolation."""
     from app.services.source_fetcher import FetchResult
 
-    body = _official_decision(
-        text="REAL FETCHED OFFICIAL CONTENT — SECURE TRANSPORT",
-        official_url="https://karararama.yargitay.gov.tr/karar/123",
-    )
-    # Ingest via the internal service seam (not via HTTP) to simulate the
-    # official_fetch path. Publish an official-fetch route is a follow-up.
     from app.db.session import get_sessionmaker
-    from app.services.source_ingestion_service import ingest_source
+    from app.services.source_ingestion_service import ingest_official_fetch
     sm = get_sessionmaker()
     async with sm() as db:
-        result = await ingest_source(
+        result = await ingest_official_fetch(
             db,
             metadata={
                 "source_type": "supreme_court_decision",
@@ -159,9 +153,6 @@ async def test_secure_official_fetch_creates_verified_official(client: AsyncClie
                 "case_number": "2020/123", "decision_number": "2021/456",
                 "decision_date": "2021-06-12",
             },
-            raw_text="REAL FETCHED OFFICIAL CONTENT — SECURE TRANSPORT",
-            official_url="https://karararama.yargitay.gov.tr/karar/123",
-            retrieval_method="official_fetch",
             fetch_result=FetchResult(
                 final_url="https://karararama.yargitay.gov.tr/karar/123",
                 status_code=200, content=b"REAL FETCHED OFFICIAL CONTENT - SECURE TRANSPORT",
@@ -172,7 +163,6 @@ async def test_secure_official_fetch_creates_verified_official(client: AsyncClie
     assert result.outcome == "created"
     assert result.verification_status == "verified_official"
 
-    # The verification evidence must reference the exact version.
     async with sm() as db:
         from app.db.source_repository import SourceVerificationRepository
         verifications = await SourceVerificationRepository.list_for_record(db, result.source_record_id)
@@ -181,6 +171,45 @@ async def test_secure_official_fetch_creates_verified_official(client: AsyncClie
     assert official_ev[0].source_version_id == result.source_version_id
     assert official_ev[0].evidence_hash != ""
     assert official_ev[0].verification_method == "official_fetch_match"
+
+
+@pytest.mark.asyncio
+async def test_official_fetch_uses_fetch_content_not_supplied_raw_text(client: AsyncClient):
+    """Prove that ingested content comes from fetch_result.content, not from
+    any external raw_text — caller supplied text is a fabricated sentinel that
+    MUST NOT appear in the stored SourceVersion."""
+    from app.services.source_fetcher import FetchResult
+
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_official_fetch
+
+    sm = get_sessionmaker()
+    async with sm() as db:
+        result = await ingest_official_fetch(
+            db,
+            metadata={
+                "source_type": "supreme_court_decision",
+                "title": "Test",
+                "court": "Yargıtay", "chamber": "13. HD",
+                "case_number": "2020/999", "decision_number": "2021/888",
+                "decision_date": "2021-06-12",
+            },
+            fetch_result=FetchResult(
+                final_url="https://karararama.yargitay.gov.tr/x",
+                status_code=200,
+                content=b"OFFICIAL FETCHED BYTES CONTENT - NOT SENTINEL",
+                content_type="text/html",
+            ),
+        )
+        vid = result.source_version_id
+        await db.commit()
+
+    from app.db.source_repository import SourceVersionRepository
+    async with sm() as db:
+        version = await SourceVersionRepository.get(db, vid)
+    assert version is not None
+    assert "FABRICATED SENTINEL XYZ999" not in version.normalized_text
+    assert "OFFICIAL FETCHED BYTES CONTENT" in version.normalized_text
 
 
 @pytest.mark.asyncio
@@ -233,11 +262,11 @@ async def test_new_changed_version_does_not_inherit_verified_official(client: As
     needs_review — it CANNOT inherit the old version's trust."""
     from app.services.source_fetcher import FetchResult
     from app.db.session import get_sessionmaker
-    from app.services.source_ingestion_service import ingest_source
+    from app.services.source_ingestion_service import ingest_official_fetch
 
     sm = get_sessionmaker()
     async with sm() as db:
-        result = await ingest_source(
+        result = await ingest_official_fetch(
             db,
             metadata={
                 "source_type": "supreme_court_decision",
@@ -246,9 +275,6 @@ async def test_new_changed_version_does_not_inherit_verified_official(client: As
                 "case_number": "2020/500", "decision_number": "2021/999",
                 "decision_date": "2021-06-12",
             },
-            raw_text="OFFICIAL FETCHED VERSION 1 TEXT",
-            official_url="https://karararama.yargitay.gov.tr/karar/500",
-            retrieval_method="official_fetch",
             fetch_result=FetchResult(
                 final_url="https://karararama.yargitay.gov.tr/karar/500",
                 status_code=200, content=b"OFFICIAL FETCHED VERSION 1 TEXT",
@@ -499,6 +525,159 @@ async def test_audit_excludes_source_text(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_missing_source_404(client: AsyncClient):
     assert (await client.get("/api/v1/legal-sources/nope")).status_code == 404
+
+
+# --- Evidence forgery + fetch integrity tests ---------------------------
+@pytest.mark.asyncio
+async def test_fetch_rejects_invalid_status_code(client: AsyncClient):
+    """FetchResult with 4xx/5xx is rejected by ingest_official_fetch."""
+    from app.services.source_fetcher import FetchResult
+    from app.services.source_ingestion_service import ingest_official_fetch
+    from app.db.session import get_sessionmaker
+    sm = get_sessionmaker()
+    async with sm() as db:
+        with pytest.raises(ValueError, match="status must be 2xx"):
+            await ingest_official_fetch(
+                db,
+                metadata={"source_type": "supreme_court_decision",
+                          "title": "T", "court": "Y", "chamber": "13. HD",
+                          "case_number": "2020/1", "decision_number": "2021/1",
+                          "decision_date": "2021-01-01"},
+                fetch_result=FetchResult(
+                    final_url="https://karararama.yargitay.gov.tr/x",
+                    status_code=503, content=b"x", content_type="text/html",
+                ),
+            )
+
+
+@pytest.mark.asyncio
+async def test_fetch_rejects_empty_content(client: AsyncClient):
+    from app.services.source_fetcher import FetchResult
+    from app.services.source_ingestion_service import ingest_official_fetch
+    from app.db.session import get_sessionmaker
+    sm = get_sessionmaker()
+    async with sm() as db:
+        with pytest.raises(ValueError, match="content is empty"):
+            await ingest_official_fetch(
+                db,
+                metadata={"source_type": "supreme_court_decision",
+                          "title": "T", "court": "Y", "chamber": "13. HD",
+                          "case_number": "2020/2", "decision_number": "2021/2",
+                          "decision_date": "2021-01-01"},
+                fetch_result=FetchResult(
+                    final_url="https://karararama.yargitay.gov.tr/x",
+                    status_code=200, content=b"", content_type="text/html",
+                ),
+            )
+
+
+@pytest.mark.asyncio
+async def test_fetch_rejects_unallowlisted_final_url(client: AsyncClient):
+    from app.services.source_fetcher import FetchResult
+    from app.services.source_ingestion_service import ingest_official_fetch
+    from app.db.session import get_sessionmaker
+    sm = get_sessionmaker()
+    async with sm() as db:
+        with pytest.raises(ValueError, match="not allowlisted"):
+            await ingest_official_fetch(
+                db,
+                metadata={"source_type": "supreme_court_decision",
+                          "title": "T", "court": "Y", "chamber": "13. HD",
+                          "case_number": "2020/3", "decision_number": "2021/3",
+                          "decision_date": "2021-01-01"},
+                fetch_result=FetchResult(
+                    final_url="https://evil.example.com/decision",
+                    status_code=200, content=b"x", content_type="text/html",
+                ),
+            )
+
+
+@pytest.mark.asyncio
+async def test_evidence_for_old_version_cannot_verify_new_version(client: AsyncClient):
+    """Evidence bound to v1 must not unlock verification for v2."""
+    from app.services.source_fetcher import FetchResult
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_official_fetch
+
+    sm = get_sessionmaker()
+    async with sm() as db:
+        r1 = await ingest_official_fetch(
+            db,
+            metadata={"source_type": "supreme_court_decision",
+                      "title": "T", "court": "Yargıtay", "chamber": "13. HD",
+                      "case_number": "2020/101", "decision_number": "2021/101",
+                      "decision_date": "2021-01-01"},
+            fetch_result=FetchResult(
+                final_url="https://karararama.yargitay.gov.tr/v1",
+                status_code=200, content=b"VERSION 1 OFFICIAL CONTENT",
+                content_type="text/html",
+            ),
+        )
+        rec_id = r1.source_record_id
+        assert r1.verification_status == "verified_official"
+        await db.commit()
+
+    # New version arrives via editor_submit → needs_review.
+    await client.post("/api/v1/legal-sources/ingest", json=_official_decision(
+        text="VERSION 2 CONTENT",
+        case_number="2020/101", decision_number="2021/101", decision_date="2021-01-01",
+        court="Yargıtay", chamber="13. HD", issuing_authority="",
+    ))
+    record = await client.get(f"/api/v1/legal-sources/{rec_id}")
+    v2_id = record.json()["current_version_id"]
+
+    # verify to verified_official must fail because v2 has no official evidence.
+    r = await client.post(f"/api/v1/legal-sources/{rec_id}/verify",
+                          json={"target_status": "verified_official"})
+    assert r.status_code == 409
+    assert record.json()["verification_status"] == "needs_review"
+
+
+# --- JWT role integration tests (real signed token with patched AUTH_MODE=jwt) --
+@pytest.mark.asyncio
+async def test_jwt_role_boundary_lawyer_blocked():
+    """lawyer role receives 403 on editor-only endpoints in JWT mode."""
+    from unittest.mock import patch
+
+    from app.services.auth_service import create_access_token
+
+    token = create_access_token("u-lawyer", "t1", "lawyer", "s1")
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app as _jwt_app
+
+    transport = ASGITransport(app=_jwt_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        with patch("app.services.auth_service.get_auth_mode", return_value="jwt"), \
+             patch("app.routes.source_routes.get_auth_mode", return_value="jwt"):
+            headers = {"Authorization": f"Bearer {token}"}
+            r = await ac.post("/api/v1/legal-sources/ingest",
+                              json=_official_decision(), headers=headers)
+            assert r.status_code == 403, f"lawyer must be blocked from ingest, got {r.status_code}"
+
+
+@pytest.mark.asyncio
+async def test_jwt_role_boundary_tenant_admin_blocked():
+    """tenant_admin must NOT have global source editor rights in JWT mode."""
+    from unittest.mock import patch
+
+    from app.services.auth_service import create_access_token
+    from app.routes.source_routes import _EDITOR_ROLES
+
+    # Structural check first.
+    assert "tenant_admin" not in _EDITOR_ROLES
+
+    token = create_access_token("u-ta", "t1", "tenant_admin", "s1")
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app as _jwt_app
+
+    transport = ASGITransport(app=_jwt_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        with patch("app.services.auth_service.get_auth_mode", return_value="jwt"), \
+             patch("app.routes.source_routes.get_auth_mode", return_value="jwt"):
+            headers = {"Authorization": f"Bearer {token}"}
+            r = await ac.post("/api/v1/legal-sources/ingest",
+                              json=_official_decision(), headers=headers)
+            assert r.status_code == 403, f"tenant_admin must be blocked from ingest, got {r.status_code}"
 
 
 # --- Role-boundary tests (editor/admin vs lawyer/tenant_admin) -----------
