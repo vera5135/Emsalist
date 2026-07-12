@@ -397,7 +397,7 @@ Kapanış kapısı:
 
 ### P2.6 — Güvenilir hukuk kaynağı omurgası
 
-Durum: ✅ Implementation completed — PR #15 final acceptance green; formal merge pending.
+Durum: ✅ Completed — PR #15 `main`'e merge edildi (merge commit `523cb66`).
 
 Canonical, DB-backed güvenilir hukuk kaynağı omurgası uygulandı. P2.6; embedding
 üretimi, semantik sıralama veya arama motoru **içermez** — yalnız P2.7'nin
@@ -456,16 +456,18 @@ Bilinen sınırlar / ertelenen kapsam (kabul bloğu değil):
 
 Kapanış kanıtı:
 
+- Feature acceptance head: `521481f` (aşağıdaki CI kanıtları bu head'te alındı)
+- Post-merge main closure: PR #15 normal merge commit `523cb66` (`main`)
 - Migration: `ce94808703a4`, tek head, zero drift, downgrade/upgrade round-trip temiz
 - Backend PostgreSQL: 1270 passed, 0 skipped, 0 failed
 - Source backbone: 30 service testi, 38 route testi
 - OpenAPI: drift temiz, 159 benzersiz v1 operation ID
 - Mobil: kaynağa özel 14 test yeşil; Mobile CI yeşil
-- HEAD `6370702` gerekli CI:
-  - Security Scanning — run `29194078664` — completed / success
-  - Config and Migration Audit — run `29194078681` — completed / success
-  - Mobile CI — run `29194078686` — completed / success
-  - P1.14 Final Acceptance — run `29194078662` — completed / success
+- Feature acceptance head `521481f` gerekli CI:
+  - Security Scanning — run `29207647138` — completed / success
+  - Config and Migration Audit — run `29207647082` — completed / success
+  - Mobile CI — run `29207647044` — completed / success
+  - P1.14 Final Acceptance — run `29207647050` — completed / success
 
 Kapanış kapısı:
 
