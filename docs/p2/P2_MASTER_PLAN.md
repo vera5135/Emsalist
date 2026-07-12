@@ -397,7 +397,40 @@ Kapanış kapısı:
 
 ### P2.6 — Güvenilir hukuk kaynağı omurgası
 
-Durum: ⏳ Not started.
+Durum: ✅ Implementation completed — PR #15 final acceptance green; formal merge pending.
+
+Canonical, DB-backed güvenilir hukuk kaynağı omurgası uygulandı. P2.6; embedding
+üretimi, semantik sıralama veya arama motoru **içermez** — yalnız P2.7'nin
+tüketeceği bir index-eligibility policy seam sağlar.
+
+Uygulanan davranış:
+
+- canonical `SourceRecord` / `SourceVersion` / `SourceParagraph` modeli
+- `SourceVerification` / `SourceRelationship` / `SourceUsage` modeli
+- deterministic canonical key engine (Türkçe-duyarlı NFKC/casefold + E./K. +
+  tarih normalizasyonu)
+- source version korunması (eski sürüm `superseded` ama silinmez)
+- `editor_submit` her zaman `needs_review` başlar
+- resmî URL tek başına kanıt değildir
+- `verified_official` yalnız o `SourceVersion`'a bağlı `official_fetch_match`
+  kanıtıyla verilir
+- resmî güven yalnız sunucunun kendi fetch ettiği byte'lardan türetilir
+- `evidence_hash` = `SourceVersion.content_hash`
+- değişen sürüm eski sürümün güvenini miras almaz
+- aynı-hash resmî fetch mevcut sürümü `duplicate_verified` ile doğrular; yeni
+  `SourceVersion` yaratmaz
+- effective current-version trust resolver
+- `SourceUsage` kesin `source_version_id` provenance'ı
+- `SourceUsage` için paragraf opsiyoneldir
+- effective trust `SourceRecord` / Official Tracking / Source Review üzerinde
+  tutarlı gösterilir
+- global source mutation editor/admin sınırı (`require_editor`)
+- `tenant_admin` hariç tutulur (global source editor değildir)
+- JWT 4-rol × 4-aksiyon request-level authorization matrix (gerçek seed'lenmiş
+  DB kimlikleriyle)
+- PostgreSQL audit FK integrity (`audit_events_tenant_id_fkey` korunur)
+- SSRF-fail-closed güvenli source fetcher
+- P2.7-tüketilebilir `index_eligibility` saf policy seam
 
 Kaynaklar:
 
@@ -410,12 +443,39 @@ Kaynaklar:
 - doğrulanmış ikincil kaynaklar
 - kontrollü doktrin
 
+Bilinen sınırlar / ertelenen kapsam (kabul bloğu değil):
+
+- canlı zamanlanmış sağlayıcı ingestion'ı henüz canonical ingestion'a bağlı
+  değildir; güvenli fetch / resmî ingestion servis seam'i mevcuttur
+- mobil editor/review UI uygulanmadı (backend API only)
+- semantik arama / embedding / ranking P2.7'dir
+- hukuki mesele grafiği P2.8'dir
+- kaynaklı dilekçe üretimi P2.9'dur
+- `affected_draft_count`, dilekçe üretimi var olana kadar unsupported kalır
+- native mobil dosya seçici borcu P2.5/mobil entegrasyona aittir, P2.6'ya değil
+
+Kapanış kanıtı:
+
+- Migration: `ce94808703a4`, tek head, zero drift, downgrade/upgrade round-trip temiz
+- Backend PostgreSQL: 1270 passed, 0 skipped, 0 failed
+- Source backbone: 30 service testi, 38 route testi
+- OpenAPI: drift temiz, 159 benzersiz v1 operation ID
+- Mobil: kaynağa özel 14 test yeşil; Mobile CI yeşil
+- HEAD `6370702` gerekli CI:
+  - Security Scanning — run `29194078664` — completed / success
+  - Config and Migration Audit — run `29194078681` — completed / success
+  - Mobile CI — run `29194078686` — completed / success
+  - P1.14 Final Acceptance — run `29194078662` — completed / success
+
 Kapanış kapısı:
 
-- doğrulanmamış kaynağın doğrulanmış görünmemesi
-- tekrar kararların canonical key ile birleştirilmesi
-- kullanılan kaynağın dosya ve dilekçe bağlamında izlenmesi
-- citation'ın deterministic renderer ile üretilmesi
+- doğrulanmamış / editor-submitted içerik `verified_official` görünemez
+- tekrar canonical kaynak/sürüm davranışı deterministic'tir (silent overwrite yok)
+- kesin source version ve paragraf provenance'ı korunur
+- tarihsel `SourceUsage` güveni güncel `SourceRecord` güvenini miras alamaz
+- effective current-version trust tutarlı gösterilir
+- JWT modda global source mutation'ları editor/admin ile sınırlıdır
+- PostgreSQL-backed final acceptance yeşildir
 
 ### P2.7 — Hibrit hukuk araması
 
