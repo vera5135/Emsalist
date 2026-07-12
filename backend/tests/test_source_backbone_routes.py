@@ -24,12 +24,27 @@ from app.main import app
 OTHER_TENANT = "tenant-src-other"
 OTHER_USER = "user-src-other"
 
+# Real JWT test identities. In jwt auth mode an allowed editor/admin mutation
+# writes an audit_event whose tenant_id is the token's tenant_id. That column
+# is FK-constrained to tenants.id (enforced by PostgreSQL), so the JWT token
+# claims MUST map to a real seeded tenant + user — a fake tenant like "t1"
+# violates audit_events_tenant_id_fkey.
+JWT_TENANT = "tenant-src-jwt"
+JWT_USERS = {
+    "lawyer": "user-src-jwt-lawyer",
+    "tenant_admin": "user-src-jwt-tenant-admin",
+    "editor": "user-src-jwt-editor",
+    "admin": "user-src-jwt-admin",
+}
+
 
 @pytest_asyncio.fixture(autouse=True)
 async def db_setup():
     maker = get_sessionmaker()
-    tenants = ["local", OTHER_TENANT]
-    async with maker() as session:
+    tenants = ["local", OTHER_TENANT, JWT_TENANT]
+    user_ids = ["local-user", OTHER_USER, *JWT_USERS.values()]
+
+    async def _cleanup(session):
         await session.execute(delete(SourceUsage).where(SourceUsage.tenant_id.in_(tenants)))
         await session.execute(delete(SourceParagraph))
         await session.execute(delete(SourceVerification))
@@ -38,26 +53,25 @@ async def db_setup():
         await session.execute(delete(SourceRecord))
         await session.execute(delete(Case).where(Case.tenant_id.in_(tenants)))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(tenants)))
-        await session.execute(delete(User).where(User.id.in_(["local-user", OTHER_USER])))
+        await session.execute(delete(User).where(User.id.in_(user_ids)))
         await session.execute(delete(Tenant).where(Tenant.id.in_(tenants)))
+
+    async with maker() as session:
+        await _cleanup(session)
         await session.flush()
         session.add(Tenant(id="local", name="Local", slug="local-src", status="active"))
         session.add(Tenant(id=OTHER_TENANT, name="Other", slug="other-src", status="active"))
+        session.add(Tenant(id=JWT_TENANT, name="JWT Source Test Tenant", slug="jwt-source-test", status="active"))
         session.add(User(id="local-user", tenant_id="local", email_normalized="src@local", display_name="L", status="active", role="lawyer"))
         session.add(User(id=OTHER_USER, tenant_id=OTHER_TENANT, email_normalized="src@other", display_name="O", status="active", role="lawyer"))
+        session.add(User(id=JWT_USERS["lawyer"], tenant_id=JWT_TENANT, email_normalized="jwt-lawyer@source.test", display_name="JWT Lawyer", status="active", role="lawyer"))
+        session.add(User(id=JWT_USERS["tenant_admin"], tenant_id=JWT_TENANT, email_normalized="jwt-tenant-admin@source.test", display_name="JWT Tenant Admin", status="active", role="tenant_admin"))
+        session.add(User(id=JWT_USERS["editor"], tenant_id=JWT_TENANT, email_normalized="jwt-editor@source.test", display_name="JWT Editor", status="active", role="editor"))
+        session.add(User(id=JWT_USERS["admin"], tenant_id=JWT_TENANT, email_normalized="jwt-admin@source.test", display_name="JWT Admin", status="active", role="admin"))
         await session.commit()
     yield
     async with maker() as session:
-        await session.execute(delete(SourceUsage).where(SourceUsage.tenant_id.in_(tenants)))
-        await session.execute(delete(SourceParagraph))
-        await session.execute(delete(SourceVerification))
-        await session.execute(delete(SourceRelationship))
-        await session.execute(delete(SourceVersion))
-        await session.execute(delete(SourceRecord))
-        await session.execute(delete(Case).where(Case.tenant_id.in_(tenants)))
-        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(tenants)))
-        await session.execute(delete(User).where(User.id.in_(["local-user", OTHER_USER])))
-        await session.execute(delete(Tenant).where(Tenant.id.in_(tenants)))
+        await _cleanup(session)
         await session.commit()
 
 
@@ -636,27 +650,6 @@ async def test_evidence_for_old_version_cannot_verify_new_version(client: AsyncC
 
 
 # --- JWT role integration tests (real signed token with patched AUTH_MODE=jwt) --
-@pytest.mark.asyncio
-async def test_jwt_role_boundary_lawyer_blocked():
-    """lawyer role receives 403 on editor-only endpoints in JWT mode."""
-    from unittest.mock import patch
-
-    from app.services.auth_service import create_access_token
-
-    token = create_access_token("u-lawyer", "t1", "lawyer", "s1")
-    from httpx import ASGITransport, AsyncClient
-    from app.main import app as _jwt_app
-
-    transport = ASGITransport(app=_jwt_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        with patch("app.services.auth_service.get_auth_mode", return_value="jwt"), \
-             patch("app.routes.source_routes.get_auth_mode", return_value="jwt"):
-            headers = {"Authorization": f"Bearer {token}"}
-            r = await ac.post("/api/v1/legal-sources/ingest",
-                              json=_official_decision(), headers=headers)
-            assert r.status_code == 403, f"lawyer must be blocked from ingest, got {r.status_code}"
-
-
 async def _jwt_client():
     from httpx import ASGITransport, AsyncClient
     from app.main import app as _jwt_app
@@ -666,7 +659,34 @@ async def _jwt_client():
 
 def _jwt_token(role: str) -> str:
     from app.services.auth_service import create_access_token
-    return create_access_token(f"u-{role}", "t1", role, "s1")
+
+    # Token claims (sub, tenant_id, role) MUST match the real seeded identity so
+    # that any resulting audit_event satisfies audit_events_tenant_id_fkey.
+    return create_access_token(JWT_USERS[role], JWT_TENANT, role, f"session-{role}")
+
+
+async def _seed_needs_review_source(*, number: str, title: str) -> str:
+    """Seed a fresh needs_review legislation source via the editor-candidate
+    service path and return its source_record_id.
+
+    Each action in the authorization matrix (verify / quarantine / review)
+    operates on an independent record with a deterministic unique canonical key
+    so state transitions never collide with one another."""
+    from app.db.session import get_sessionmaker
+    from app.services.source_ingestion_service import ingest_editor_candidate
+
+    sm = get_sessionmaker()
+    async with sm() as db:
+        result = await ingest_editor_candidate(
+            db,
+            metadata={"source_type": "legislation", "title": title,
+                      "issuing_authority": "TBMM", "number": number,
+                      "publication_date": "2021-01-01", "effective_date": "2022-01-01"},
+            raw_text=f"Seed content for {number}.",
+        )
+        await db.commit()
+    assert result.verification_status == "needs_review"
+    return result.source_record_id
 
 
 async def _jwt_post(ac, path, token, json=None):
@@ -814,36 +834,60 @@ async def test_jwt_editor_global_source_mutations_allowed():
     finally:
         await ac.aclose()
 
+    # Audit referential integrity: the allowed editor mutations wrote audit
+    # events whose tenant_id/actor_id come from the seeded JWT identity. This
+    # proves the fixture fix does NOT bypass the audit path — the exact FK the
+    # PostgreSQL CI failure exposed is satisfied.
+    async with sm() as db:
+        events = (await db.execute(
+            select(AuditEvent).where(AuditEvent.tenant_id == JWT_TENANT)
+        )).scalars().all()
+    assert events, "editor mutation must produce an audit event"
+    assert all(e.tenant_id == JWT_TENANT for e in events)
+    assert all(e.actor_id == JWT_USERS["editor"] for e in events)
+
 
 @pytest.mark.asyncio
 async def test_jwt_admin_global_source_mutations_allowed():
-    from app.services.source_fetcher import FetchResult
+    """admin role: full 4-action allowed matrix (ingest / verify / quarantine /
+    review) mirroring the editor matrix, each on an independent fresh record."""
     from app.db.session import get_sessionmaker
-    from app.services.source_ingestion_service import ingest_official_fetch
 
-    async with get_sessionmaker()() as db:
-        result = await ingest_official_fetch(
-            db,
-            metadata={"source_type": "supreme_court_decision",
-                      "title": "JWT Admin Test",
-                      "court": "Yargıtay", "chamber": "13. HD",
-                      "case_number": "2020/jwt4", "decision_number": "2021/jwt4",
-                      "decision_date": "2021-01-01"},
-            fetch_result=FetchResult(
-                final_url="https://karararama.yargitay.gov.tr/x",
-                status_code=200, content=b"jwt admin test content",
-                content_type="text/html",
-            ),
-        )
-        await db.commit()
+    verify_id = await _seed_needs_review_source(number="jwt-admin-verify", title="JWT Admin Verify")
+    quarantine_id = await _seed_needs_review_source(number="jwt-admin-quarantine", title="JWT Admin Quarantine")
+    review_id = await _seed_needs_review_source(number="jwt-admin-review", title="JWT Admin Review")
 
     ac = await _jwt_client()
     try:
         token = _jwt_token("admin")
-        r = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
-        assert r.status_code == 201, f"admin ingest: expected 201, got {r.status_code}"
+        # 1. ingest → 201
+        ingest = await _jwt_post(ac, "/api/v1/legal-sources/ingest", token, json=_official_decision())
+        assert ingest.status_code == 201, f"admin ingest: expected 201, got {ingest.status_code}"
+        # 2. verify editor_verified → 200
+        verify = await _jwt_post(ac, f"/api/v1/legal-sources/{verify_id}/verify", token,
+                                 json={"target_status": "editor_verified"})
+        assert verify.status_code == 200, f"admin verify: expected 200, got {verify.status_code}"
+        # 3. quarantine → 200
+        quarantine = await _jwt_post(ac, f"/api/v1/legal-sources/{quarantine_id}/quarantine", token)
+        assert quarantine.status_code == 200, f"admin quarantine: expected 200, got {quarantine.status_code}"
+        # 4. source-review approve → 200
+        review = await _jwt_post(ac, f"/api/v1/source-review/{review_id}/approve", token)
+        assert review.status_code == 200, f"admin review: expected 200, got {review.status_code}"
     finally:
         await ac.aclose()
+
+    # Audit referential integrity for the admin path too.
+    sm = get_sessionmaker()
+    async with sm() as db:
+        events = (await db.execute(
+            select(AuditEvent).where(AuditEvent.tenant_id == JWT_TENANT)
+        )).scalars().all()
+    assert events, "admin mutations must produce audit events"
+    assert all(e.tenant_id == JWT_TENANT for e in events)
+    assert all(e.actor_id == JWT_USERS["admin"] for e in events)
+    actions = {e.action for e in events}
+    assert {"legal_source_ingested", "legal_source_verified",
+            "legal_source_quarantined", "source_review_approved"} <= actions
 
 
 # --- Remove redundant single-endpoint JWT tests (covered by above) -------
@@ -986,31 +1030,6 @@ async def test_usage_of_verified_old_version_keeps_status_after_unverified_new_v
     # Usage bound to v1 must show verified_official (v1 has fetch evidence).
     assert items[0]["verification_status"] == "verified_official"
     assert items[0]["source_version_id"] == v1_id
-
-
-@pytest.mark.asyncio
-async def test_jwt_role_boundary_tenant_admin_blocked():
-    """tenant_admin must NOT have global source editor rights in JWT mode."""
-    from unittest.mock import patch
-
-    from app.services.auth_service import create_access_token
-    from app.routes.source_routes import _EDITOR_ROLES
-
-    # Structural check first.
-    assert "tenant_admin" not in _EDITOR_ROLES
-
-    token = create_access_token("u-ta", "t1", "tenant_admin", "s1")
-    from httpx import ASGITransport, AsyncClient
-    from app.main import app as _jwt_app
-
-    transport = ASGITransport(app=_jwt_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        with patch("app.services.auth_service.get_auth_mode", return_value="jwt"), \
-             patch("app.routes.source_routes.get_auth_mode", return_value="jwt"):
-            headers = {"Authorization": f"Bearer {token}"}
-            r = await ac.post("/api/v1/legal-sources/ingest",
-                              json=_official_decision(), headers=headers)
-            assert r.status_code == 403, f"tenant_admin must be blocked from ingest, got {r.status_code}"
 
 
 # --- Role-boundary tests (editor/admin vs lawyer/tenant_admin) -----------
