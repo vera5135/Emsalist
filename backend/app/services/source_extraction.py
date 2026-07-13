@@ -81,7 +81,6 @@ class ExtractedContent:
 def extract_content_from_fetch(
     fetch_result: FetchResult,
     *,
-    source_type: str = "",
     parser_version: str = "p2.6c-extract-1",
 ) -> ExtractedContent:
     """Extract legal content from fetched bytes, replacing chrome with clean text.

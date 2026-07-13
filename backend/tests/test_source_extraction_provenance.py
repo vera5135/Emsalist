@@ -83,7 +83,6 @@ async def _provider_ingest(
     )
     extracted = extract_content_from_fetch(
         fetch_result,
-        source_type="supreme_court_decision",
         parser_version=EXTRACTION_VERSION,
     )
     extracted_fr = make_extracted_fetch_result(fetch_result, extracted)
@@ -729,7 +728,6 @@ async def test_valid_future_extraction_version_accepted():
         )
         extracted = extract_content_from_fetch(
             fetch_result,
-            source_type="supreme_court_decision",
             parser_version="p2.6c-extract-2",
         )
         extracted_fr = make_extracted_fetch_result(fetch_result, extracted)

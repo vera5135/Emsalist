@@ -10,6 +10,7 @@ temporal status remains P2.6-controlled.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from urllib.parse import quote
 
@@ -17,7 +18,6 @@ from bs4 import BeautifulSoup
 
 from app.services.source_providers.base import (
     ERR_MANUAL_REVIEW_REQUIRED,
-    ERR_MISSING_IDENTIFIER,
     OfficialSourceProvider,
     ParsedOfficialSource,
     ProviderCapabilities,
@@ -48,9 +48,102 @@ _INSTRUMENT_TYPE_MAP = {
     "kararname": "presidential_decree",
 }
 
-_ISSUE_NO_RE = re.compile(r"(?i)(?:sayı|sayi)\s*[:\-]?\s*(\d{4,6})")
+_ISSUE_HEADING_RE = re.compile(
+    r"^(?:t\.?\s*c\.?\s+)?resm[iî]\s+gazete(?:si)?$",
+    re.IGNORECASE,
+)
+_ISSUE_NO_RE = re.compile(r"(?im)^\s*(?:sayı|sayi)\s*[:\-]\s*(\d{4,6})\b")
 _DATE_RE = re.compile(r"(?i)(?:tarih|yayım\s*tarihi)\s*[:\-]?\s*(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})")
-_INSTRUMENT_NO_RE = re.compile(r"(?i)(?:karar|kanun|mevzuat|k\.)\s*(?:numarası|sayısı|no)\s*[:\-]?\s*(\d+)")
+
+_INSTRUMENT_HEADING_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("presidential_decree", re.compile(
+        r"^(?:.+\s+)?(?:cumhurbaşkan(?:ı|lığı)\s+(?:kararı|kararnamesi)|kararname)$",
+        re.IGNORECASE,
+    )),
+    ("regulation", re.compile(r"^(?:.+\s+)?yönetmeli(?:k|ği)$", re.IGNORECASE)),
+    ("communique", re.compile(r"^(?:.+\s+)?tebli(?:ğ|ği)$", re.IGNORECASE)),
+    ("circular", re.compile(r"^(?:.+\s+)?genelge(?:si)?$", re.IGNORECASE)),
+    ("legislation", re.compile(r"^(?:.+\s+)?kanun(?:u)?$", re.IGNORECASE)),
+)
+
+_INSTRUMENT_NUMBER_PATTERNS: dict[str, re.Pattern[str]] = {
+    "legislation": re.compile(
+        r"(?im)^\s*kanun\s*(?:numarası|no)\s*[:\-]\s*(\d+)\b"
+    ),
+    "regulation": re.compile(
+        r"(?im)^\s*(?:yönetmelik\s*(?:numarası|no)|mevzuat\s*no)\s*[:\-]\s*(\d+)\b"
+    ),
+    "communique": re.compile(
+        r"(?im)^\s*tebliğ\s*(?:numarası|no)\s*[:\-]\s*(\d+)\b"
+    ),
+    "circular": re.compile(
+        r"(?im)^\s*genelge\s*(?:numarası|no)\s*[:\-]\s*(\d+)\b"
+    ),
+    "presidential_decree": re.compile(
+        r"(?im)^\s*(?:cumhurbaşkanı\s+kararı|kararname|karar)\s*(?:numarası|sayısı|no)\s*[:\-]\s*(\d+)\b"
+    ),
+}
+
+
+@dataclass(frozen=True)
+class GazetteDocumentIdentity:
+    source_type: str
+    number: str
+    title: str
+    normalized_text: str
+
+
+def classify_fetched_gazette_document(content: bytes) -> GazetteDocumentIdentity:
+    """Classify canonical Gazette identity from exact fetched bytes only.
+
+    Discovery candidate fields are routing hints. They are deliberately absent
+    from this classifier and cannot select canonical source type or number.
+    """
+    raw = content.decode("utf-8", errors="replace")
+    soup = BeautifulSoup(raw, "lxml")
+    heading_node = soup.find(["h1", "h2"])
+    title = heading_node.get_text(" ", strip=True) if heading_node else ""
+    normalized_title = re.sub(r"\s+", " ", title).strip()
+    text = html_to_text(raw)
+    assert_meaningful_body(text)
+
+    if _ISSUE_HEADING_RE.fullmatch(normalized_title):
+        issue_match = _ISSUE_NO_RE.search(text)
+        if issue_match is None:
+            raise ProviderError(
+                ERR_MANUAL_REVIEW_REQUIRED,
+                "gazette issue bytes lack a deterministic issue number",
+            )
+        return GazetteDocumentIdentity(
+            source_type="official_gazette_issue",
+            number=issue_match.group(1),
+            title=title or f"Resmî Gazete Sayı {issue_match.group(1)}",
+            normalized_text=text,
+        )
+
+    source_type = ""
+    for controlled_type, pattern in _INSTRUMENT_HEADING_PATTERNS:
+        if pattern.fullmatch(normalized_title):
+            source_type = controlled_type
+            break
+    if not source_type:
+        raise ProviderError(
+            ERR_MANUAL_REVIEW_REQUIRED,
+            "gazette bytes do not prove a controlled document type",
+        )
+
+    number_match = _INSTRUMENT_NUMBER_PATTERNS[source_type].search(text)
+    if number_match is None:
+        raise ProviderError(
+            ERR_MANUAL_REVIEW_REQUIRED,
+            "gazette instrument bytes lack a deterministic canonical number",
+        )
+    return GazetteDocumentIdentity(
+        source_type=source_type,
+        number=number_match.group(1),
+        title=title,
+        normalized_text=text,
+    )
 
 
 class ResmiGazeteProvider(OfficialSourceProvider):
@@ -99,61 +192,36 @@ class ResmiGazeteProvider(OfficialSourceProvider):
                 source_type=source_type,
                 detail_url=href,
                 external_id=str(a.get("data-instrument-id") or "") or None,
+                # Untrusted routing/observability hints only. parse() derives
+                # canonical identity again from the exact fetched bytes.
                 discovered_metadata={"kind": CANDIDATE_INSTRUMENT, "instrument_type": itype},
             ))
         return ProviderDiscoveryPage(candidates=candidates, next_cursor=None, exhausted=True)
 
     async def parse(self, candidate, fetch_result) -> ParsedOfficialSource:
-        raw = fetch_result.content.decode("utf-8", errors="replace")
-        soup = BeautifulSoup(raw, "lxml")
-        heading = soup.find(["h1", "h2"])
-        title = heading.get_text(" ", strip=True) if heading else ""
-        text = html_to_text(raw)
-        assert_meaningful_body(text)
-
-        date_m = _DATE_RE.search(text)
+        identity = classify_fetched_gazette_document(fetch_result.content)
+        date_m = _DATE_RE.search(identity.normalized_text)
         publication_date = parse_iso_date(date_m.group(1)) if date_m else None
-        kind = (candidate.discovered_metadata or {}).get("kind", CANDIDATE_ISSUE)
-
-        if candidate.source_type == "official_gazette_issue" or kind == CANDIDATE_ISSUE:
-            issue_m = _ISSUE_NO_RE.search(text)
-            issue_no = issue_m.group(1) if issue_m else candidate.external_id
-            if not issue_no:
-                raise ProviderError(ERR_MISSING_IDENTIFIER, "gazette issue requires an issue number")
-            return ParsedOfficialSource(
-                provider_code=self.provider_code,
-                source_type="official_gazette_issue",
-                title=title or f"Resmî Gazete Sayı {issue_no}",
-                official_url=fetch_result.final_url,
-                raw_text=text,
-                issuing_authority="Resmî Gazete",
-                number=issue_no,
-                publication_date=publication_date,
-                provider_metadata={"external_id": candidate.external_id, "kind": CANDIDATE_ISSUE},
-            )
-
-        # Published instrument path — requires a real instrument number.
-        inst_m = _INSTRUMENT_NO_RE.search(text)
-        number = inst_m.group(1) if inst_m else None
-        if not number:
-            # Segmentation/number uncertain — do NOT fabricate an instrument boundary.
-            raise ProviderError(
-                ERR_MANUAL_REVIEW_REQUIRED,
-                "gazette instrument has no deterministic number; not fabricating",
-            )
         return ParsedOfficialSource(
             provider_code=self.provider_code,
-            source_type=candidate.source_type,
-            title=title or f"Resmî Gazete Yayımı No. {number}",
+            source_type=identity.source_type,
+            title=identity.title or f"Resmî Gazete Yayımı No. {identity.number}",
             official_url=fetch_result.final_url,
-            raw_text=text,
-            issuing_authority="",
-            number=number,
+            raw_text=identity.normalized_text,
+            issuing_authority=(
+                "Resmî Gazete"
+                if identity.source_type == "official_gazette_issue"
+                else ""
+            ),
+            number=identity.number,
             publication_date=publication_date,
             provider_metadata={
                 "external_id": candidate.external_id,
-                "kind": CANDIDATE_INSTRUMENT,
-                "gazette_issue_number": (candidate.discovered_metadata or {}).get("gazette_issue_number"),
+                "kind": (
+                    CANDIDATE_ISSUE
+                    if identity.source_type == "official_gazette_issue"
+                    else CANDIDATE_INSTRUMENT
+                ),
             },
         )
 

@@ -348,7 +348,6 @@ async def _fetch_parse_ingest(db, provider, cand, *, transport, resolver, sleepe
     # hash (provenance) is preserved in SourceVersion.raw_document_hash.
     extracted = extract_content_from_fetch(
         fetch_result,
-        source_type=cand.source_type,
         parser_version="p2.6c-extract-1",
     )
     extracted_fr = make_extracted_fetch_result(fetch_result, extracted)
