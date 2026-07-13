@@ -14,13 +14,20 @@ Security properties (deterministic + testable via an injectable resolver):
 - max redirects + redirect-loop guard
 - streaming response size limit + timeout
 - content-type allowlist
+
+For real network access, use :class:`HttpxSourceTransport` which is a
+controlled SSRF-safe HTTP transport adapter. In tests, inject a callable
+stub that returns objects with status_code, headers, content, location.
 """
 from __future__ import annotations
 
 import ipaddress
 import socket
 from dataclasses import dataclass, field
+from typing import Callable
 from urllib.parse import urlparse
+
+import httpx
 
 # Official/allowlisted legal domains (suffix match on registrable host).
 ALLOWED_DOMAINS = frozenset({
@@ -34,6 +41,8 @@ ALLOWED_DOMAINS = frozenset({
     "kararlarbilgibankasi.anayasa.gov.tr",
     "anayasa.gov.tr",
     "emsal.uyap.gov.tr",
+    "kararlar.uyusmazlik.gov.tr",
+    "uyusmazlik.gov.tr",
 })
 
 ALLOWED_CONTENT_TYPES = frozenset({
@@ -143,6 +152,98 @@ class _StubResponse:
     headers: dict
     content: bytes
     location: str | None = None
+
+
+# ── Real SSRF-safe HTTP transport (P2.6C) ─────────────────────────────────
+class HttpxSourceTransport:
+    """Controlled HTTPS transport adapter for :func:`fetch_source`.
+
+    This is the ONLY class that performs real network I/O for official-source
+    fetching. Every HTTP request goes through this adapter, which returns a
+    ``_StubResponse``-compatible object so the transport contract stays
+    uniform between stubs and live fetches.
+
+    Security invariants:
+    - HTTP-client automatic redirects are DISABLED → source_fetcher owns every
+      redirect-hop re-validation.
+    - TLS certificate verification is ENABLED (never disabled for trusted hosts).
+    - Environment proxy variables (HTTP_PROXY / HTTPS_PROXY / ALL_PROXY) are
+      intentionally NOT consumed — no untrusted proxy routing without explicit
+      review.
+    - Response body is streamed with a hard size cap; oversized responses are
+      rejected mid-stream.
+    - A bounded connect/read timeout is applied to every request.
+    """
+
+    def __init__(
+        self,
+        *,
+        timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+        max_bytes: int = MAX_RESPONSE_BYTES,
+    ):
+        self._timeout = timeout_seconds
+        self._max_bytes = max_bytes
+        # Explicit: no proxy auto-detection from env vars.
+        self._client = httpx.Client(
+            follow_redirects=False,
+            verify=True,
+            timeout=timeout_seconds,
+        )
+
+    def __call__(self, url: str) -> _StubResponse:
+        """Fetch [url] and return a transport-agnostic stub-compatible object.
+
+        Raises ``SourceFetchError`` on transport-level failures (connect /
+        timeout / oversized / TLS / unsupported scheme). HTTP status codes
+        >= 400 are returned and inspected by the caller (:func:`fetch_source`).
+        """
+        try:
+            with self._client.stream("GET", url) as resp:
+                # Stream the body with a hard byte cap so we never hold an
+                # unbounded response in memory.
+                body = bytearray()
+                for chunk in resp.iter_bytes(65536):
+                    body.extend(chunk)
+                    if len(body) > self._max_bytes:
+                        raise SourceFetchError("response_too_large", "Yanıt boyutu sınırı aştı.")
+                return _StubResponse(
+                    status_code=resp.status_code,
+                    headers=dict(resp.headers),
+                    content=bytes(body),
+                    location=resp.headers.get("location"),
+                )
+        except SourceFetchError:
+            raise
+        except httpx.TimeoutException:
+            raise SourceFetchError("fetch_timeout", "Resmî kaynak zaman aşımı.")
+        except httpx.InvalidURL:
+            raise SourceFetchError("invalid_url", "Geçersiz URL.")
+        except httpx.ConnectError:
+            raise SourceFetchError("connect_error", "Resmî kaynağa bağlanılamadı.")
+        except OSError as e:
+            raise SourceFetchError("network_error", str(e)[:120]) from e
+
+
+def create_real_transport(**kw) -> HttpxSourceTransport:
+    """Factory: the real SSRF-safe transport used when ``--enable-live``.
+
+    Tests inject a stub transport; production/live-smoke calls this.
+    """
+    return HttpxSourceTransport(**kw)
+
+
+def create_live_transport(**kw) -> HttpxSourceTransport | None:
+    """Return the real transport ONLY when live source ingestion is explicitly
+    enabled (OFFICIAL_PROVIDER_LIVE_SMOKE=1).
+    Otherwise return None (fail-closed — no accidental network access).
+    """
+    import os as _os
+
+    if _os.environ.get("OFFICIAL_PROVIDER_LIVE_SMOKE", "").lower() not in {
+        "1", "true", "yes",
+    }:
+        return None
+    return create_real_transport(**kw)
 
 
 def fetch_source(

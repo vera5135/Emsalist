@@ -109,3 +109,11 @@ class DanistayProvider(OfficialSourceProvider):
             decision_date=decision_date,
             provider_metadata={"external_id": candidate.external_id},
         )
+
+    def build_exact_candidate(self, external_id: str) -> ProviderDiscoveryCandidate:
+        return ProviderDiscoveryCandidate(
+            provider_code=self.provider_code,
+            source_type="admin_court",
+            detail_url=f"{self._DETAIL_BASE}?id={external_id}",
+            external_id=external_id,
+        )

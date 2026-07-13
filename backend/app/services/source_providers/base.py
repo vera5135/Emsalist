@@ -48,6 +48,9 @@ ERR_UNSUPPORTED_MODE = "unsupported_mode"
 STATUS_AVAILABLE = "available"
 STATUS_DISABLED = "disabled"
 STATUS_DEGRADED = "degraded"
+STATUS_FIXTURE_TESTED_ONLY = "fixture_tested_only"
+STATUS_TRANSPORT_UNAVAILABLE = "transport_unavailable"
+STATUS_BROWSER_DISCOVERY_UNAVAILABLE = "browser_discovery_unavailable"
 STATUS_UNSUPPORTED_REQUIRES_AUTH = "unsupported_requires_auth"
 STATUS_PROVIDER_CHANGED = "provider_changed"
 STATUS_MANUAL_REVIEW_REQUIRED = "manual_review_required"
@@ -242,3 +245,17 @@ class OfficialSourceProvider:
         self, candidate: ProviderDiscoveryCandidate, fetch_result
     ) -> ParsedOfficialSource:
         raise NotImplementedError
+
+    def build_exact_candidate(self, external_id: str) -> ProviderDiscoveryCandidate:
+        """Resolve a provider-specific external_id into a safe official candidate.
+
+        The provider constructs the detail_url from its own fixed official base
+        (never from caller input). The returned candidate contains only provider-
+        generated fields — no caller-supplied URLs.
+        """
+        raise ProviderError("unsupported_mode", f"{self.provider_code}: external_id resolution not supported")
+
+    @staticmethod
+    def default_resolver():
+        from app.services.source_fetcher import default_resolver
+        return default_resolver

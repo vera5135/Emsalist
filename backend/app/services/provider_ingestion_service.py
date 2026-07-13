@@ -30,6 +30,7 @@ from app.db.source_ingestion_repository import (
     SourceIngestionRunRepository,
 )
 from app.services.source_canonical_key import CanonicalKeyError
+from app.services.source_extraction import extract_content_from_fetch, make_extracted_fetch_result
 from app.services.source_ingestion_service import ingest_official_fetch
 from app.services.source_providers import registry
 from app.services.source_providers.base import (
@@ -88,7 +89,7 @@ async def run_ingestion(
     to_date: str | None = None,
     max_items: int = 50,
     cursor: dict | None = None,
-    candidate: dict | None = None,
+    external_id: str | None = None,
     transport=None,
     resolver=None,
     created_by: str | None = None,
@@ -96,10 +97,8 @@ async def run_ingestion(
 ) -> RunSummary:
     """Execute a bounded, deterministic provider ingestion run.
 
-    ``transport`` is the injectable HTTP transport passed to the P2.6 secure
-    fetcher (a fixture stub in tests, a real SSRF-safe client in production).
-    Enablement, provider existence and run-type capability are validated up
-    front. Trust is produced exclusively via ``ingest_official_fetch``.
+    [external_id] is the ONLY way to specify an exact_source target
+    (never an arbitrary caller-supplied URL). The provider resolves it.
     """
     if run_type not in RUN_MODES:
         raise ProviderError("unsupported_mode", f"unknown run_type: {run_type}")
@@ -109,24 +108,32 @@ async def run_ingestion(
         raise ProviderError("unsupported_mode",
                             f"{provider_code} does not support {run_type}")
 
+    params = {
+        "query": query, "from_date": from_date, "to_date": to_date,
+        "max_items": max_items, "external_id": external_id,
+    }
     run = await SourceIngestionRunRepository.create(
         db, provider_code=provider_code, run_type=run_type,
-        created_by=created_by, cursor=cursor or {},
+        created_by=created_by, cursor=params,
     )
     await db.commit()
     return await _execute_loop(
         db, run, provider, run_type=run_type, query=query, from_date=from_date,
-        to_date=to_date, max_items=max_items, cursor=cursor, candidate=candidate,
-        transport=transport, resolver=resolver, sleeper=sleeper,
+        to_date=to_date, max_items=max_items, cursor=None,
+        external_id=external_id, transport=transport, resolver=resolver,
+        sleeper=sleeper,
     )
 
 
 async def execute_run(
     db: AsyncSession, run_id: str, *, transport=None, resolver=None, sleeper=None,
-    query: str | None = None, from_date: str | None = None, to_date: str | None = None,
-    max_items: int = 50, candidate: dict | None = None,
 ) -> RunSummary:
-    """Execute a previously-created queued run in place (CLI/worker path)."""
+    """Execute a previously-created queued run in place (CLI/worker path).
+
+    Reads persisted run parameters (query, from_date, to_date, max_items,
+    external_id) from cursor_json. The provider resolves external_id into a
+    safe candidate — no caller-supplied URL.
+    """
     run = await SourceIngestionRunRepository.get(db, run_id)
     if run is None:
         raise ProviderError("unknown_run", f"run not found: {run_id}")
@@ -139,17 +146,19 @@ async def execute_run(
     params = run.cursor_json or {}
     return await _execute_loop(
         db, run, provider, run_type=run.run_type,
-        query=query or params.get("query"),
-        from_date=from_date or params.get("from_date"),
-        to_date=to_date or params.get("to_date"),
-        max_items=max_items, cursor=params.get("cursor"), candidate=candidate,
+        query=params.get("query"),
+        from_date=params.get("from_date"),
+        to_date=params.get("to_date"),
+        max_items=params.get("max_items", 50),
+        cursor=None,
+        external_id=params.get("external_id"),
         transport=transport, resolver=resolver, sleeper=sleeper,
     )
 
 
 async def _execute_loop(
     db: AsyncSession, run, provider, *, run_type, query, from_date, to_date,
-    max_items, cursor, candidate, transport, resolver, sleeper,
+    max_items, cursor, external_id, transport, resolver, sleeper,
 ) -> RunSummary:
     provider_code = provider.provider_code
     sleep = sleeper or _default_sleeper
@@ -165,7 +174,7 @@ async def _execute_loop(
         candidates = await _collect_candidates(
             provider, run_type=run_type, query=query, from_date=from_date,
             to_date=to_date, max_items=max_items, cursor=cursor,
-            candidate=candidate, transport=transport, resolver=resolver,
+            external_id=external_id, transport=transport,
         )
     except ProviderError as e:
         run.discovered_count = 0
@@ -279,22 +288,16 @@ async def _execute_loop(
 
 async def _collect_candidates(
     provider, *, run_type, query, from_date, to_date, max_items, cursor,
-    candidate, transport, resolver,
+    external_id, transport,
 ) -> list[ProviderDiscoveryCandidate]:
     if run_type == RUN_EXACT_SOURCE:
-        if not candidate or not candidate.get("detail_url"):
-            raise ProviderError("missing_identifier", "exact_source requires a candidate detail_url")
-        return [ProviderDiscoveryCandidate(
-            provider_code=provider.provider_code,
-            source_type=candidate.get("source_type") or (provider.source_types[0] if provider.source_types else ""),
-            detail_url=candidate["detail_url"],
-            download_url=candidate.get("download_url"),
-            external_id=candidate.get("external_id"),
-        )]
+        if not external_id:
+            raise ProviderError("missing_identifier", "exact_source requires an external_id")
+        return [provider.build_exact_candidate(external_id)]
     page = await provider.discover(
         query=query, cursor=(cursor or {}).get("page") if cursor else None,
         limit=max_items, from_date=from_date, to_date=to_date,
-        transport=transport, resolver=resolver,
+        transport=transport, resolver=provider.default_resolver(),
     )
     return page.candidates[:max_items]
 
@@ -304,9 +307,19 @@ async def _fetch_parse_ingest(db, provider, cand, *, transport, resolver):
     parsed: ParsedOfficialSource = await provider.parse(cand, fetch_result)
     # Content-quality gate (defense in depth; providers also gate in parse()).
     assert_meaningful_body(parsed.raw_text)
+    # Extraction provenance: the raw fetched bytes contain HTML/chrome. Extract
+    # the deterministic legal text so the canonical SourceVersion.content_hash
+    # equals the hash of the legal content, not site chrome. The raw-document
+    # hash (provenance) is preserved in SourceVersion.raw_document_hash.
+    extracted = extract_content_from_fetch(
+        fetch_result,
+        source_type=cand.source_type,
+        parser_version="p2.6c-extract-1",
+    )
+    extracted_fr = make_extracted_fetch_result(fetch_result, extracted)
     # Canonical ingestion via the P2.6 official-fetch trust path ONLY.
     return await ingest_official_fetch(
-        db, metadata=parsed.to_ingest_metadata(), fetch_result=fetch_result)
+        db, metadata=parsed.to_ingest_metadata(), fetch_result=extracted_fr)
 
 
 def _apply_outcome(run, provider_code: str, outcome: str) -> None:

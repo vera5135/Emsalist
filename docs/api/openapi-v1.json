@@ -9663,51 +9663,6 @@
         ],
         "title": "ConversationResponse"
       },
-      "CreateRunCandidate": {
-        "properties": {
-          "detail_url": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 1,
-            "title": "Detail Url"
-          },
-          "source_type": {
-            "type": "string",
-            "maxLength": 60,
-            "title": "Source Type",
-            "default": ""
-          },
-          "download_url": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 1000
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Download Url"
-          },
-          "external_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "External Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "detail_url"
-        ],
-        "title": "CreateRunCandidate"
-      },
       "CreateRunRequest": {
         "properties": {
           "run_type": {
@@ -9759,22 +9714,26 @@
             "title": "Max Items",
             "default": 50
           },
-          "candidate": {
+          "external_id": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/CreateRunCandidate"
+                "type": "string",
+                "maxLength": 128
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "External Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "run_type"
         ],
-        "title": "CreateRunRequest"
+        "title": "CreateRunRequest",
+        "description": "exact_source runs reference a provider-issued external_id (never a caller-\nsupplied URL). The provider resolves the external_id into a safe candidate."
       },
       "DecisionInput": {
         "properties": {

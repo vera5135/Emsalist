@@ -156,3 +156,11 @@ class ResmiGazeteProvider(OfficialSourceProvider):
                 "gazette_issue_number": (candidate.discovered_metadata or {}).get("gazette_issue_number"),
             },
         )
+
+    def build_exact_candidate(self, external_id: str) -> ProviderDiscoveryCandidate:
+        return ProviderDiscoveryCandidate(
+            provider_code=self.provider_code,
+            source_type="official_gazette_issue",
+            detail_url=f"{self._ISSUE_BASE}?id={external_id}",
+            external_id=external_id,
+        )

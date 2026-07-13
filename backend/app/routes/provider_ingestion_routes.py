@@ -142,10 +142,8 @@ async def create_run(
     # Persist run parameters (no secrets) in cursor_json for the runner.
     params = {
         "query": body.query, "from_date": body.from_date, "to_date": body.to_date,
-        "max_items": body.max_items,
+        "max_items": body.max_items, "external_id": body.external_id,
     }
-    if body.candidate is not None:
-        params["candidate"] = body.candidate.model_dump()
     run = await SourceIngestionRunRepository.create(
         db, provider_code=provider_code, run_type=body.run_type,
         created_by=ctx.actor_id or None, cursor=params,

@@ -1,8 +1,12 @@
-"""P2.6C — Official provider ingestion API contract models.
+"""P2.6C — Official provider ingestion API contract models (v2 — safe locators).
 
-Deliberately exposes NO raw provider HTML, no fetch URL ingestion surface, no
-stack traces, no secrets — only safe provider metadata, run counters and safe
-status/error codes.
+Deliberately exposes NO raw fetch/detail/download URL, no stack traces, no
+secrets. exact_source runs reference candidates by a provider-generated
+external_id (or server-issued candidate_id) resolved by the provider — never
+by an arbitrary caller-supplied URL.
+
+SECURITY: extra="forbid" so payloads containing unlisted fields (e.g.
+``detail_url``) are rejected fail-closed.
 """
 from __future__ import annotations
 
@@ -35,20 +39,18 @@ class ProviderListResponse(BaseModel):
     items: list[ProviderInfoResponse] = Field(default_factory=list)
 
 
-class CreateRunCandidate(BaseModel):
-    detail_url: str = Field(min_length=1, max_length=1000)
-    source_type: str = Field(default="", max_length=60)
-    download_url: str | None = Field(default=None, max_length=1000)
-    external_id: str | None = Field(default=None, max_length=128)
-
-
 class CreateRunRequest(BaseModel):
+    """exact_source runs reference a provider-issued external_id (never a caller-
+    supplied URL). The provider resolves the external_id into a safe candidate."""
+
+    model_config = {"extra": "forbid"}
+
     run_type: str = Field(min_length=1, max_length=30)
     query: str | None = Field(default=None, max_length=500)
     from_date: str | None = Field(default=None, max_length=20)
     to_date: str | None = Field(default=None, max_length=20)
     max_items: int = Field(default=50, ge=1, le=500)
-    candidate: CreateRunCandidate | None = None
+    external_id: str | None = Field(default=None, max_length=128)
 
 
 class IngestionRunResponse(BaseModel):

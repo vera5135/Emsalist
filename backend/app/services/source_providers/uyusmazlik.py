@@ -41,15 +41,15 @@ class UyusmazlikProvider(OfficialSourceProvider):
     provider_code = "uyusmazlik"
     provider_name = "Uyuşmazlık Mahkemesi (UYAP Emsal)"
     source_types = ("court_of_jurisdictional_disputes_decision",)
-    official_domains = ("emsal.uyap.gov.tr",)
+    official_domains = ("kararlar.uyusmazlik.gov.tr", "uyusmazlik.gov.tr")
     capabilities = ProviderCapabilities(
         discovery=True, fetch=True, parse=True,
         incremental=False, bounded_window=True, requires_browser=True,
     )
     request_policy = ProviderRequestPolicy(min_interval_seconds=4.0, max_concurrency=1)
 
-    _SEARCH_BASE = "https://emsal.uyap.gov.tr/aramalist"
-    _DETAIL_BASE = "https://emsal.uyap.gov.tr/getDokuman"
+    _SEARCH_BASE = "https://kararlar.uyusmazlik.gov.tr/aramalist"
+    _DETAIL_BASE = "https://kararlar.uyusmazlik.gov.tr/getDokuman"
 
     async def discover(self, *, query=None, cursor=None, limit=20, from_date=None,
                        to_date=None, transport=None, resolver=None) -> ProviderDiscoveryPage:
@@ -108,4 +108,12 @@ class UyusmazlikProvider(OfficialSourceProvider):
                 "external_id": candidate.external_id,
                 "representation": "download" if candidate.download_url else "view",
             },
+        )
+
+    def build_exact_candidate(self, external_id: str) -> ProviderDiscoveryCandidate:
+        return ProviderDiscoveryCandidate(
+            provider_code=self.provider_code,
+            source_type="court_of_jurisdictional_disputes_decision",
+            detail_url=f"{self._DETAIL_BASE}?id={external_id}",
+            external_id=external_id,
         )

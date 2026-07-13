@@ -39,13 +39,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _live_transport():
-    """Return the real SSRF-safe HTTP transport, or None when not available.
+    """Return the real SSRF-safe transport when live ingestion is enabled."""
+    from app.services.source_fetcher import create_live_transport
 
-    This is intentionally a seam: a production deployment wires an httpx-based
-    transport that returns objects with (status_code, headers, content,
-    location). Not wired in this build — live access requires explicit setup.
-    """
-    return None
+    return create_live_transport()
 
 
 async def _run(args) -> int:

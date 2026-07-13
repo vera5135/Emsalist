@@ -142,3 +142,11 @@ class AymProvider(OfficialSourceProvider):
             paragraph_hints=para_numbers or None,
             provider_metadata=provider_metadata,
         )
+
+    def build_exact_candidate(self, external_id: str) -> ProviderDiscoveryCandidate:
+        return ProviderDiscoveryCandidate(
+            provider_code=self.provider_code,
+            source_type="constitutional_court_decision",
+            detail_url=f"{self._DETAIL_BASE}?id={external_id}",
+            external_id=external_id,
+        )
