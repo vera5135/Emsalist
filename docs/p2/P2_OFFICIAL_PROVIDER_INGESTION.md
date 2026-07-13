@@ -26,6 +26,25 @@ Bu bir arama motoru değildir. Embedding üretmez. LLM hukuki muhakeme içermez.
 4. Provider API endpoint'leri `require_editor` sınırıyla korunur. Avukat ve
    `tenant_admin` rolleri 403 alır.
 
+### İki seviyeli resmî origin sınırı
+
+`source_fetcher.ALLOWED_DOMAINS`, bir hedefin tanınan resmî hukuk alanlarından
+biri olup olmadığını belirleyen global SSRF dış sınırıdır. Her yürütülen
+sağlayıcının `official_domains` tuple'ı ise aynı URL'nin o sağlayıcıya ait olup
+olmadığını belirleyen daha dar trust sınırıdır. Global olarak resmî bir alan
+adı her sağlayıcı için resmî sayılmaz; örneğin `mevzuat.gov.tr`, Yargıtay
+sağlayıcı kapsamına girmez.
+
+Sağlayıcı taban sınıfı bu dar kapsamı discovery ve detail fetch çağrılarında
+`source_fetcher`'a geçirir. İlk hedef ve her redirect hop'u hem global hem de
+yürütülen sağlayıcının kapsamına göre, ağ çağrısından önce doğrulanır. Fetch
+sonrasında `FetchResult.final_url`, parse ve extraction başlamadan önce yeniden
+sağlayıcı kapsamına bağlanır. Son olarak provider orchestration,
+`ingest_official_fetch` çağrısına beklenen `official_domains` kapsamını açıkça
+geçirir; böylece kanonik yazılar ve resmî evidence oluşturulmadan önce ikinci
+bir defense-in-depth doğrulaması yapılır. Generic P2.6 `ingest_official_fetch`
+çağrıları, sağlayıcı kapsamı verilmediğinde mevcut global davranışı korur.
+
 ## Sağlayıcı sözleşmesi
 
 `backend/app/services/source_providers/base.py` içinde tanımlanmıştır.
@@ -49,8 +68,9 @@ açılıp kapatılır; varsayılan kapalıdır.
 
 ```
 Provider keşif/parse                        → UNTRUSTED
-P2.6 source_fetcher ile tam çekim           → SSRF-safe bytes
-ingest_official_fetch(fetch_result)         → P2.6 verified_official
+Global + provider-scoped source_fetcher     → provider-bound SSRF-safe bytes
+Final URL provider doğrulaması              → parse/extraction admission
+Provider-bound ingest_official_fetch        → P2.6 verified_official
 ```
 
 Hiçbir sağlayıcı kodu doğrudan trust üretemez. `record.verification_status = "verified_official"` veya `SourceVerification(...verified_official...)` sadece P2.6 `ingest_official_fetch` motorunda gerçekleşir.

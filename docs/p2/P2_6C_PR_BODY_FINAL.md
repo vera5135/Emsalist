@@ -48,6 +48,18 @@ URL path/query, response body, headers, cookies, or raw exception.
 
 - All provider networking uses the existing destination validation and pinned
   `HttpxSourceTransport`; provider modules do not use direct HTTP clients.
+- The global official-domain allowlist remains the outer SSRF boundary, while
+  the executing provider's non-empty `official_domains` is a mandatory narrower
+  origin boundary. A globally official domain is not automatically official for
+  every provider.
+- Provider scope is enforced before the initial fetch and on every redirect
+  hop, so a cross-provider redirect is rejected before foreign bytes are
+  downloaded. Exact-host and controlled subdomain matching use one shared
+  normalized matcher and reject lookalike/suffix-confusion domains.
+- The fetched final URL is validated against the executing provider before
+  parse or extraction. Provider orchestration also passes the provider's domain
+  scope to `ingest_official_fetch`, preventing canonical writes or official
+  evidence if a fabricated/foreign `FetchResult` bypasses the fetch seam.
 - Redirect hops, public-IP validation, DNS rebinding defense, TLS hostname and
   Host authority, proxy isolation, timeout, content type, and response-size
   controls remain centralized in `source_fetcher`.
@@ -91,6 +103,7 @@ namespace. Legacy rows without subtype provenance remain unknown/legacy.
 
 ## Tests
 
+- Provider-origin binding focused suite: `11 passed`
 - Final forensic blocker focused suite: `25 passed`
 - Controlled smoke harness: `25 passed`
 - Provider suite: `75 passed`
@@ -100,15 +113,15 @@ namespace. Legacy rows without subtype provenance remain unknown/legacy.
 - P2.6 routes: `40 passed`
 - Article locator: `27 passed`
 - API/OpenAPI: `28 passed, 1 warning`
-- Latest local full backend: `1451 passed, 80 environment-gated skipped, 4 warnings`;
-  `1531 collected`, zero failures
+- Latest local full backend: `1462 passed, 80 environment-gated skipped, 5 warnings`;
+  `1542 collected`, zero failures
 - Independently verified exact-head GitHub P1.14 JUnit for
   `36a5f24d3d464eebd994403780dada04bbb6def9`: `1531 tests`, `0 failures`,
   `0 errors`, `0 skipped`
 - GitHub pytest summary at that exact head: `1531 passed, 4 warnings`
 
-Local evidence is `1451 passed + 80 environment-gated skipped`; GitHub P1.14
-executed all `1531` tests with `0 skipped`. The committed smoke tests use fake
+Local evidence is `1462 passed + 80 environment-gated skipped`; the historical
+GitHub P1.14 evidence above executed all `1531` tests with `0 skipped`. The committed smoke tests use fake
 transports/resolvers only and perform no external DNS or TCP.
 
 ## Known limitations
