@@ -75,8 +75,10 @@ Run türleri: `discover_only`, `fetch_and_ingest`, `exact_source`, `bounded_wind
 Run statüleri: `queued`, `running`, `completed`, `completed_with_errors`, `failed`, `cancelled`.
 
 API endpoint'leri çalışmayı `queued` oluşturur (202). Gerçek yürütme CLI / worker
-seam üzerinden yapılır. Doğrudan canlı HTTP taşıyıcı yapılandırması production
-dağıtımına bırakılmıştır.
+seam üzerinden yapılır. Otomatik/worker canlı HTTP taşıyıcısı fail-closed kalır
+ve yalnızca `OFFICIAL_PROVIDER_LIVE_SMOKE=1` ile yapılandırılır. Operatör
+CLI'sinde `--enable-live` açık opt-in sınırıdır ve SSRF-korumalı gerçek
+taşıyıcıyı kurar.
 
 ## CLI
 
@@ -86,6 +88,11 @@ python -m app.official_source_ingestion --provider yargitay \
 ```
 
 Servis katmanıyla aynı kodu kullanır; ikinci bir CLI-only ingestion motoru yoktur.
+`--run-id` kullanıldığında kuyrukta saklanan `cursor_json.max_items` yetkilidir;
+CLI `--max-items` değeri kuyruktaki parametreyi sessizce ezmez. `--enable-live`
+verilmezse taşıyıcı `None` kalır ve gerçek ağ erişimi yapılmaz. `--enable-live`
+verilirse `create_real_transport()` kullanılır ve oluşturulan taşıyıcı kapanışta
+`close()` edilir.
 
 ## API endpoint'leri
 
@@ -101,6 +108,28 @@ Servis katmanıyla aynı kodu kullanır; ikinci bir CLI-only ingestion motoru yo
 Hiçbir endpoint keyfî URL fetch, ham provider HTML, stack trace veya secret
 döndürmez.
 
+Provider liste/detay yanıtı yalnız güvenli operasyonel alanları döndürür:
+`status`, `last_run_at`, `last_success_at`, `last_run_status`,
+`last_safe_error_code`. Ham URL, cursor, sorgu, external id, HTML, header,
+stack trace veya exception metni dönmez.
+
+Operasyonel durum çözümleme sırası saf ve I/O'suzdur:
+
+1. disabled provider → `disabled`
+2. auth gerektiriyorsa → `unsupported_requires_auth`
+3. browser gerektiriyor ve browser discovery uygulanmadıysa → `browser_discovery_unavailable`
+4. otomatik/live transport yapılandırılmadıysa → `transport_unavailable`
+5. son terminal safe error `provider_structure_changed` ise → `provider_changed`
+6. son terminal safe error `challenge_detected` veya `manual_review_required` ise → `manual_review_required`
+7. başarılı veya kısmi başarılı operasyonel run yoksa → `fixture_tested_only`
+8. son terminal run `failed` ise → `degraded`
+9. son terminal run `completed_with_errors` ise → `degraded`
+10. son terminal run `completed` ise → `available`
+
+Queued/running run'lar son terminal operasyonel sağlığı silmez. `last_success_at`,
+yalnızca gerçek başarılı iş üreten `completed` veya `completed_with_errors`
+run'lardan gelir; boş başarı sahte son başarı üretmez.
+
 ## Gözlemlenebilirlik
 
 Metrikler (Prometheus formatı, `GET /metrics`) — güvenli etiketlerle:
@@ -114,6 +143,7 @@ Metrikler (Prometheus formatı, `GET /metrics`) — güvenli etiketlerle:
 - `emsalist_official_source_provider_new_version_total` (provider_code)
 - `emsalist_official_source_provider_conflict_total` (provider_code)
 - `emsalist_official_source_provider_error_total` (provider_code, safe_error_code)
+- `emsalist_official_source_provider_retry_total` (provider_code, operation, safe_error_code)
 
 Hiçbir metrik etiketi ham URL, karar başlığı, E/K numarası veya sorgu içeriği
 taşımaz.
@@ -121,9 +151,19 @@ taşımaz.
 ## Sağlayıcı politika (rate-limit, politeness)
 
 Tüm sağlayıcılar düşük eşzamanlılıkla varsayılan olarak yapılandırılmıştır
-(max_concurrency=1, min_interval≥2s, max_retries≤2). 429 Retry-After'a saygı
-duyulur; 403 agresif retry yapılmaz. CAPTCHA / challenge tespit edilirse
-çalışma durdurulur.
+(max_concurrency=1, min_interval≥2s, max_retries≤2). `max_retries` ek deneme
+sayısıdır; varsayılan 2 değeri en fazla 3 toplam deneme anlamına gelir.
+Backoff deterministiktir: `backoff_base_seconds * 2 ** retry_index`,
+`backoff_max_seconds` ile sınırlanır ve `min_interval_seconds` altına düşmez.
+
+Tek bir paylaşılan retry executor yalnızca provider ağ operasyonlarına uygulanır:
+discovery fetch'i ve detail fetch'i. Parse, canonical ingestion, DB yazımı ve
+`ingest_official_fetch` retry edilmez. 429 için güvenli parse edilmiş
+`Retry-After` değeri operasyonel sınırlar içindeyse kullanılır; sınırı aşarsa
+erken retry yapılmaz ve `rate_limited` ile fail-closed edilir. 403
+`access_denied` olarak tek denemede durur. CAPTCHA/challenge, yapı değişimi,
+transport yokluğu, access denied ve rate limit provider-wide stop kodlarıdır;
+kalan adaylar hammer edilmez.
 
 ## Resmî site değişikliği tespiti
 
@@ -140,7 +180,9 @@ yapısı değişirse `provider_structure_changed` safe error code döner.
 ## Kapsam dışı
 
 - Canlı zamanlanmış periodic provider ingestion (cron/scheduler integration yok — schedule-ready tasarım)
-- Gerçek üretim HTTP taşıyıcı bağlama (yapılandırma seami mevcut; production deployer'a bırakılmış)
+- Browser discovery uygulanmadı; browser gerektiren gerçek yüzeyler canlı kabul sayılmaz.
+- Kontrollü live smoke acceptance henüz tamamlanmadı; fixture testleri canlı provider kabulü değildir.
+- Article subtype provenance henüz tamamlanmadı.
 - Mobil sağlayıcı yönetim UI (editor/admin backend altyapısı)
 - Authentication/CAPTCHA gerektiren sağlayıcı yüzeylerinin bypass edilmesi
 - OCR, UDF parser, dosya tabanlı ingestion (P2.5 kapsamı)

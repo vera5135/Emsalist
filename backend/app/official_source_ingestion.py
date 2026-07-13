@@ -40,33 +40,37 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _live_transport():
     """Return the real SSRF-safe transport when live ingestion is enabled."""
-    from app.services.source_fetcher import create_live_transport
+    from app.services.source_fetcher import create_real_transport
 
-    return create_live_transport()
+    return create_real_transport()
 
 
 async def _run(args) -> int:
     maker = get_sessionmaker()
     transport = _live_transport() if args.enable_live else None
-    async with maker() as db:
-        try:
-            if args.run_id:
-                summary = await execute_run(
-                    db, args.run_id, transport=transport,
-                    max_items=args.max_items,
-                )
-            else:
-                if not args.provider:
-                    print("--provider or --run-id is required", file=sys.stderr)
-                    return 2
-                summary = await run_ingestion(
-                    db, provider_code=args.provider, run_type=args.mode,
-                    query=args.query, from_date=args.from_date, to_date=args.to_date,
-                    max_items=args.max_items, transport=transport, created_by="cli",
-                )
-        except ProviderError as e:
-            print(f"provider error: {e.code}", file=sys.stderr)
-            return 1
+    try:
+        async with maker() as db:
+            try:
+                if args.run_id:
+                    summary = await execute_run(
+                        db, args.run_id, transport=transport,
+                    )
+                else:
+                    if not args.provider:
+                        print("--provider or --run-id is required", file=sys.stderr)
+                        return 2
+                    summary = await run_ingestion(
+                        db, provider_code=args.provider, run_type=args.mode,
+                        query=args.query, from_date=args.from_date, to_date=args.to_date,
+                        max_items=args.max_items, transport=transport, created_by="cli",
+                    )
+            except ProviderError as e:
+                print(f"provider error: {e.code}", file=sys.stderr)
+                return 1
+    finally:
+        close = getattr(transport, "close", None)
+        if callable(close):
+            close()
     print(
         f"run={summary.run_id} provider={summary.provider_code} "
         f"mode={summary.run_type} status={summary.status} "

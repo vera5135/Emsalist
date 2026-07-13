@@ -33,6 +33,8 @@ class ProviderInfoResponse(BaseModel):
     status: str
     last_run_at: str | None = None
     last_success_at: str | None = None
+    last_run_status: str | None = None
+    last_safe_error_code: str = ""
 
 
 class ProviderListResponse(BaseModel):

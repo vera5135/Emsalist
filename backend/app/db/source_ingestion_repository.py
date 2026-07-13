@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import SourceIngestionItem, SourceIngestionRun
@@ -70,6 +70,56 @@ class SourceIngestionRunRepository:
         stmt = stmt.order_by(SourceIngestionRun.created_at.desc()).limit(limit).offset(offset)
         rows = list((await session.execute(stmt)).scalars().all())
         return rows, int(total)
+
+    @staticmethod
+    async def latest_run_for_provider(
+        session: AsyncSession, provider_code: str,
+    ) -> SourceIngestionRun | None:
+        stmt = (
+            select(SourceIngestionRun)
+            .where(SourceIngestionRun.provider_code == provider_code)
+            .order_by(SourceIngestionRun.created_at.desc())
+            .limit(1)
+        )
+        return (await session.execute(stmt)).scalars().first()
+
+    @staticmethod
+    async def latest_terminal_run_for_provider(
+        session: AsyncSession, provider_code: str,
+    ) -> SourceIngestionRun | None:
+        stmt = (
+            select(SourceIngestionRun)
+            .where(
+                SourceIngestionRun.provider_code == provider_code,
+                SourceIngestionRun.status.in_(TERMINAL_RUN_STATUSES),
+            )
+            .order_by(SourceIngestionRun.created_at.desc())
+            .limit(1)
+        )
+        return (await session.execute(stmt)).scalars().first()
+
+    @staticmethod
+    async def latest_successful_run_for_provider(
+        session: AsyncSession, provider_code: str,
+    ) -> SourceIngestionRun | None:
+        successful_work = or_(
+            SourceIngestionRun.discovered_count > 0,
+            SourceIngestionRun.fetched_count > 0,
+            SourceIngestionRun.ingested_count > 0,
+            SourceIngestionRun.duplicate_count > 0,
+            SourceIngestionRun.new_version_count > 0,
+        )
+        stmt = (
+            select(SourceIngestionRun)
+            .where(
+                SourceIngestionRun.provider_code == provider_code,
+                SourceIngestionRun.status.in_((RUN_COMPLETED, RUN_COMPLETED_WITH_ERRORS)),
+                successful_work,
+            )
+            .order_by(SourceIngestionRun.created_at.desc())
+            .limit(1)
+        )
+        return (await session.execute(stmt)).scalars().first()
 
     @staticmethod
     async def mark_running(session: AsyncSession, run: SourceIngestionRun) -> None:

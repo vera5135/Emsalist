@@ -6,7 +6,8 @@ All transports are deterministic fixtures — no live network access.
 """
 from __future__ import annotations
 
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -25,9 +26,23 @@ from app.db.models import (
 )
 from app.db.session import get_sessionmaker
 from app.services.source_providers import registry
+from app.services.source_fetcher import FetchResult, SourceFetchError
 from app.services.source_providers.base import (
+    ERR_ACCESS_DENIED,
+    ERR_CHALLENGE,
+    ERR_FETCH_FAILED,
+    ERR_MANUAL_REVIEW_REQUIRED,
+    ERR_RATE_LIMITED,
+    ERR_SSRF_BLOCKED,
+    ERR_STRUCTURE_CHANGED,
+    ERR_TRANSPORT_UNAVAILABLE,
+    OfficialSourceProvider,
+    ParsedOfficialSource,
+    ProviderCapabilities,
     ProviderDiscoveryCandidate,
+    ProviderDiscoveryPage,
     ProviderError,
+    ProviderRequestPolicy,
 )
 
 BODY_SENTINEL = "GİZLİKARARGÖVDESİSENTINEL2026"
@@ -664,3 +679,544 @@ async def test_no_arbitrary_url_ingestion_surface():
     for path in schema.get("paths", {}):
         assert "ingest-url" not in path
         assert "fetch-url" not in path
+
+
+# ═════════════════ P2.6C retry/status closure regressions ═════════════════
+class SequencedProvider(OfficialSourceProvider):
+    provider_code = "yargitay"
+    provider_name = "Fake Provider"
+    source_types = ("legislation",)
+    official_domains = ("karararama.yargitay.gov.tr",)
+    capabilities = ProviderCapabilities(discovery=True, fetch=True, parse=True)
+
+    def __init__(
+        self,
+        *,
+        discover_steps=None,
+        fetch_steps=None,
+        parse_error: ProviderError | None = None,
+        candidate_count: int = 1,
+        policy: ProviderRequestPolicy | None = None,
+    ):
+        self.discover_steps = list(discover_steps or [])
+        self.fetch_steps = list(fetch_steps or [])
+        self.parse_error = parse_error
+        self.candidate_count = candidate_count
+        self.request_policy = policy or ProviderRequestPolicy(
+            min_interval_seconds=0,
+            max_retries=2,
+            backoff_base_seconds=1,
+            backoff_max_seconds=5,
+        )
+        self.discover_calls = 0
+        self.fetch_calls = 0
+        self.parse_calls = 0
+
+    async def discover(self, **_kw) -> ProviderDiscoveryPage:
+        self.discover_calls += 1
+        if self.discover_steps:
+            step = self.discover_steps.pop(0)
+            if isinstance(step, Exception):
+                raise step
+        return ProviderDiscoveryPage(
+            candidates=[
+                ProviderDiscoveryCandidate(
+                    provider_code=self.provider_code,
+                    source_type="legislation",
+                    detail_url=f"https://karararama.yargitay.gov.tr/doc/{idx}",
+                    external_id=f"fake-{idx}",
+                )
+                for idx in range(self.candidate_count)
+            ]
+        )
+
+    async def fetch(self, candidate, *, transport=None, resolver=None):
+        self.fetch_calls += 1
+        if self.fetch_steps:
+            step = self.fetch_steps.pop(0)
+            if isinstance(step, Exception):
+                raise step
+        return FetchResult(
+            final_url=candidate.detail_url,
+            status_code=200,
+            content=_html(
+                "Kanun Numarasi: 6098 Resmi metin govdesi yeterince uzun."
+            ),
+            content_type="text/html",
+        )
+
+    async def parse(self, candidate, fetch_result) -> ParsedOfficialSource:
+        self.parse_calls += 1
+        if self.parse_error is not None:
+            raise self.parse_error
+        return ParsedOfficialSource(
+            provider_code=self.provider_code,
+            source_type="legislation",
+            title="Fake Law",
+            official_url=fetch_result.final_url,
+            raw_text="Kanun Numarasi: 6098 Resmi metin govdesi yeterince uzun.",
+            number="6098",
+        )
+
+
+def _retry_error(code=ERR_FETCH_FAILED, *, retry_after=None, status=None):
+    return ProviderError(
+        code,
+        "safe",
+        retryable=True,
+        retry_after_seconds=retry_after,
+        http_status=status,
+    )
+
+
+def _outcome(outcome="created"):
+    return SimpleNamespace(
+        outcome=outcome,
+        source_record_id="sr-1",
+        source_version_id="sv-1",
+    )
+
+
+async def _run_fake_provider(provider: SequencedProvider, *, sleeper=None):
+    from app.services.provider_ingestion_service import run_ingestion
+
+    async def _no_sleep(_seconds):
+        return None
+
+    maker = get_sessionmaker()
+    with patch("app.services.provider_ingestion_service.registry.get", return_value=provider), \
+         patch("app.services.provider_ingestion_service.ingest_official_fetch",
+               new=AsyncMock(return_value=_outcome())):
+        async with maker() as db:
+            return await run_ingestion(
+                db,
+                provider_code=provider.provider_code,
+                run_type="fetch_and_ingest",
+                transport=make_transport({}),
+                resolver=public_resolver,
+                sleeper=sleeper or _no_sleep,
+                max_items=provider.candidate_count,
+            )
+
+
+@pytest.mark.asyncio
+async def test_injected_resolver_used_for_discovery_and_fetch_no_external_dns(enabled_all):
+    calls = []
+
+    def fail_getaddrinfo(*_args, **_kw):
+        calls.append(_args)
+        raise AssertionError("external DNS must not be used")
+
+    with patch("socket.getaddrinfo", side_effect=fail_getaddrinfo):
+        discover_summary = await _run(
+            provider_code="mevzuat",
+            run_type="discover_only",
+            transport=_prov_transport(
+                MEVZUAT_DETAIL,
+                _search_html('<a class="mevzuat-link" data-mevzuat-id="M-1">TBK</a>'),
+            ),
+            max_items=1,
+        )
+        fetch_summary = await _run(
+            provider_code="mevzuat",
+            run_type="fetch_and_ingest",
+            transport=_prov_transport(
+                MEVZUAT_DETAIL,
+                _search_html('<a class="mevzuat-link" data-mevzuat-id="M-1">TBK</a>'),
+            ),
+            max_items=1,
+        )
+    assert discover_summary.status == "completed"
+    assert fetch_summary.ingested == 1
+    assert calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider_code,search_key,link", [
+    ("yargitay", "aramalist", '<a class="karar-link" data-karar-id="Y-1">Y</a>'),
+    ("danistay", "aramalist", '<a class="karar-link" data-karar-id="D-1">D</a>'),
+    ("aym", "/Ara", '<a class="karar-link" data-karar-id="A-1">A</a>'),
+    ("uyusmazlik", "aramalist", '<a class="karar-link" data-karar-id="U-1">U</a>'),
+    ("mevzuat", "/Ara", '<a class="mevzuat-link" data-mevzuat-id="M-1">M</a>'),
+    ("resmi_gazete", "fihrist", '<a class="gazete-issue" href="https://resmigazete.gov.tr/eskiler/x.htm" data-issue-no="1">RG</a>'),
+])
+async def test_discover_only_all_providers_use_injected_resolver(
+    enabled_all, provider_code, search_key, link,
+):
+    with patch("socket.getaddrinfo", side_effect=AssertionError("external DNS")) as dns:
+        summary = await _run(
+            provider_code=provider_code,
+            run_type="discover_only",
+            transport=make_transport({search_key: StubResp(content=_search_html(link))}),
+            max_items=1,
+        )
+    assert summary.discovered == 1
+    assert dns.call_count == 0
+
+
+@pytest.mark.parametrize("fetch_error,expected,retryable", [
+    (SourceFetchError("unsafe_scheme", "safe"), ERR_SSRF_BLOCKED, False),
+    (SourceFetchError("no_transport", "safe"), ERR_TRANSPORT_UNAVAILABLE, False),
+    (SourceFetchError("http_error", "safe", http_status=429, retry_after_seconds=2), ERR_RATE_LIMITED, True),
+    (SourceFetchError("http_error", "safe", http_status=503), ERR_FETCH_FAILED, True),
+    (SourceFetchError("http_error", "safe", http_status=403), ERR_ACCESS_DENIED, False),
+    (SourceFetchError("http_error", "safe", http_status=404), ERR_FETCH_FAILED, False),
+    (SourceFetchError("fetch_timeout", "safe"), ERR_FETCH_FAILED, True),
+    (SourceFetchError("connect_error", "safe"), ERR_FETCH_FAILED, True),
+    (SourceFetchError("network_error", "safe"), ERR_FETCH_FAILED, True),
+    (SourceFetchError("tls_error", "safe"), ERR_FETCH_FAILED, False),
+    (SourceFetchError("response_too_large", "safe"), ERR_FETCH_FAILED, False),
+    (SourceFetchError("unsupported_content_type", "safe"), ERR_FETCH_FAILED, False),
+])
+def test_provider_fetch_error_classification_matrix(fetch_error, expected, retryable):
+    provider = registry.get_definition("yargitay")
+    err = provider._provider_error_from_fetch_error(fetch_error)
+    assert err.code == expected
+    assert err.retryable is retryable
+    assert err.http_status == fetch_error.http_status
+    assert err.retry_after_seconds == fetch_error.retry_after_seconds
+
+
+@pytest.mark.asyncio
+async def test_retry_503_then_200_succeeds(enabled_all):
+    provider = SequencedProvider(fetch_steps=[_retry_error(status=503)])
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "completed"
+    assert provider.fetch_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_503_503_then_200_succeeds(enabled_all):
+    provider = SequencedProvider(fetch_steps=[_retry_error(status=503), _retry_error(status=503)])
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "completed"
+    assert provider.fetch_calls == 3
+
+
+@pytest.mark.asyncio
+async def test_retry_exhaustion_has_no_fourth_attempt(enabled_all):
+    provider = SequencedProvider(fetch_steps=[
+        _retry_error(status=503), _retry_error(status=503), _retry_error(status=503),
+    ])
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "failed"
+    assert summary.last_safe_error_code == ERR_FETCH_FAILED
+    assert provider.fetch_calls == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("err", [
+    ProviderError(ERR_FETCH_FAILED, "connect", retryable=True),
+    ProviderError(ERR_FETCH_FAILED, "network", retryable=True),
+])
+async def test_connect_and_network_errors_retry_to_success(enabled_all, err):
+    provider = SequencedProvider(fetch_steps=[err])
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "completed"
+    assert provider.fetch_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_429_retry_after_respects_min_interval(enabled_all):
+    sleeps = []
+
+    async def record_sleep(seconds):
+        sleeps.append(seconds)
+
+    provider = SequencedProvider(
+        fetch_steps=[_retry_error(ERR_RATE_LIMITED, retry_after=2, status=429)],
+        policy=ProviderRequestPolicy(
+            min_interval_seconds=3,
+            max_retries=2,
+            backoff_base_seconds=1,
+            backoff_max_seconds=5,
+        ),
+    )
+    summary = await _run_fake_provider(provider, sleeper=record_sleep)
+    assert summary.status == "completed"
+    assert provider.fetch_calls == 2
+    assert 3 in sleeps
+
+
+@pytest.mark.asyncio
+async def test_429_retry_after_above_max_fails_without_retry(enabled_all):
+    provider = SequencedProvider(
+        fetch_steps=[_retry_error(ERR_RATE_LIMITED, retry_after=30, status=429)],
+        policy=ProviderRequestPolicy(
+            min_interval_seconds=0,
+            max_retries=2,
+            backoff_base_seconds=1,
+            backoff_max_seconds=5,
+        ),
+    )
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "failed"
+    assert summary.last_safe_error_code == ERR_RATE_LIMITED
+    assert provider.fetch_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("err", [
+    ProviderError(ERR_ACCESS_DENIED, "403"),
+    ProviderError(ERR_SSRF_BLOCKED, "ssrf"),
+    ProviderError(ERR_FETCH_FAILED, "tls"),
+    ProviderError(ERR_FETCH_FAILED, "too_large"),
+])
+async def test_non_retryable_fetch_errors_attempt_once(enabled_all, err):
+    provider = SequencedProvider(fetch_steps=[err])
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "failed"
+    assert provider.fetch_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_parse_failure_does_not_retry_fetch(enabled_all):
+    provider = SequencedProvider(parse_error=ProviderError(ERR_STRUCTURE_CHANGED, "parse"))
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "failed"
+    assert provider.fetch_calls == 1
+    assert provider.parse_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_ingest_rejection_does_not_retry_fetch_or_ingest(enabled_all):
+    from app.services.provider_ingestion_service import run_ingestion
+
+    provider = SequencedProvider()
+    ingest = AsyncMock(side_effect=ValueError("safe reject"))
+
+    async def _no_sleep(_seconds):
+        return None
+
+    maker = get_sessionmaker()
+    with patch("app.services.provider_ingestion_service.registry.get", return_value=provider), \
+         patch("app.services.provider_ingestion_service.ingest_official_fetch", new=ingest):
+        async with maker() as db:
+            summary = await run_ingestion(
+                db,
+                provider_code=provider.provider_code,
+                run_type="fetch_and_ingest",
+                transport=make_transport({}),
+                resolver=public_resolver,
+                sleeper=_no_sleep,
+                max_items=1,
+            )
+    assert summary.status == "failed"
+    assert provider.fetch_calls == 1
+    assert ingest.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_discovery_retry_uses_shared_executor(enabled_all):
+    provider = SequencedProvider(discover_steps=[_retry_error()])
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "completed"
+    assert provider.discover_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_retry_uses_shared_executor(enabled_all):
+    provider = SequencedProvider(fetch_steps=[_retry_error()])
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "completed"
+    assert provider.fetch_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_challenge_first_candidate_stops_run(enabled_all):
+    provider = SequencedProvider(
+        candidate_count=3,
+        fetch_steps=[ProviderError(ERR_CHALLENGE, "challenge")],
+    )
+    summary = await _run_fake_provider(provider)
+    maker = get_sessionmaker()
+    async with maker() as db:
+        items = (await db.execute(select(SourceIngestionItem))).scalars().all()
+    assert summary.status == "failed"
+    assert summary.failed == 1
+    assert provider.fetch_calls == 1
+    assert len(items) == 1
+
+
+@pytest.mark.asyncio
+async def test_structure_change_after_success_stops_with_errors(enabled_all):
+    provider = SequencedProvider(
+        candidate_count=3,
+        fetch_steps=[None, ProviderError(ERR_STRUCTURE_CHANGED, "changed")],
+    )
+    summary = await _run_fake_provider(provider)
+    maker = get_sessionmaker()
+    async with maker() as db:
+        items = (await db.execute(select(SourceIngestionItem))).scalars().all()
+    assert summary.status == "completed_with_errors"
+    assert summary.ingested == 1
+    assert summary.failed == 1
+    assert provider.fetch_calls == 2
+    assert len(items) == 2
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_exhausted_stops_provider_hammering(enabled_all):
+    provider = SequencedProvider(
+        candidate_count=3,
+        fetch_steps=[
+            _retry_error(ERR_RATE_LIMITED, status=429),
+            _retry_error(ERR_RATE_LIMITED, status=429),
+            _retry_error(ERR_RATE_LIMITED, status=429),
+        ],
+    )
+    summary = await _run_fake_provider(provider)
+    assert summary.status == "failed"
+    assert summary.last_safe_error_code == ERR_RATE_LIMITED
+    assert provider.fetch_calls == 3
+
+
+def test_operational_status_precedence():
+    from app.routes import provider_ingestion_routes as routes
+
+    caps = ProviderCapabilities()
+    definition = SimpleNamespace(capabilities=caps)
+    terminal = SimpleNamespace(status="failed", last_safe_error_code="")
+    success = SimpleNamespace(status="completed")
+    with patch("app.services.source_providers.registry.is_enabled", return_value=False):
+        assert routes._provider_status("x", definition, terminal, success) == "disabled"
+    with patch("app.services.source_providers.registry.is_enabled", return_value=True):
+        assert routes._provider_status(
+            "x", SimpleNamespace(capabilities=ProviderCapabilities(requires_auth=True)),
+            terminal, success,
+        ) == "unsupported_requires_auth"
+        assert routes._provider_status(
+            "x", SimpleNamespace(capabilities=ProviderCapabilities(requires_browser=True)),
+            terminal, success,
+        ) == "browser_discovery_unavailable"
+    with patch("app.services.source_providers.registry.is_enabled", return_value=True), \
+         patch("app.routes.provider_ingestion_routes._automatic_live_transport_configured",
+               return_value=False):
+        assert routes._provider_status("x", definition, terminal, success) == "transport_unavailable"
+    with patch("app.services.source_providers.registry.is_enabled", return_value=True), \
+         patch("app.routes.provider_ingestion_routes._automatic_live_transport_configured",
+               return_value=True):
+        assert routes._provider_status("x", definition, None, None) == "fixture_tested_only"
+        assert routes._provider_status(
+            "x", definition,
+            SimpleNamespace(status="failed", last_safe_error_code="provider_structure_changed"),
+            success,
+        ) == "provider_changed"
+        assert routes._provider_status(
+            "x", definition,
+            SimpleNamespace(status="failed", last_safe_error_code="challenge_detected"),
+            success,
+        ) == "manual_review_required"
+        assert routes._provider_status("x", definition, terminal, success) == "degraded"
+        assert routes._provider_status(
+            "x", definition,
+            SimpleNamespace(status="completed_with_errors", last_safe_error_code="fetch_failed"),
+            success,
+        ) == "degraded"
+        assert routes._provider_status(
+            "x", definition,
+            SimpleNamespace(status="completed", last_safe_error_code=""),
+            success,
+        ) == "available"
+
+
+@pytest.mark.asyncio
+async def test_provider_info_uses_history_queries_and_safe_fields(enabled_all):
+    from app.db.source_ingestion_repository import SourceIngestionRunRepository
+    from app.routes import provider_ingestion_routes as routes
+
+    maker = get_sessionmaker()
+    async with maker() as db:
+        terminal = await SourceIngestionRunRepository.create(
+            db, provider_code="mevzuat", run_type="fetch_and_ingest")
+        terminal.discovered_count = 1
+        await SourceIngestionRunRepository.mark_running(db, terminal)
+        await SourceIngestionRunRepository.finalize(
+            db, terminal, status="completed", last_safe_error_code="")
+        queued = await SourceIngestionRunRepository.create(
+            db, provider_code="mevzuat", run_type="fetch_and_ingest")
+        await db.commit()
+        with patch("app.services.source_providers.registry.is_enabled", return_value=True), \
+             patch("app.routes.provider_ingestion_routes._automatic_live_transport_configured",
+                   return_value=True):
+            info = await routes._provider_info(db, "mevzuat")
+    assert info.status == "available"
+    assert info.last_run_status == "queued"
+    assert info.last_run_at == queued.created_at.isoformat()
+    assert info.last_success_at == terminal.completed_at.isoformat()
+    assert info.last_safe_error_code == ""
+
+
+@pytest.mark.asyncio
+async def test_execute_run_uses_persisted_max_items(enabled_all):
+    from app.db.source_ingestion_repository import SourceIngestionRunRepository
+    from app.services.provider_ingestion_service import execute_run
+
+    provider = SequencedProvider(candidate_count=10)
+    seen_limits = []
+    original_discover = provider.discover
+
+    async def discover_with_limit(**kw):
+        seen_limits.append(kw["limit"])
+        return await original_discover(**kw)
+
+    provider.discover = discover_with_limit
+    maker = get_sessionmaker()
+    with patch("app.services.provider_ingestion_service.registry.get", return_value=provider):
+        async with maker() as db:
+            run = await SourceIngestionRunRepository.create(
+                db,
+                provider_code=provider.provider_code,
+                run_type="discover_only",
+                cursor={"max_items": 7},
+            )
+            await db.commit()
+            summary = await execute_run(db, run.id, transport=make_transport({}), resolver=public_resolver)
+    assert summary.discovered == 7
+    assert seen_limits == [7]
+
+
+@pytest.mark.asyncio
+async def test_cli_enable_live_semantics_and_transport_closure():
+    from app import official_source_ingestion as cli
+
+    class FakeMaker:
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class FakeTransport:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    summary = SimpleNamespace(
+        run_id="run-1", provider_code="yargitay", run_type="discover_only",
+        status="completed", discovered=0, fetched=0, ingested=0,
+        duplicate=0, new_version=0, conflict=0, failed=0,
+        last_safe_error_code="",
+    )
+    args = SimpleNamespace(
+        enable_live=False, run_id="", provider="yargitay", mode="discover_only",
+        query=None, from_date=None, to_date=None, max_items=1,
+    )
+    transport = FakeTransport()
+    with patch("app.official_source_ingestion.get_sessionmaker", return_value=FakeMaker()), \
+         patch("app.official_source_ingestion.run_ingestion", new=AsyncMock(return_value=summary)), \
+         patch("app.services.source_fetcher.create_real_transport", return_value=transport) as factory:
+        assert await cli._run(args) == 0
+        assert factory.call_count == 0
+    args.enable_live = True
+    with patch("app.official_source_ingestion.get_sessionmaker", return_value=FakeMaker()), \
+         patch("app.official_source_ingestion.run_ingestion", new=AsyncMock(return_value=summary)), \
+         patch("app.services.source_fetcher.create_real_transport", return_value=transport) as factory:
+        assert await cli._run(args) == 0
+        assert factory.call_count == 1
+        assert transport.closed is True

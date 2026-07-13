@@ -13,10 +13,12 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db.session import get_session
 from app.db.source_ingestion_repository import (
     RUN_COMPLETED,
     RUN_COMPLETED_WITH_ERRORS,
+    RUN_FAILED,
     SourceIngestionRunRepository,
 )
 from app.models.provider_models import (
@@ -33,7 +35,13 @@ from app.services.source_providers import registry
 from app.services.source_providers.base import (
     RUN_MODES,
     STATUS_AVAILABLE,
+    STATUS_BROWSER_DISCOVERY_UNAVAILABLE,
+    STATUS_DEGRADED,
     STATUS_DISABLED,
+    STATUS_FIXTURE_TESTED_ONLY,
+    STATUS_MANUAL_REVIEW_REQUIRED,
+    STATUS_PROVIDER_CHANGED,
+    STATUS_TRANSPORT_UNAVAILABLE,
     STATUS_UNSUPPORTED_REQUIRES_AUTH,
     ProviderError,
 )
@@ -48,24 +56,45 @@ def _iso(dt) -> str | None:
     return dt.isoformat() if dt is not None else None
 
 
-def _provider_status(code: str) -> str:
-    definition = registry.get_definition(code)
+def _automatic_live_transport_configured() -> bool:
+    return bool(get_settings().official_provider_live_smoke)
+
+
+def _provider_status(code: str, definition, latest_terminal, latest_successful) -> str:
     if not registry.is_enabled(code):
         return STATUS_DISABLED
     if definition.capabilities.requires_auth:
         return STATUS_UNSUPPORTED_REQUIRES_AUTH
-    return STATUS_AVAILABLE
+    if definition.capabilities.requires_browser:
+        return STATUS_BROWSER_DISCOVERY_UNAVAILABLE
+    if not _automatic_live_transport_configured():
+        return STATUS_TRANSPORT_UNAVAILABLE
+    terminal_error = (latest_terminal.last_safe_error_code if latest_terminal else "") or ""
+    if terminal_error == "provider_structure_changed":
+        return STATUS_PROVIDER_CHANGED
+    if terminal_error in {"challenge_detected", "manual_review_required"}:
+        return STATUS_MANUAL_REVIEW_REQUIRED
+    if latest_successful is None:
+        return STATUS_FIXTURE_TESTED_ONLY
+    if latest_terminal is not None and latest_terminal.status == RUN_FAILED:
+        return STATUS_DEGRADED
+    if latest_terminal is not None and latest_terminal.status == RUN_COMPLETED_WITH_ERRORS:
+        return STATUS_DEGRADED
+    if latest_terminal is not None and latest_terminal.status == RUN_COMPLETED:
+        return STATUS_AVAILABLE
+    return STATUS_FIXTURE_TESTED_ONLY
 
 
 async def _provider_info(db: AsyncSession, code: str) -> ProviderInfoResponse:
     definition = registry.get_definition(code)
-    runs, _ = await SourceIngestionRunRepository.list(db, provider_code=code, limit=20, offset=0)
-    last_run_at = _iso(runs[0].created_at) if runs else None
-    last_success_at = None
-    for r in runs:
-        if r.status in (RUN_COMPLETED, RUN_COMPLETED_WITH_ERRORS):
-            last_success_at = _iso(r.completed_at or r.created_at)
-            break
+    latest_run = await SourceIngestionRunRepository.latest_run_for_provider(db, code)
+    latest_terminal = await SourceIngestionRunRepository.latest_terminal_run_for_provider(db, code)
+    latest_successful = await SourceIngestionRunRepository.latest_successful_run_for_provider(db, code)
+    last_run_at = _iso(latest_run.created_at) if latest_run else None
+    last_success_at = (
+        _iso(latest_successful.completed_at or latest_successful.created_at)
+        if latest_successful else None
+    )
     caps = definition.capabilities
     return ProviderInfoResponse(
         code=code,
@@ -78,9 +107,13 @@ async def _provider_info(db: AsyncSession, code: str) -> ProviderInfoResponse:
             incremental=caps.incremental, bounded_window=caps.bounded_window,
             requires_browser=caps.requires_browser, requires_auth=caps.requires_auth,
         ),
-        status=_provider_status(code),
+        status=_provider_status(code, definition, latest_terminal, latest_successful),
         last_run_at=last_run_at,
         last_success_at=last_success_at,
+        last_run_status=latest_run.status if latest_run else None,
+        last_safe_error_code=(
+            latest_terminal.last_safe_error_code if latest_terminal else ""
+        ) or "",
     )
 
 
