@@ -542,6 +542,10 @@ async def _create_version_with_paragraphs(
     mjson: dict = {"source_type": source_type}
     if extraction_method is not None:
         mjson["extraction_method"] = extraction_method
+    if source_type in para.ARTICLE_BEARING_SOURCE_TYPES:
+        mjson["paragraph_locator_version"] = para.ARTICLE_LOCATOR_VERSION
+
+    split_paragraphs = para.split_paragraphs(source_type, normalized)
 
     version = await SourceVersionRepository.create(
         session,
@@ -556,7 +560,7 @@ async def _create_version_with_paragraphs(
         valid_to=metadata.get("valid_to", ""),
         metadata_json=mjson,
     )
-    for sp in para.split_paragraphs(source_type, normalized):
+    for sp in split_paragraphs:
         await SourceParagraphRepository.create(
             session,
             source_version_id=version.id,
@@ -566,5 +570,6 @@ async def _create_version_with_paragraphs(
             heading_path=sp.heading_path,
             page=sp.page,
             article_number=sp.article_number,
+            locator_json=sp.locator_json,
         )
     return version
