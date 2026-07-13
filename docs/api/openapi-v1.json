@@ -1599,18 +1599,6 @@
             "title": "Max Items",
             "type": "integer"
           },
-          "query": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Query"
-          },
           "run_type": {
             "maxLength": 30,
             "minLength": 1,

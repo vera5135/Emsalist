@@ -66,6 +66,14 @@ Hiçbir sağlayıcı kodu doğrudan trust üretemez. `record.verification_status
 | Mevzuat | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Mevzuat Bilgi Sistemi. Madde/Ek Madde/Geçici Madde/Mükerrer Madde alt türü ve citable locator provenance korunur. Navigasyon/kurabiye kromu kanonik içeriğe karışmaz. |
 | Resmî Gazete | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gazete sayısı vs yayımlanmış enstrüman ayırımı. Enstrüman segmentasyonu belirsiz ise uydurulmaz; `manual_review_required`. |
 
+Resmî Gazete kanonik kimliği yalnız exact fetch içeriğinden türetilir. Kontrollü
+`h1`/`h2` başlığı belge tipini; exact gövdedeki tipe özgü, satır-başına bağlı
+etiketler sayı/numarayı belirler. Discovery adayındaki `source_type`, `kind`,
+`instrument_type` ve `external_id` yalnız untrusted routing/observability
+ipuçlarıdır; kanonik tip veya numara fallback'i değildir. Belirsiz başlık,
+eksik tipe özgü numara ya da gövde içinde sıradan bir mevzuat atfı
+`manual_review_required` ile fail-closed kalır.
+
 ## Ingestion run modeli
 
 - `source_ingestion_runs` — sağlayıcı, tür, durum, sayaçlar, safe error code.
@@ -80,6 +88,13 @@ ve yalnızca `OFFICIAL_PROVIDER_LIVE_SMOKE=1` ile yapılandırılır. Operatör
 CLI'sinde `--enable-live` açık opt-in sınırıdır ve SSRF-korumalı gerçek
 taşıyıcıyı kurar.
 
+Queued API run kontratı ham `query` kabul etmez (`extra="forbid"`); kalıcı
+`cursor_json` parametreleri yalnız `from_date`, `to_date`, `max_items` ve
+`external_id` alanlarıdır. Forged/legacy bir queued run içinde `query` anahtarı
+bulunursa yürütme provider discovery veya transport çağırmadan
+`persisted_query_not_supported` ile fail-closed olur. Ham sorgu run/item
+depolamasına, safe yanıtlara, log veya metrik etiketlerine yazılmaz.
+
 ## CLI
 
 ```bash
@@ -88,6 +103,9 @@ python -m app.official_source_ingestion --provider yargitay \
 ```
 
 Servis katmanıyla aynı kodu kullanır; ikinci bir CLI-only ingestion motoru yoktur.
+Doğrudan CLI `--query` girdisi yalnız o proses içindeki `provider.discover`
+çağrısına iletilir; `SourceIngestionRun.cursor_json` veya item satırlarında
+saklanmaz ve queued worker tarafından replay edilmez.
 `--run-id` kullanıldığında kuyrukta saklanan `cursor_json.max_items` yetkilidir;
 CLI `--max-items` değeri kuyruktaki parametreyi sessizce ezmez. `--enable-live`
 verilmezse taşıyıcı `None` kalır ve gerçek ağ erişimi yapılmaz. `--enable-live`

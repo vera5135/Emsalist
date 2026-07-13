@@ -52,8 +52,13 @@ URL path/query, response body, headers, cookies, or raw exception.
   Host authority, proxy isolation, timeout, content type, and response-size
   controls remain centralized in `source_fetcher`.
 - Discovery metadata never becomes official evidence.
+- Resmî Gazete canonical type and number come only from controlled evidence in
+  the exact fetched bytes; candidate type/kind/external ID cannot select them.
 - Exact fetched bytes are extracted and passed through `ingest_official_fetch`;
   evidence remains bound to the exact `SourceVersion.content_hash`.
+- A provider-extracted same-hash fetch cannot add evidence to a legacy version
+  that lacks complete valid immutable extraction provenance; direct canonical
+  exact-byte re-verification remains supported.
 - Retry is limited to the shared provider network-operation executor. Parse,
   canonical writes, and evidence creation are not retried.
 - Challenge, access denial, rate limit, structure change, and transport absence
@@ -73,6 +78,8 @@ namespace. Legacy rows without subtype provenance remain unknown/legacy.
   transport/telemetry states.
 - Metrics use low-cardinality provider, operation, status, and safe-code labels.
 - Run/item persistence excludes raw provider bodies and queries.
+- Queued API runs reject raw `query`; direct CLI `--query` reaches discovery
+  in memory only, is not persisted, and cannot be replayed from `cursor_json`.
 - The live-smoke report exposes only safe outcomes, counts, optional safe HTTP
   metadata, content size/type, and hostname-only final destinations.
 
