@@ -59,10 +59,10 @@ Hiçbir sağlayıcı kodu doğrudan trust üretemez. `record.verification_status
 
 | Sağlayıcı | Discovery | Fetch | Parse | Kanonik ingestion | Incremental | Known limitation |
 |---|---|---|---|---|---|---|
-| Yargıtay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gerçek Karar Arama JavaScript yüzeyi; browser gerektirir. Gerçek yüzey yapısı kontrol edilene kadar canlı keşif mümkün değildir. |
-| Danıştay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gerçek yüzey JS yüzeyi; browser gerektirir. Board/daire bilgisi korunur, numbered chamber'a indirgenmez. |
-| AYM | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gerçek yüzey JS yüzeyi. Bireysel başvuru (Başvuru No, karar no olmadan) `manual_review_required` hata koduyla işaretlenir; data uydurulmaz. |
-| Uyuşmazlık Mah. | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Halihazırda allowlist'te olan UYAP emsal yüzeyi üzerinden. Görüntü/indirme temsil farklılığında aynı içerik duplicate oluşturmaz. |
+| Yargıtay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; canlı browser discovery P2.6D'ye ertelendi ve P2.6C'de `browser_discovery_unavailable` ile fail-closed kalır. |
+| Danıştay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; canlı browser discovery P2.6D'ye ertelendi. Board/daire bilgisi numbered chamber'a indirgenmez. |
+| AYM | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; Norm Denetimi ve Bireysel Başvuru browser discovery P2.6D'ye ertelendi. Eksik canonical karar numarası uydurulmaz. |
+| Uyuşmazlık Mah. | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Mevcut capability `requires_browser=True` olduğu için non-browser live smoke'a otomatik olarak uygun değildir. Görüntü/indirme temsil farklılığında aynı içerik duplicate oluşturmaz. |
 | Mevzuat | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Mevzuat Bilgi Sistemi. Madde/Ek Madde/Geçici Madde/Mükerrer Madde alt türü ve citable locator provenance korunur. Navigasyon/kurabiye kromu kanonik içeriğe karışmaz. |
 | Resmî Gazete | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gazete sayısı vs yayımlanmış enstrüman ayırımı. Enstrüman segmentasyonu belirsiz ise uydurulmaz; `manual_review_required`. |
 
@@ -125,6 +125,11 @@ Operasyonel durum çözümleme sırası saf ve I/O'suzdur:
 8. son terminal run `failed` ise → `degraded`
 9. son terminal run `completed_with_errors` ise → `degraded`
 10. son terminal run `completed` ise → `available`
+
+Yargıtay, Danıştay ve AYM için browser discovery P2.6D'ye ertelenmiştir.
+Capability bayrağı değiştirilmez ve browser prerequisite karşılanmadan durum
+`transport_unavailable`, `fixture_tested_only` veya `available` seviyesine
+ilerlemez.
 
 Queued/running run'lar son terminal operasyonel sağlığı silmez. `last_success_at`,
 yalnızca gerçek başarılı iş üreten `completed` veya `completed_with_errors`
@@ -217,11 +222,45 @@ olarak ele alınır. Gelecekteki P2.7 tüketicileri de eksik alt türü unknown/
 saymalıdır. Aynı hash ile `duplicate_verified` sonucu mevcut immutable version
 ve paragraph setini sırf yeni locator metadata'sı eklemek için yeniden yazmaz.
 
+## Kontrollü non-browser live smoke
+
+`python -m app.official_source_ingestion_smoke --confirm-live-smoke` yalnızca
+operatör tarafından çalıştırılan, dry/observation amaçlı bounded bir harness'tir.
+Çalışması için aynı anda:
+
+- `OFFICIAL_PROVIDER_LIVE_SMOKE=true`
+- `--confirm-live-smoke`
+
+gereklidir. Tek guard bile eksikse transport factory çağrılmaz; DNS/TCP oluşmaz.
+`--enable-live` tek başına acceptance smoke başlatmaz.
+
+Uygunluk, ayrı bir sağlayıcı listesinden değil kapalı registry'deki capability
+kontratından türetilir: discovery+fetch desteklenmeli ve `requires_browser=False`
+olmalıdır. Mevcut durumda bu koşulu Mevzuat ve Resmî Gazete karşılar. Uyuşmazlık
+dahil browser-required sağlayıcılar otomatik olarak dışlanır.
+
+Her enabled/eligible sağlayıcı için en fazla bir discovery sonucu ve en fazla
+bir detail fetch yapılır. Pagination izlenmez ve ikinci bir retry döngüsü yoktur;
+mevcut provider retry executor/policy kullanılır. Tüm gerçek ağ erişimi
+`create_real_transport()` → provider → destination-pinned `source_fetcher`
+yolundadır. Harness canonical ingestion veya veritabanı yazımı yapmaz.
+
+Safe rapor yalnız provider kodu, eligibility/attempt durumu, kapalı outcome,
+candidate sayısı, detail-attempt durumu, safe error, güvenli HTTP status,
+content type/boyut ve kabul edilen final URL'den çıkarılan hostname'i içerir.
+Ham query, external id, başlık, E/K numarası, URL path/query, body, header,
+cookie, stack trace ve raw exception içermez.
+
+Browser discovery P2.6D'ye ertelenmiştir. Browser bytes resmî kanıt değildir;
+P2.6C non-browser smoke browser detail indirmez. CAPTCHA/access-control bypass,
+stealth/evasion ve proxy rotation yasaktır. Fixture smoke testleri controlled
+live smoke kanıtı değildir.
+
 ## Kapsam dışı
 
 - Canlı zamanlanmış periodic provider ingestion (cron/scheduler integration yok — schedule-ready tasarım)
-- Browser discovery uygulanmadı; browser gerektiren gerçek yüzeyler canlı kabul sayılmaz.
-- Kontrollü live smoke acceptance henüz tamamlanmadı; fixture testleri canlı provider kabulü değildir.
+- Browser discovery P2.6D'ye ertelendi; browser gerektiren gerçek yüzeyler P2.6C canlı kabulü değildir.
+- Kontrollü live smoke evidence ve final PR acceptance tamamlanmadan P2.6C tamamlanmış sayılmaz.
 - Mobil sağlayıcı yönetim UI (editor/admin backend altyapısı)
 - Authentication/CAPTCHA gerektiren sağlayıcı yüzeylerinin bypass edilmesi
 - OCR, UDF parser, dosya tabanlı ingestion (P2.5 kapsamı)
