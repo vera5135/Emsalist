@@ -32,7 +32,7 @@
     "/api/v1/case/new": {
       "post": {
         "tags": [
-          "Case Analysis"
+          "Legacy / Case Analysis"
         ],
         "summary": "Create New Case",
         "operationId": "create_new_case_api_v1_case_new_post",
@@ -51,13 +51,14 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true
       }
     },
     "/api/v1/case/current": {
       "get": {
         "tags": [
-          "Case Analysis"
+          "Legacy / Case Analysis"
         ],
         "summary": "Get Current Case",
         "operationId": "get_current_case_api_v1_case_current_get",
@@ -76,16 +77,18 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true
       }
     },
     "/api/v1/case/state": {
       "get": {
         "tags": [
-          "Case Analysis"
+          "Legacy / Case Analysis"
         ],
         "summary": "Get Case State",
         "operationId": "get_case_state_api_v1_case_state_get",
+        "deprecated": true,
         "parameters": [
           {
             "name": "case_id",
@@ -131,10 +134,11 @@
       },
       "post": {
         "tags": [
-          "Case Analysis"
+          "Legacy / Case Analysis"
         ],
         "summary": "Build Case State",
         "operationId": "build_case_state_api_v1_case_state_post",
+        "deprecated": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -174,7 +178,7 @@
     "/api/v1/case/analyze": {
       "post": {
         "tags": [
-          "Case Analysis"
+          "Legacy / Case Analysis"
         ],
         "summary": "Analyze Case",
         "operationId": "analyze_case_api_v1_case_analyze_post",
@@ -209,13 +213,14 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true
       }
     },
     "/api/v1/case/reason": {
       "post": {
         "tags": [
-          "Case Analysis"
+          "Legacy / Case Analysis"
         ],
         "summary": "Run Dynamic Reasoner",
         "operationId": "run_dynamic_reasoner_api_v1_case_reason_post",
@@ -252,17 +257,19 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true
       }
     },
     "/api/v1/case/legal-issue-graph": {
       "get": {
         "tags": [
-          "Case Analysis"
+          "Legacy / Case Analysis"
         ],
         "summary": "Get Legal Issue Graph",
         "description": "Build and return the Legal Issue Graph for the current case.",
         "operationId": "get_legal_issue_graph_api_v1_case_legal_issue_graph_get",
+        "deprecated": true,
         "parameters": [
           {
             "name": "case_id",
@@ -310,7 +317,7 @@
     "/api/v1/documents/upload": {
       "post": {
         "tags": [
-          "Document Intake"
+          "Legacy / Document Intake"
         ],
         "summary": "Upload Document",
         "operationId": "upload_document_api_v1_documents_upload_post",
@@ -346,6 +353,7 @@
             }
           }
         },
+        "deprecated": true,
         "security": [
           {
             "HTTPBearer": []
@@ -356,7 +364,7 @@
     "/api/v1/documents/analyze": {
       "post": {
         "tags": [
-          "Document Intake"
+          "Legacy / Document Intake"
         ],
         "summary": "Analyze Documents",
         "operationId": "analyze_documents_api_v1_documents_analyze_post",
@@ -392,6 +400,7 @@
             }
           }
         },
+        "deprecated": true,
         "security": [
           {
             "HTTPBearer": []
@@ -402,10 +411,11 @@
     "/api/v1/documents": {
       "get": {
         "tags": [
-          "Document Intake"
+          "Legacy / Document Intake"
         ],
         "summary": "List Documents",
         "operationId": "list_documents_api_v1_documents_get",
+        "deprecated": true,
         "security": [
           {
             "HTTPBearer": []
@@ -460,10 +470,11 @@
     "/api/v1/documents/{document_id}": {
       "get": {
         "tags": [
-          "Document Intake"
+          "Legacy / Document Intake"
         ],
         "summary": "Get Document",
         "operationId": "get_document_api_v1_documents__document_id__get",
+        "deprecated": true,
         "security": [
           {
             "HTTPBearer": []
@@ -521,10 +532,11 @@
       },
       "delete": {
         "tags": [
-          "Document Intake"
+          "Legacy / Document Intake"
         ],
         "summary": "Delete Document",
         "operationId": "delete_document_api_v1_documents__document_id__delete",
+        "deprecated": true,
         "security": [
           {
             "HTTPBearer": []
@@ -2548,7 +2560,7 @@
     "/api/v1/petition/strategy": {
       "post": {
         "tags": [
-          "DilekÃ§e"
+          "Dilekçe"
         ],
         "summary": "Build Petition Strategy",
         "operationId": "build_petition_strategy_api_v1_petition_strategy_post",
@@ -2589,7 +2601,7 @@
     "/api/v1/petition/draft": {
       "post": {
         "tags": [
-          "DilekÃ§e"
+          "Dilekçe"
         ],
         "summary": "Build Petition Draft",
         "operationId": "build_petition_draft_api_v1_petition_draft_post",
@@ -2630,7 +2642,7 @@
     "/api/v1/petition/final-draft": {
       "post": {
         "tags": [
-          "DilekÃ§e"
+          "Dilekçe"
         ],
         "summary": "Build Final Petition Draft",
         "operationId": "build_final_petition_draft_api_v1_petition_final_draft_post",

@@ -185,6 +185,16 @@ class OpenAPIContractTests(unittest.TestCase):
                     tags_used.add(tag)
         self.assertIn("Authentication", tags_used)
 
+    def test_legacy_and_canonical_document_apis_are_distinguished(self):
+        schema = self.client.get("/openapi.json").json()
+        legacy = schema["paths"]["/api/v1/documents/upload"]["post"]
+        canonical = schema["paths"]["/api/v1/cases/{case_id}/documents"]["post"]
+
+        self.assertTrue(legacy["deprecated"])
+        self.assertIn("Legacy / Document Intake", legacy["tags"])
+        self.assertFalse(canonical.get("deprecated", False))
+        self.assertIn("Documents", canonical["tags"])
+
 
 class AuthContractTests(unittest.TestCase):
     """P1.12.6 — Authentication contract."""
