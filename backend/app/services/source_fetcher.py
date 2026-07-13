@@ -14,6 +14,10 @@ Security properties (deterministic + testable via an injectable resolver):
 - max redirects + redirect-loop guard
 - streaming response size limit + timeout
 - content-type allowlist
+- P2.6C: typed validated destination contract
+- P2.6C: transport IP destination pinning (no independent DNS)
+- P2.6C: trust_env=False (no proxy/env consumption)
+- P2.6C: TLS SNI/hostname verification pinned to original hostname
 
 For real network access, use :class:`HttpxSourceTransport` which is a
 controlled SSRF-safe HTTP transport adapter. In tests, inject a callable
@@ -23,11 +27,14 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+import ssl
 from dataclasses import dataclass, field
+from types import TracebackType
 from typing import Callable
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
+import httpcore
 
 # Official/allowlisted legal domains (suffix match on registrable host).
 ALLOWED_DOMAINS = frozenset({
@@ -59,6 +66,33 @@ _BLOCKED_HOSTNAMES = frozenset({
     "localhost", "metadata.google.internal", "metadata",
 })
 
+# ── safe error codes (no raw exception strings in messages) ──────────────
+_EC = {
+    "empty_url": "Boş URL.",
+    "unsafe_scheme": "Desteklenmeyen şema.",
+    "credentials_in_url": "URL kimlik bilgisi içeremez.",
+    "no_hostname": "Geçersiz ana bilgisayar.",
+    "blocked_host": "Engellenen ana bilgisayar.",
+    "blocked_ip": "Engellenen IP adresi.",
+    "ip_literal_not_allowed": "IP literal URL kabul edilmiyor.",
+    "domain_not_allowed": "Alan adı izin listesinde değil.",
+    "dns_failed": "Alan adı çözümlenemedi.",
+    "dns_unsafe_ip": "Çözümlenen IP güvenli değil.",
+    "no_transport": "Ağ taşıyıcısı yapılandırılmadı.",
+    "redirect_loop": "Yönlendirme döngüsü.",
+    "too_many_redirects": "Çok fazla yönlendirme.",
+    "http_error": "HTTP {}",
+    "unsupported_content_type": "Desteklenmeyen içerik türü.",
+    "response_too_large": "Yanıt boyutu sınırı aştı.",
+    "fetch_timeout": "Resmî kaynak zaman aşımı.",
+    "invalid_url": "Geçersiz URL.",
+    "connect_error": "Resmî kaynağa bağlanılamadı.",
+    "tls_error": "TLS bağlantı hatası.",
+    "destination_not_validated": "Hedef IP doğrulanmış kümede değil.",
+    "network_error": "Ağ hatası.",
+    "transport_unavailable": "Güvenli taşıyıcı kullanılabilir değil.",
+}
+
 
 class SourceFetchError(Exception):
     def __init__(self, code: str, message: str):
@@ -89,12 +123,9 @@ def _ip_is_safe(ip_str: str) -> bool:
         addr = ipaddress.ip_address(ip_str)
     except ValueError:
         return False
-    # Reject loopback / private / link-local / reserved / multicast /
-    # unspecified for both IPv4 and IPv6 (covers ::1, fc00::/7, fe80::/10, etc.)
     if (addr.is_loopback or addr.is_private or addr.is_link_local
             or addr.is_reserved or addr.is_multicast or addr.is_unspecified):
         return False
-    # IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) — unwrap and re-check.
     if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
         return _ip_is_safe(str(addr.ipv4_mapped))
     return True
@@ -106,46 +137,77 @@ def default_resolver(hostname: str) -> list[str]:
     return list({str(info[4][0]) for info in infos})
 
 
-def validate_url(url: str, resolver=default_resolver) -> list[str]:
-    """Validates a single URL and returns the resolved safe IPs.
+# ── Typed validated destination (P2.6C) ───────────────────────────────────
+@dataclass(frozen=True)
+class ValidatedDestination:
+    """Immutable destination contract binding URL, hostname, port to
+    validated IPs. Only :func:`validate_destination` may construct it."""
+
+    url: str
+    scheme: str
+    hostname: str
+    port: int
+    validated_ips: tuple[str, ...]
+
+
+def validate_destination(
+    url: str, resolver=default_resolver
+) -> ValidatedDestination:
+    """Validate a single URL and return a typed immutable destination.
 
     Raises SourceFetchError on any SSRF/allowlist/scheme violation.
+    Portable: no module-level mutable state, injectable resolver.
     """
     if not url:
-        raise SourceFetchError("empty_url", "Boş URL.")
+        raise SourceFetchError("empty_url", _EC["empty_url"])
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise SourceFetchError("unsafe_scheme", f"Desteklenmeyen şema: {parsed.scheme}")
+        raise SourceFetchError("unsafe_scheme", _EC["unsafe_scheme"])
     if parsed.username or parsed.password:
-        raise SourceFetchError("credentials_in_url", "URL kimlik bilgisi içeremez.")
+        raise SourceFetchError("credentials_in_url", _EC["credentials_in_url"])
     hostname = parsed.hostname
     if not hostname:
-        raise SourceFetchError("no_hostname", "Geçersiz ana bilgisayar.")
+        raise SourceFetchError("no_hostname", _EC["no_hostname"])
     if hostname.lower() in _BLOCKED_HOSTNAMES:
-        raise SourceFetchError("blocked_host", "Engellenen ana bilgisayar.")
+        raise SourceFetchError("blocked_host", _EC["blocked_host"])
 
-    # If the host is an IP literal, validate it directly (fail-closed).
+    # IP literal → reject.
     try:
         literal = ipaddress.ip_address(hostname)
         if not _ip_is_safe(str(literal)):
-            raise SourceFetchError("blocked_ip", "Engellenen IP adresi.")
-        # IP literal must still be within an allowed domain policy → reject.
-        raise SourceFetchError("ip_literal_not_allowed", "IP literal URL kabul edilmiyor.")
+            raise SourceFetchError("blocked_ip", _EC["blocked_ip"])
+        raise SourceFetchError("ip_literal_not_allowed", _EC["ip_literal_not_allowed"])
     except ValueError:
-        pass  # not an IP literal → hostname
+        pass
 
     if not _host_allowed(hostname):
-        raise SourceFetchError("domain_not_allowed", "Alan adı izin listesinde değil.")
+        raise SourceFetchError("domain_not_allowed", _EC["domain_not_allowed"])
 
     resolved = resolver(hostname)
     if not resolved:
-        raise SourceFetchError("dns_failed", "Alan adı çözümlenemedi.")
+        raise SourceFetchError("dns_failed", _EC["dns_failed"])
     for ip in resolved:
         if not _ip_is_safe(ip):
-            raise SourceFetchError("dns_unsafe_ip", "Çözümlenen IP güvenli değil.")
-    return resolved
+            raise SourceFetchError("dns_unsafe_ip", _EC["dns_unsafe_ip"])
+
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    return ValidatedDestination(
+        url=url,
+        scheme=parsed.scheme,
+        hostname=hostname,
+        port=port,
+        validated_ips=tuple(resolved),
+    )
 
 
+# Backward-compatible wrapper — returns validated IPs only.
+def validate_url(url: str, resolver=default_resolver) -> list[str]:
+    dest = validate_destination(url, resolver=resolver)
+    return list(dest.validated_ips)
+
+
+# ── transport stubs ─────────────────────────────────────────────────────
 @dataclass
 class _StubResponse:
     status_code: int
@@ -154,25 +216,104 @@ class _StubResponse:
     location: str | None = None
 
 
+# ── Validated IP network backend (P2.6C destination pinning) ─────────────
+class _ValidatedNetworkBackend(httpcore.NetworkBackend):
+    """Network backend that connects only to a pre-validated IP set.
+
+    Ignores the host parameter passed by httpcore; connects only to
+    addresses in *validated_ips*. Fallback across valid IPs is attempted
+    within the validated set only — no independent DNS resolution.
+    """
+
+    def __init__(self, validated_ips: tuple[str, ...], server_hostname: str):
+        self._validated_ips = validated_ips
+        self._server_hostname = server_hostname
+        self._inner = httpcore.SyncBackend()
+
+    def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options=None,
+    ) -> httpcore.NetworkStream:
+        last_err: Exception | None = None
+        for ip in self._validated_ips:
+            try:
+                return self._inner.connect_tcp(
+                    ip, port, timeout, local_address, socket_options,
+                )
+            except OSError as e:
+                last_err = e
+                continue
+        raise SourceFetchError(
+            "destination_not_validated",
+            _EC["destination_not_validated"],
+        )
+
+    def connect_unix_socket(
+        self, path: str, timeout: float | None = None, socket_options=None,
+    ) -> httpcore.NetworkStream:
+        raise OSError("Unix sockets not supported")
+
+    def sleep(self, seconds: float) -> None:
+        self._inner.sleep(seconds)
+
+
+def _build_pinned_ssl_context(hostname: str) -> ssl.SSLContext:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = True
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
+def _make_pinned_client(
+    dest: ValidatedDestination,
+    timeout_seconds: int,
+) -> httpx.Client:
+    """Build an httpx client pinned to *dest*.validated_ips.
+
+    TCP connection goes to validated IPs only (via _ValidatedNetworkBackend).
+    TLS SNI and hostname verification use dest.hostname (original hostname).
+    HTTP Host header uses dest.hostname.
+    """
+    ssl_ctx = _build_pinned_ssl_context(dest.hostname)
+    backend = _ValidatedNetworkBackend(dest.validated_ips, dest.hostname)
+    pool = httpcore.ConnectionPool(
+        ssl_context=ssl_ctx,
+        max_connections=1,
+        max_keepalive_connections=0,
+        network_backend=backend,
+    )
+    return httpx.Client(
+        transport=pool,
+        follow_redirects=False,
+        verify=True,
+        timeout=timeout_seconds,
+        trust_env=False,
+    )
+
+
 # ── Real SSRF-safe HTTP transport (P2.6C) ─────────────────────────────────
 class HttpxSourceTransport:
-    """Controlled HTTPS transport adapter for :func:`fetch_source`.
+    """Controlled HTTPS transport for :func:`fetch_source`.
 
-    This is the ONLY class that performs real network I/O for official-source
-    fetching. Every HTTP request goes through this adapter, which returns a
-    ``_StubResponse``-compatible object so the transport contract stays
-    uniform between stubs and live fetches.
+    When ``fetch_source`` is called with a callable transport stub (tests),
+    that stub receives the current URL string. For real/pinned transport,
+    call ``fetch_pinned(validated_destination)`` instead.
 
     Security invariants:
-    - HTTP-client automatic redirects are DISABLED → source_fetcher owns every
-      redirect-hop re-validation.
-    - TLS certificate verification is ENABLED (never disabled for trusted hosts).
-    - Environment proxy variables (HTTP_PROXY / HTTPS_PROXY / ALL_PROXY) are
-      intentionally NOT consumed — no untrusted proxy routing without explicit
-      review.
-    - Response body is streamed with a hard size cap; oversized responses are
-      rejected mid-stream.
-    - A bounded connect/read timeout is applied to every request.
+    - HTTP-client automatic redirects are DISABLED.
+    - TLS certificate verification is ENABLED.
+    - ``trust_env=False`` — env proxies (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY)
+      and TLS env vars (SSL_CERT_FILE/SSL_CERT_DIR) are NOT consumed.
+    - Per-request destination IP pinning: only :class:`ValidatedDestination`
+      IPs are eligible for connection.
+    - TLS SNI = original hostname, not IP.
+    - Response body is streamed with a hard size cap.
+    - Bounded connect/read timeout.
     """
 
     def __init__(
@@ -183,29 +324,45 @@ class HttpxSourceTransport:
     ):
         self._timeout = timeout_seconds
         self._max_bytes = max_bytes
-        # Explicit: no proxy auto-detection from env vars.
-        self._client = httpx.Client(
-            follow_redirects=False,
-            verify=True,
-            timeout=timeout_seconds,
-        )
 
     def __call__(self, url: str) -> _StubResponse:
-        """Fetch [url] and return a transport-agnostic stub-compatible object.
+        """Unpinned fetch for backward-compatible test stubs.
 
-        Raises ``SourceFetchError`` on transport-level failures (connect /
-        timeout / oversized / TLS / unsupported scheme). HTTP status codes
-        >= 400 are returned and inspected by the caller (:func:`fetch_source`).
+        For real pinned requests use :meth:`fetch_pinned`.
         """
+        client = httpx.Client(
+            follow_redirects=False,
+            verify=True,
+            timeout=self._timeout,
+            trust_env=False,
+        )
         try:
-            with self._client.stream("GET", url) as resp:
-                # Stream the body with a hard byte cap so we never hold an
-                # unbounded response in memory.
+            return self._stream(client, url)
+        finally:
+            client.close()
+
+    def fetch_pinned(self, dest: ValidatedDestination) -> _StubResponse:
+        """Fetch [dest.url] through a client pinned to dest.validated_ips.
+
+        Connects only to IPs in the validated set. TLS SNI, hostname
+        verification, and Host header all use dest.hostname.
+        """
+        client = _make_pinned_client(dest, self._timeout)
+        try:
+            return self._stream(client, dest.url)
+        finally:
+            client.close()
+
+    def _stream(self, client: httpx.Client, url: str) -> _StubResponse:
+        try:
+            with client.stream("GET", url) as resp:
                 body = bytearray()
                 for chunk in resp.iter_bytes(65536):
                     body.extend(chunk)
                     if len(body) > self._max_bytes:
-                        raise SourceFetchError("response_too_large", "Yanıt boyutu sınırı aştı.")
+                        raise SourceFetchError(
+                            "response_too_large", _EC["response_too_large"],
+                        )
                 return _StubResponse(
                     status_code=resp.status_code,
                     headers=dict(resp.headers),
@@ -215,17 +372,33 @@ class HttpxSourceTransport:
         except SourceFetchError:
             raise
         except httpx.TimeoutException:
-            raise SourceFetchError("fetch_timeout", "Resmî kaynak zaman aşımı.")
+            raise SourceFetchError("fetch_timeout", _EC["fetch_timeout"])
         except httpx.InvalidURL:
-            raise SourceFetchError("invalid_url", "Geçersiz URL.")
+            raise SourceFetchError("invalid_url", _EC["invalid_url"])
         except httpx.ConnectError:
-            raise SourceFetchError("connect_error", "Resmî kaynağa bağlanılamadı.")
-        except OSError as e:
-            raise SourceFetchError("network_error", str(e)[:120]) from e
+            raise SourceFetchError("connect_error", _EC["connect_error"])
+        except (ssl.SSLError, httpx.RemoteProtocolError) as e:
+            raise SourceFetchError("tls_error", _EC["tls_error"])
+        except OSError:
+            raise SourceFetchError("network_error", _EC["network_error"])
+
+    def close(self) -> None:
+        pass  # stateless — clients are created per-call
+
+    def __enter__(self) -> HttpxSourceTransport:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self.close()
 
 
 def create_real_transport(**kw) -> HttpxSourceTransport:
-    """Factory: the real SSRF-safe transport used when ``--enable-live``.
+    """Factory: the real SSRF-safe transport.
 
     Tests inject a stub transport; production/live-smoke calls this.
     """
@@ -246,6 +419,7 @@ def create_live_transport(**kw) -> HttpxSourceTransport | None:
     return create_real_transport(**kw)
 
 
+# ── Secure fetch with per-hop destination binding ──────────────────────────
 def fetch_source(
     url: str,
     *,
@@ -254,39 +428,46 @@ def fetch_source(
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
     max_bytes: int = MAX_RESPONSE_BYTES,
 ) -> FetchResult:
-    """Securely fetch a source URL.
+    """Securely fetch a source URL with per-hop destination validation.
 
     [transport] is an injectable callable ``(url) -> _StubResponse`` used by
-    tests to avoid real network I/O; it must return an object with
-    status_code, headers (dict), content (bytes) and optional location. When
-    None, real fetching is not performed in this build (fetch is provided via
-    the ingestion service seam). Every hop re-runs [validate_url].
+    tests to avoid real network I/O. When None, real fetching is not performed.
+
+    Every redirect hop is independently destination-validated.
+    Relative redirects are normalized via ``urljoin`` before re-validation.
+    Redirect loops are detected on normalized absolute URLs.
     """
     if transport is None:
-        raise SourceFetchError("no_transport", "Ağ taşıyıcısı yapılandırılmadı.")
+        raise SourceFetchError("no_transport", _EC["no_transport"])
 
     current = url
     chain: list[str] = []
     for _hop in range(MAX_REDIRECTS + 1):
-        validate_url(current, resolver=resolver)
-        chain.append(current)
-        resp = transport(current)
+        dest = validate_destination(current, resolver=resolver)
+        chain.append(dest.url)
+
+        if isinstance(transport, HttpxSourceTransport):
+            resp = transport.fetch_pinned(dest)
+        else:
+            resp = transport(dest.url)
+
         if resp.status_code in (301, 302, 303, 307, 308) and resp.location:
-            nxt = resp.location
+            nxt = urljoin(current, resp.location)
             if nxt in chain:
-                raise SourceFetchError("redirect_loop", "Yönlendirme döngüsü.")
+                raise SourceFetchError("redirect_loop", _EC["redirect_loop"])
             current = nxt
             continue
         if resp.status_code >= 400:
-            raise SourceFetchError("http_error", f"HTTP {resp.status_code}")
+            raise SourceFetchError("http_error", _EC["http_error"].format(resp.status_code))
         content_type = (resp.headers.get("content-type", "") or "").split(";")[0].strip().lower()
         if content_type and content_type not in ALLOWED_CONTENT_TYPES:
-            raise SourceFetchError("unsupported_content_type", f"Desteklenmeyen içerik türü: {content_type}")
+            raise SourceFetchError("unsupported_content_type",
+                                   f"{_EC['unsupported_content_type']} ({content_type})")
         content = resp.content or b""
         if len(content) > max_bytes:
-            raise SourceFetchError("response_too_large", "Yanıt boyutu sınırı aştı.")
+            raise SourceFetchError("response_too_large", _EC["response_too_large"])
         return FetchResult(
             final_url=current, status_code=resp.status_code, content=content,
             content_type=content_type, redirect_chain=chain,
         )
-    raise SourceFetchError("too_many_redirects", "Çok fazla yönlendirme.")
+    raise SourceFetchError("too_many_redirects", _EC["too_many_redirects"])
