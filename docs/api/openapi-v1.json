@@ -7708,6 +7708,311 @@
         }
       }
     },
+    "/api/v1/official-source-providers": {
+      "get": {
+        "tags": [
+          "Official Source Providers"
+        ],
+        "summary": "List Providers",
+        "operationId": "official_provider_list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/official-source-providers/{provider_code}": {
+      "get": {
+        "tags": [
+          "Official Source Providers"
+        ],
+        "summary": "Get Provider",
+        "operationId": "official_provider_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "provider_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderInfoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/official-source-providers/{provider_code}/runs": {
+      "post": {
+        "tags": [
+          "Official Source Providers"
+        ],
+        "summary": "Create Run",
+        "operationId": "official_provider_create_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "provider_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Code"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/official-source-ingestion-runs": {
+      "get": {
+        "tags": [
+          "Official Source Ingestion Runs"
+        ],
+        "summary": "List Runs",
+        "operationId": "official_ingestion_run_list",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "provider_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Provider Code"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionRunListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/official-source-ingestion-runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Official Source Ingestion Runs"
+        ],
+        "summary": "Get Run",
+        "operationId": "official_ingestion_run_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/official-source-ingestion-runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "Official Source Ingestion Runs"
+        ],
+        "summary": "Cancel Run",
+        "operationId": "official_ingestion_run_cancel",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meta/capabilities": {
       "get": {
         "tags": [
@@ -9357,6 +9662,119 @@
           "created_at"
         ],
         "title": "ConversationResponse"
+      },
+      "CreateRunCandidate": {
+        "properties": {
+          "detail_url": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Detail Url"
+          },
+          "source_type": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Source Type",
+            "default": ""
+          },
+          "download_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Url"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail_url"
+        ],
+        "title": "CreateRunCandidate"
+      },
+      "CreateRunRequest": {
+        "properties": {
+          "run_type": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Run Type"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "from_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Date"
+          },
+          "to_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Date"
+          },
+          "max_items": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Max Items",
+            "default": 50
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRunCandidate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_type"
+        ],
+        "title": "CreateRunRequest"
       },
       "DecisionInput": {
         "properties": {
@@ -11598,6 +12016,145 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "IngestionRunListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IngestionRunResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 50
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "default": 0
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "IngestionRunListResponse"
+      },
+      "IngestionRunResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "provider_code": {
+            "type": "string",
+            "title": "Provider Code"
+          },
+          "run_type": {
+            "type": "string",
+            "title": "Run Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "discovered_count": {
+            "type": "integer",
+            "title": "Discovered Count",
+            "default": 0
+          },
+          "fetched_count": {
+            "type": "integer",
+            "title": "Fetched Count",
+            "default": 0
+          },
+          "ingested_count": {
+            "type": "integer",
+            "title": "Ingested Count",
+            "default": 0
+          },
+          "duplicate_count": {
+            "type": "integer",
+            "title": "Duplicate Count",
+            "default": 0
+          },
+          "new_version_count": {
+            "type": "integer",
+            "title": "New Version Count",
+            "default": 0
+          },
+          "conflict_count": {
+            "type": "integer",
+            "title": "Conflict Count",
+            "default": 0
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count",
+            "default": 0
+          },
+          "last_safe_error_code": {
+            "type": "string",
+            "title": "Last Safe Error Code",
+            "default": ""
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "default": ""
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider_code",
+          "run_type",
+          "status"
+        ],
+        "title": "IngestionRunResponse"
+      },
       "JobEnqueueRequest": {
         "properties": {
           "job_type": {
@@ -13622,6 +14179,128 @@
           "precedent_id"
         ],
         "title": "PrecedentSelectRequest"
+      },
+      "ProviderCapabilitiesModel": {
+        "properties": {
+          "discovery": {
+            "type": "boolean",
+            "title": "Discovery",
+            "default": false
+          },
+          "fetch": {
+            "type": "boolean",
+            "title": "Fetch",
+            "default": false
+          },
+          "parse": {
+            "type": "boolean",
+            "title": "Parse",
+            "default": false
+          },
+          "incremental": {
+            "type": "boolean",
+            "title": "Incremental",
+            "default": false
+          },
+          "bounded_window": {
+            "type": "boolean",
+            "title": "Bounded Window",
+            "default": false
+          },
+          "requires_browser": {
+            "type": "boolean",
+            "title": "Requires Browser",
+            "default": false
+          },
+          "requires_auth": {
+            "type": "boolean",
+            "title": "Requires Auth",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ProviderCapabilitiesModel"
+      },
+      "ProviderInfoResponse": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "source_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Types"
+          },
+          "official_domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Official Domains"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ProviderCapabilitiesModel"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "enabled",
+          "capabilities",
+          "status"
+        ],
+        "title": "ProviderInfoResponse"
+      },
+      "ProviderListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderInfoResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "ProviderListResponse"
       },
       "RankedDecision": {
         "properties": {

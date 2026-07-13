@@ -1111,3 +1111,56 @@ class SourceUsage(Base):
         Index("ix_source_usages_tenant_case", "tenant_id", "case_id"),
         Index("ix_source_usages_record", "source_record_id"),
     )
+
+
+# -- P2.6C Official provider ingestion runs --
+class SourceIngestionRun(Base):
+    """One controlled provider ingestion run. Stores ONLY safe counters and
+    codes — never raw source text or private query credentials."""
+
+    __tablename__ = "source_ingestion_runs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    provider_code: Mapped[str] = mapped_column(String(30), nullable=False)
+    run_type: Mapped[str] = mapped_column(String(30), nullable=False, default="discover_only")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
+    cursor_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    discovered_count: Mapped[int] = mapped_column(Integer, default=0)
+    fetched_count: Mapped[int] = mapped_column(Integer, default=0)
+    ingested_count: Mapped[int] = mapped_column(Integer, default=0)
+    duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
+    new_version_count: Mapped[int] = mapped_column(Integer, default=0)
+    conflict_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_safe_error_code: Mapped[str] = mapped_column(String(50), default="")
+    created_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    __table_args__ = (
+        Index("ix_source_ingestion_runs_provider", "provider_code", "created_at"),
+    )
+
+
+class SourceIngestionItem(Base):
+    """Per-candidate traceability within a run. Stores hashes/codes only —
+    never raw fetched HTML/text or private queries."""
+
+    __tablename__ = "source_ingestion_items"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    run_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_ingestion_runs.id"), nullable=False)
+    provider_code: Mapped[str] = mapped_column(String(30), nullable=False)
+    external_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    candidate_url_hash: Mapped[str] = mapped_column(String(64), default="")
+    dedupe_key: Mapped[str] = mapped_column(String(160), default="")
+    status: Mapped[str] = mapped_column(String(30), default="discovered")
+    source_record_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    safe_error_code: Mapped[str] = mapped_column(String(50), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        Index("ix_source_ingestion_items_run", "run_id"),
+        Index("ix_source_ingestion_items_dedupe", "provider_code", "dedupe_key"),
+    )
