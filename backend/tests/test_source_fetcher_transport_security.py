@@ -149,7 +149,7 @@ def test_dns_rebinding_transport_only_uses_validated():
 
     backend._inner.connect_tcp = _fake_connect
     result = backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
-    assert isinstance(result, FakeStream)
+    assert isinstance(result._inner, FakeStream)
     for call_host in calls:
         assert call_host == SAFE_IP
 
@@ -177,7 +177,7 @@ def test_connect_error_A_to_B_fallback():
 
     backend._inner.connect_tcp = _fake_connect
     result = backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
-    assert isinstance(result, FakeStream)
+    assert isinstance(result._inner, FakeStream)
     assert calls == [SAFE_IP, SAFE_IP_B]
 
 
@@ -196,7 +196,7 @@ def test_connect_timeout_A_to_B_fallback():
 
     backend._inner.connect_tcp = _fake_connect
     result = backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
-    assert isinstance(result, FakeStream)
+    assert isinstance(result._inner, FakeStream)
     assert calls == [SAFE_IP, SAFE_IP_B]
 
 
@@ -405,24 +405,34 @@ def test_create_live_transport_enabled():
 
 # ── Real pinned end-to-end path ──────────────────────────────────────────
 class _FakeNetworkStream(httpcore.NetworkStream):
-    def __init__(self, response_bytes, captured=None):
+    def __init__(self, response_bytes, captured=None, fail_at=None):
         self._buf = bytearray(response_bytes)
-        self._tls_captured = captured or {}
+        self._tls_captured = captured if captured is not None else {}
+        self._fail_at = fail_at
         self.closed = False
 
     def read(self, max_bytes, timeout=None):
+        self._tls_captured.setdefault("read_timeouts", []).append(timeout)
+        if self._fail_at == "read":
+            raise httpcore.ReadTimeout("secret read detail")
         data = bytes(self._buf[:max_bytes])
         self._buf = self._buf[max_bytes:]
         return data
 
     def write(self, data, timeout=None):
-        pass
+        self._tls_captured.setdefault("write_timeouts", []).append(timeout)
+        self._tls_captured.setdefault("writes", []).append(bytes(data))
+        if self._fail_at == "write":
+            raise httpcore.WriteTimeout("secret write detail")
 
     def close(self):
         self.closed = True
 
     def start_tls(self, ssl_context, server_hostname=None, timeout=None):
+        if self._fail_at == "tls":
+            raise ssl.SSLError("private certificate path")
         self._tls_captured["server_hostname"] = server_hostname
+        self._tls_captured["tls_timeout"] = timeout
         self._tls_captured["check_hostname"] = ssl_context.check_hostname
         self._tls_captured["verify_mode"] = ssl_context.verify_mode
         return self
@@ -433,20 +443,180 @@ class _FakeNetworkStream(httpcore.NetworkStream):
 
 class _FakePinnedBackend(httpcore.NetworkBackend):
     def __init__(self, response_bytes=b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n",
-                 captures=None):
+                 captures=None, fail_at=None):
         self._response_bytes = response_bytes
-        self._captures = captures or {}
+        self._captures = captures if captures is not None else {}
+        self._fail_at = fail_at
         self._captured_hosts = []
+        self.streams = []
 
     def connect_tcp(self, host, port, timeout, local_address=None, socket_options=None):
         self._captured_hosts.append(host)
-        return _FakeNetworkStream(self._response_bytes, self._captures)
+        self._captures.setdefault("connect_timeouts", []).append(timeout)
+        if self._fail_at == "connect":
+            raise httpcore.ConnectTimeout("secret connect detail")
+        if self._fail_at == "pool":
+            raise httpcore.PoolTimeout("secret pool detail")
+        stream = _FakeNetworkStream(
+            self._response_bytes, self._captures, self._fail_at,
+        )
+        self.streams.append(stream)
+        return stream
 
     def connect_unix_socket(self, path, timeout, socket_options=None):
         raise OSError()
 
     def sleep(self, seconds):
         pass
+
+
+def _real_transport(backend, *, timeout=7, max_bytes=MAX_RESPONSE_BYTES):
+    return HttpxSourceTransport(
+        timeout_seconds=timeout,
+        max_bytes=max_bytes,
+        _network_backend_factory=lambda _dest: backend,
+    )
+
+
+@pytest.mark.parametrize("value", [0, -1, True, False, 1.5, "7", None, 301])
+def test_timeout_input_rejected(value):
+    with pytest.raises(ValueError):
+        HttpxSourceTransport(timeout_seconds=value)
+
+
+def test_actual_pinned_path_propagates_timeouts_tls_sni_and_closes():
+    raw = (b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
+           b"<html>actual pinned result</html>")
+    captures = {}
+    backend = _FakePinnedBackend(raw, captures)
+    result = fetch_source(
+        YARGITAY_URL,
+        resolver=_resolver(SAFE_IP),
+        transport=_real_transport(backend),
+    )
+    assert result.status_code == 200
+    assert result.content == b"<html>actual pinned result</html>"
+    assert result.content_type == "text/html"
+    assert result.final_url == YARGITAY_URL
+    assert backend._captured_hosts == [SAFE_IP]
+    assert captures["connect_timeouts"] == [7]
+    assert captures["read_timeouts"] and set(captures["read_timeouts"]) == {7}
+    assert captures["write_timeouts"] and set(captures["write_timeouts"]) == {7}
+    assert captures["tls_timeout"] == 7
+    assert captures["server_hostname"] == "karararama.yargitay.gov.tr"
+    assert captures["server_hostname"] != SAFE_IP
+    assert captures["check_hostname"] is True
+    assert captures["verify_mode"] == ssl.CERT_REQUIRED
+    assert backend.streams and all(stream.closed for stream in backend.streams)
+
+
+@pytest.mark.parametrize(
+    ("fail_at", "exception_type"),
+    [
+        ("connect", httpcore.ConnectTimeout),
+        ("read", httpcore.ReadTimeout),
+        ("write", httpcore.WriteTimeout),
+        ("pool", httpcore.PoolTimeout),
+    ],
+)
+def test_actual_path_timeout_errors_are_safely_mapped(fail_at, exception_type):
+    backend = _FakePinnedBackend(fail_at=fail_at)
+    with pytest.raises(SourceFetchError) as exc:
+        fetch_source(
+            YARGITAY_URL,
+            resolver=_resolver(SAFE_IP),
+            transport=_real_transport(backend),
+        )
+    assert exc.value.code == "fetch_timeout"
+    assert "secret" not in exc.value.message
+    assert issubclass(exception_type, httpcore.TimeoutException)
+    assert all(stream.closed for stream in backend.streams)
+
+
+def test_actual_path_tls_failure_is_safely_mapped_and_closed():
+    backend = _FakePinnedBackend(fail_at="tls")
+    with pytest.raises(SourceFetchError) as exc:
+        fetch_source(
+            YARGITAY_URL,
+            resolver=_resolver(SAFE_IP),
+            transport=_real_transport(backend),
+        )
+    assert exc.value.code == "tls_error"
+    assert "certificate" not in exc.value.message
+    assert backend.streams and all(stream.closed for stream in backend.streams)
+
+
+def test_actual_path_oversize_closes_stream():
+    raw = (b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n" + b"x" * 9)
+    backend = _FakePinnedBackend(raw)
+    with pytest.raises(SourceFetchError) as exc:
+        fetch_source(
+            YARGITAY_URL,
+            resolver=_resolver(SAFE_IP),
+            transport=_real_transport(backend, max_bytes=8),
+        )
+    assert exc.value.code == "response_too_large"
+    assert backend.streams and all(stream.closed for stream in backend.streams)
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://karararama.yargitay.gov.tr/path",
+         b"host: karararama.yargitay.gov.tr\r\n"),
+        ("https://karararama.yargitay.gov.tr:8443/path",
+         b"host: karararama.yargitay.gov.tr:8443\r\n"),
+    ],
+)
+def test_actual_raw_host_header_preserves_authority(url, expected):
+    captures = {}
+    backend = _FakePinnedBackend(captures=captures)
+    fetch_source(url, resolver=_resolver(SAFE_IP), transport=_real_transport(backend))
+    raw_request = b"".join(captures["writes"]).lower()
+    assert expected in raw_request
+    assert SAFE_IP.encode() not in raw_request
+
+
+def test_actual_path_redirect_preserves_timeout_per_hop():
+    first = _FakePinnedBackend(
+        b"HTTP/1.1 302 Found\r\nLocation: https://mevzuat.gov.tr/6098\r\n"
+        b"Content-Type: text/html\r\n\r\n",
+        {},
+    )
+    second = _FakePinnedBackend(
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\ndone",
+        {},
+    )
+    backends = iter([first, second])
+    transport = HttpxSourceTransport(
+        timeout_seconds=7,
+        _network_backend_factory=lambda _dest: next(backends),
+    )
+    result = fetch_source(
+        YARGITAY_URL,
+        resolver=_resolver(SAFE_IP),
+        transport=transport,
+    )
+    assert result.content == b"done"
+    for backend in (first, second):
+        assert backend._captures["connect_timeouts"] == [7]
+        assert set(backend._captures["read_timeouts"]) == {7}
+        assert set(backend._captures["write_timeouts"]) == {7}
+
+
+@pytest.mark.parametrize(
+    ("validated_ip", "rebind_ip"),
+    [(SAFE_IP, LOOPBACK), ("2606:2800:220:1:248:1893:25c8:1946", "::1")],
+)
+def test_complete_actual_path_never_uses_rebinding_target(validated_ip, rebind_ip):
+    backend = _FakePinnedBackend()
+    fetch_source(
+        YARGITAY_URL,
+        resolver=_resolver(validated_ip),
+        transport=_real_transport(backend),
+    )
+    assert backend._captured_hosts == [validated_ip]
+    assert rebind_ip not in backend._captured_hosts
 
 
 def test_end_to_end_pinned_fetch_200():

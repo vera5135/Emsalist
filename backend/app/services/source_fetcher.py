@@ -224,10 +224,16 @@ class _ValidatedNetworkBackend(httpcore.NetworkBackend):
     within the validated set only — no independent DNS resolution.
     """
 
-    def __init__(self, validated_ips: tuple[str, ...], server_hostname: str):
+    def __init__(
+        self,
+        validated_ips: tuple[str, ...],
+        server_hostname: str,
+        *,
+        inner: httpcore.NetworkBackend | None = None,
+    ):
         self._validated_ips = validated_ips
         self._server_hostname = server_hostname
-        self._inner = httpcore.SyncBackend()
+        self._inner = inner or httpcore.SyncBackend()
 
     def connect_tcp(
         self,
@@ -241,9 +247,10 @@ class _ValidatedNetworkBackend(httpcore.NetworkBackend):
         last_timeout: Exception | None = None
         for ip in self._validated_ips:
             try:
-                return self._inner.connect_tcp(
+                stream = self._inner.connect_tcp(
                     ip, port, timeout, local_address, socket_options,
                 )
+                return _ClosingNetworkStream(stream)
             except httpcore.ConnectTimeout as e:
                 last_timeout = e
                 continue
@@ -263,6 +270,40 @@ class _ValidatedNetworkBackend(httpcore.NetworkBackend):
         self._inner.sleep(seconds)
 
 
+class _ClosingNetworkStream(httpcore.NetworkStream):
+    """Delegate stream that closes the raw socket when TLS setup fails."""
+
+    def __init__(self, inner: httpcore.NetworkStream):
+        self._inner = inner
+
+    def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+        return self._inner.read(max_bytes, timeout)
+
+    def write(self, buffer: bytes, timeout: float | None = None) -> None:
+        self._inner.write(buffer, timeout)
+
+    def close(self) -> None:
+        self._inner.close()
+
+    def start_tls(
+        self,
+        ssl_context: ssl.SSLContext,
+        server_hostname: str | None = None,
+        timeout: float | None = None,
+    ) -> httpcore.NetworkStream:
+        try:
+            self._inner = self._inner.start_tls(
+                ssl_context, server_hostname, timeout,
+            )
+        except Exception:
+            self._inner.close()
+            raise
+        return self
+
+    def get_extra_info(self, info: str) -> object:
+        return self._inner.get_extra_info(info)
+
+
 def _build_pinned_ssl_context(hostname: str) -> ssl.SSLContext:
     ctx = ssl.create_default_context()
     ctx.check_hostname = True
@@ -274,6 +315,8 @@ def _build_pinned_ssl_context(hostname: str) -> ssl.SSLContext:
 def _make_pinned_pool(
     dest: ValidatedDestination,
     timeout_seconds: int,
+    *,
+    network_backend: httpcore.NetworkBackend | None = None,
 ) -> httpcore.ConnectionPool:
     """Build an httpcore pool pinned to *dest*.validated_ips.
 
@@ -282,13 +325,22 @@ def _make_pinned_pool(
     HTTP Host header uses dest.hostname.
     """
     ssl_ctx = _build_pinned_ssl_context(dest.hostname)
-    backend = _ValidatedNetworkBackend(dest.validated_ips, dest.hostname)
+    backend = _ValidatedNetworkBackend(
+        dest.validated_ips, dest.hostname, inner=network_backend,
+    )
     return httpcore.ConnectionPool(
         ssl_context=ssl_ctx,
         max_connections=1,
         max_keepalive_connections=0,
         network_backend=backend,
     )
+
+
+def _host_header_value(dest: ValidatedDestination) -> str:
+    default_port = 443 if dest.scheme == "https" else 80
+    if dest.port == default_port:
+        return dest.hostname
+    return f"{dest.hostname}:{dest.port}"
 
 
 # ── Real SSRF-safe HTTP transport (P2.6C) ─────────────────────────────────
@@ -319,9 +371,19 @@ class HttpxSourceTransport:
         *,
         timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
         max_bytes: int = MAX_RESPONSE_BYTES,
+        _network_backend_factory: Callable[
+            [ValidatedDestination], httpcore.NetworkBackend
+        ] | None = None,
     ):
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, int)
+            or not 1 <= timeout_seconds <= 300
+        ):
+            raise ValueError("timeout_seconds must be an integer from 1 to 300")
         self._timeout = timeout_seconds
         self._max_bytes = max_bytes
+        self._network_backend_factory = _network_backend_factory
 
     def __call__(self, url: str) -> _StubResponse:
         """Fail-closed: unpinned real network is insecure.
@@ -340,7 +402,12 @@ class HttpxSourceTransport:
 
         Uses httpcore.ConnectionPool directly — no httpx wrapping.
         """
-        pool = _make_pinned_pool(dest, self._timeout)
+        backend = None
+        if self._network_backend_factory is not None:
+            backend = self._network_backend_factory(dest)
+        pool = _make_pinned_pool(
+            dest, self._timeout, network_backend=backend,
+        )
         try:
             return self._stream_httpcore(pool, dest)
         finally:
@@ -349,12 +416,23 @@ class HttpxSourceTransport:
     def _stream_httpcore(self, pool: httpcore.ConnectionPool,
                          dest: ValidatedDestination) -> _StubResponse:
         headers = [
-            (b"host", dest.hostname.encode("ascii")),
+            (b"host", _host_header_value(dest).encode("ascii")),
             (b"accept", b"text/html, text/plain, application/xhtml+xml, "
                         b"application/xml, text/xml, application/json"),
         ]
         try:
-            with pool.stream("GET", dest.url, headers=headers) as resp:
+            timeout_extensions = {
+                "timeout": {
+                    "connect": self._timeout,
+                    "read": self._timeout,
+                    "write": self._timeout,
+                    "pool": self._timeout,
+                },
+            }
+            with pool.stream(
+                "GET", dest.url, headers=headers,
+                extensions=timeout_extensions,
+            ) as resp:
                 body = bytearray()
                 for chunk in resp.iter_stream():
                     body.extend(chunk)
@@ -364,19 +442,19 @@ class HttpxSourceTransport:
                         )
                 location = ""
                 for k, v in resp.headers:
-                    if k == b"location":
+                    if k.lower() == b"location":
                         location = v.decode("latin-1")
                         break
                 return _StubResponse(
                     status_code=resp.status,
-                    headers={k.decode("latin-1"): v.decode("latin-1")
+                    headers={k.decode("latin-1").lower(): v.decode("latin-1")
                              for k, v in resp.headers if isinstance(v, bytes)},
                     content=bytes(body),
                     location=location or None,
                 )
         except SourceFetchError:
             raise
-        except httpcore.ConnectTimeout:
+        except httpcore.TimeoutException:
             raise SourceFetchError("fetch_timeout", _EC["fetch_timeout"])
         except httpcore.ConnectError:
             raise SourceFetchError("connect_error", _EC["connect_error"])
