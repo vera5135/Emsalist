@@ -53,7 +53,15 @@ class DecisionCleaner:
     @staticmethod
     def repair_mojibake(text: str) -> str:
         """Repair UTF-8 text that was decoded as Latin-1/Windows-1252."""
-        if not text or not any(marker in text for marker in ("Ã", "Ä", "Å", "Â", "â€", "â")):
+        markers = (
+            "\u00c3",
+            "\u00c4",
+            "\u00c5",
+            "\u00c2",
+            "\u00e2\u20ac",
+            "\u00e2\u0080",
+        )
+        if not text or not any(marker in text for marker in markers):
             return text
         try:
             return text.encode("latin1").decode("utf-8")

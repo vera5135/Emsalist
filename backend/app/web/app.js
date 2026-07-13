@@ -185,14 +185,14 @@ const fallbackQuestions = [
 
 const commonAnswerOptions = ["Belge mevcut", "Bilmiyorum", "Sonra tamamlanacak"];
 const laborOnlyOptions = new Set([
-  "SGK hizmet dÃ¶kÃ¼mÃ¼ var",
-  "Ä°ÅŸe giriÅŸ tarihi belli",
-  "Ä°ÅŸten Ã§Ä±kÄ±ÅŸ tarihi belli",
-  "TanÄ±kla desteklenecek",
-  "Banka + elden Ã¶deme",
-  "Bordro gerÃ§eÄŸi yansÄ±tmÄ±yor",
-  "Emsal Ã¼cret araÅŸtÄ±rmasÄ±",
-  "Fiili gÃ¶rev farklÄ±",
+  "SGK hizmet dökümü var",
+  "İşe giriş tarihi belli",
+  "İşten çıkış tarihi belli",
+  "Tanıkla desteklenecek",
+  "Banka + elden ödeme",
+  "Bordro gerçeği yansıtmıyor",
+  "Emsal ücret araştırması",
+  "Fiili görev farklı",
 ]);
 const defectiveVehicleSafeOptions = [
   "Belge mevcut",
@@ -439,7 +439,7 @@ function ensureCaseControls() {
     const badge = document.createElement("span");
     badge.id = "activeCaseBadge";
     badge.className = "status-pill";
-    badge.textContent = "Aktif Dosya: hazÄ±rlanÄ±yor";
+    badge.textContent = "Aktif Dosya: hazırlanıyor";
     nav.insertBefore(badge, els.healthPill || null);
   }
   if (!document.getElementById("newCaseBtn")) {
@@ -447,7 +447,7 @@ function ensureCaseControls() {
     button.id = "newCaseBtn";
     button.type = "button";
     button.className = "ghost-btn";
-    button.textContent = "Yeni Dosya BaÅŸlat";
+    button.textContent = "Yeni Dosya Başlat";
     nav.insertBefore(button, els.healthPill || null);
   }
 }
@@ -460,7 +460,7 @@ function renderActiveCaseBadge() {
 
 async function initializeCaseSession() {
   const current = await apiFetch("/case/current");
-  if (!current.ok) throw new Error("Aktif dosya bilgisi alÄ±namadÄ±.");
+  if (!current.ok) throw new Error("Aktif dosya bilgisi alınamadı.");
   const data = await current.json();
   activeCaseId = data.case_id || null;
   renderActiveCaseBadge();
@@ -1098,17 +1098,17 @@ function renderAnalysis(data) {
     </div>
     <div class="result-item">
       <h3>Hukuki Meseleler</h3>
-      <ol class="compact-list">${issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Hukuki mesele Ã¼retilmedi.</li>"}</ol>
+      <ol class="compact-list">${issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Hukuki mesele üretilmedi.</li>"}</ol>
     </div>
     <div class="result-item">
       <h3>Kritik Riskler</h3>
       <ol class="compact-list">${risks
         .map((item) => `<li><strong>${escapeHtml(item.title || "Risk")}:</strong> ${escapeHtml(item.reason || "Sebep belirtilmedi.")}</li>`)
-        .join("") || "<li>Kritik risk bulunmadÄ±.</li>"}</ol>
+        .join("") || "<li>Kritik risk bulunmadı.</li>"}</ol>
     </div>
     <div class="result-item">
       <h3>Arastirma Sorgulari</h3>
-      <div class="meta-row">${queries.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") || "<span class=\"chip\">Sorgu Ã¼retilmedi</span>"}</div>
+      <div class="meta-row">${queries.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") || "<span class=\"chip\">Sorgu üretilmedi</span>"}</div>
     </div>
   `;
 }
@@ -3285,7 +3285,7 @@ function clearAll() {
 }
 
 async function startNewCase() {
-  setBusy(true, "Yeni dosya oluÅŸturuluyor...");
+  setBusy(true, "Yeni dosya oluşturuluyor...");
   try {
     const data = await apiPost("/case/new", {});
     activeCaseId = data.case_id || null;
@@ -3293,7 +3293,7 @@ async function startNewCase() {
     clearAll();
     await loadDocuments();
     setCaseState(null);
-    setStatus(data.message || "Yeni dosya baÅŸlatÄ±ldÄ±.");
+    setStatus(data.message || "Yeni dosya başlatıldı.");
   } finally {
     setBusy(false);
   }
@@ -3410,7 +3410,7 @@ function wireEvents() {
   $("sampleBtn").addEventListener("click", () => {
     els.caseText.value =
       "Müvekkil, ikinci el aracı satıcının kazasız, ağır hasarsız ve sorunsuz olduğu yönündeki beyanlarına güvenerek noter satışıyla satın aldı. Teslimden kısa süre sonra araçta motor arızası ortaya çıktı; servis incelemesinde arızanın önceki onarım ve gizli hasar kaydıyla bağlantılı olabileceği bildirildi. Müvekkil durumu öğrenir öğrenmez satıcıya WhatsApp üzerinden bildirdi, ancak satıcı sorumluluk kabul etmedi. Sözleşmeden dönme ve satış bedelinin iadesi, aksi halde bedel indirimi ile servis, ekspertiz ve onarım giderlerinin tahsili istenmektedir.";
-    els.practiceArea.value = "BorÃ§lar hukuku";
+    els.practiceArea.value = "Borçlar hukuku";
     els.requestType.value = "İhtiyaç nedeniyle kiralananın tahliyesine karar verilmesi";
     els.requestType.value = defectiveVehicleRequest;
     lastDecisions = [];
