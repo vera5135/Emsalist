@@ -154,21 +154,22 @@ def test_dns_rebinding_validation_catches_private():
 
 
 def test_dns_rebinding_transport_only_uses_validated():
-    from httpcore import SyncBackend
+    from unittest.mock import MagicMock
     backend = _ValidatedNetworkBackend((SAFE_IP,), YARGITAY_URL)
     calls = []
+
+    class FakeStream:
+        pass
 
     def _fake_connect(host, port, timeout, local_address=None, socket_options=None):
         calls.append(host)
         if host == SAFE_IP:
-            return SyncBackend().connect_tcp(host, port, timeout)
+            return FakeStream()
         raise OSError("not allowed")
 
     backend._inner.connect_tcp = _fake_connect
-    try:
-        backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
-    except (OSError, SourceFetchError):
-        pass
+    result = backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
+    assert isinstance(result, FakeStream)
     for call_host in calls:
         assert call_host == SAFE_IP
 
