@@ -319,7 +319,11 @@ async def _fetch_parse_ingest(db, provider, cand, *, transport, resolver):
     extracted_fr = make_extracted_fetch_result(fetch_result, extracted)
     # Canonical ingestion via the P2.6 official-fetch trust path ONLY.
     return await ingest_official_fetch(
-        db, metadata=parsed.to_ingest_metadata(), fetch_result=extracted_fr)
+        db, metadata=parsed.to_ingest_metadata(), fetch_result=extracted_fr,
+        raw_document_hash=extracted.raw_document_hash,
+        extraction_method=extracted.extraction_method,
+        extraction_version=extracted.parser_version,
+    )
 
 
 def _apply_outcome(run, provider_code: str, outcome: str) -> None:
