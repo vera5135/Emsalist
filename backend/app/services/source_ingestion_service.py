@@ -12,9 +12,13 @@ TRUST MODEL (P2.6v3):
   5. evidence_url == final_fetched_url (binding)
 - New version resets trust unless accompanied by official_fetch evidence.
 - Previous version evidence preserved.
+- P2.6C extraction provenance: provider-extracted versions carry provenance
+  metadata (extraction_method, raw_document_hash, extraction-aware parser_version)
+  that is validated during trust resolution.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -28,6 +32,10 @@ from app.db.source_repository import (
 )
 from app.services import source_paragraphs as para
 from app.services.source_canonical_key import build_canonical_key, normalize_source_type
+from app.services.source_extraction import (
+    ALLOWED_EXTRACTION_METHODS,
+    validate_extraction_version,
+)
 from app.services.source_fetcher import (
     ALLOWED_CONTENT_TYPES,
     ALLOWED_DOMAINS,
@@ -55,6 +63,50 @@ PARSER_VERSION = "p2.6-ingest-3"
 
 OFFICIAL_FETCH_METHOD = "official_fetch_match"
 OFFICIAL_VERIFIER_TYPE = "official_match"
+
+_RAW_HASH_RE = re.compile(r"^[a-f0-9]{64}$")
+
+
+def _validate_raw_document_hash(raw_document_hash: str) -> None:
+    if not isinstance(raw_document_hash, str):
+        raise ValueError("raw_document_hash must be a string")
+    if not _RAW_HASH_RE.match(raw_document_hash):
+        raise ValueError("raw_document_hash must be exactly 64 lowercase hex chars (SHA-256)")
+
+
+def _validate_extraction_method(extraction_method: str) -> None:
+    if not isinstance(extraction_method, str):
+        raise ValueError("extraction_method must be a string")
+    if extraction_method not in ALLOWED_EXTRACTION_METHODS:
+        raise ValueError(
+            f"unknown extraction_method: {extraction_method!r} "
+            f"(allowed: {sorted(ALLOWED_EXTRACTION_METHODS)})"
+        )
+
+
+def _validate_extraction_provenance(
+    raw_document_hash: str | None,
+    extraction_method: str | None,
+    extraction_version: str | None,
+) -> None:
+    _prov = (
+        raw_document_hash is not None,
+        extraction_method is not None,
+        extraction_version is not None,
+    )
+    if any(_prov) and not all(_prov):
+        raise ValueError(
+            "extraction provenance is all-or-none: "
+            "raw_document_hash, extraction_method, and extraction_version "
+            "must all be present or all be absent"
+        )
+    if all(_prov):
+        assert raw_document_hash is not None
+        assert extraction_method is not None
+        assert extraction_version is not None
+        _validate_raw_document_hash(raw_document_hash)
+        _validate_extraction_method(extraction_method)
+        validate_extraction_version(extraction_version)
 
 
 @dataclass
@@ -122,12 +174,37 @@ async def get_version_official_evidence(
 
     ALL of these must hold for the verdict to be valid. ANY mismatch returns
     :class:`VersionEvidence` with ``valid=False`` and a descriptive reason.
+
+    For provider-extracted versions (P2.6C), additional extraction provenance
+    validation is applied: raw_document_hash must be valid SHA-256,
+    extraction_method must be a known controlled value, and parser_version
+    must be extraction-aware.
     """
     if not version_id:
         return VersionEvidence.fail("no version_id")
     version = await SourceVersionRepository.get(session, version_id)
     if version is None:
         return VersionEvidence.fail("version not found")
+
+    is_provider_extracted = bool(
+        (version.metadata_json or {}).get("extraction_method")
+    ) or version.raw_document_hash is not None
+
+    if is_provider_extracted:
+        if not _RAW_HASH_RE.match(version.raw_document_hash or ""):
+            return VersionEvidence.fail(
+                "provider-extracted version: raw_document_hash missing or malformed"
+            )
+        ext_method = (version.metadata_json or {}).get("extraction_method")
+        if not ext_method or ext_method not in ALLOWED_EXTRACTION_METHODS:
+            return VersionEvidence.fail(
+                "provider-extracted version: extraction_method missing or unknown"
+            )
+        if not version.parser_version or version.parser_version == PARSER_VERSION:
+            return VersionEvidence.fail(
+                "provider-extracted version: parser_version is not extraction-aware"
+            )
+
     verifications = await SourceVerificationRepository.list_for_record(
         session, record_id
     )
@@ -219,6 +296,7 @@ async def ingest_editor_candidate(
         metadata=metadata,
         trusted_text=para.normalize_text(raw_text),
         raw_document_hash=None,
+        extraction_method=None,
         official_url=official_url,
         retrieval_method="editor_submit",
         # No fetch_result — trusted text comes from the raw_text parameter.
@@ -261,6 +339,9 @@ async def ingest_official_fetch(
     if content_type and content_type not in ALLOWED_CONTENT_TYPES:
         raise ValueError(f"unsupported content_type: {content_type}")
 
+    # Validate extraction provenance (P2.6C).
+    _validate_extraction_provenance(raw_document_hash, extraction_method, extraction_version)
+
     # Compute canonical content from the fetched bytes ONLY.
     text = _decode_fetched_bytes(content)
     trusted = para.normalize_text(text)
@@ -270,6 +351,7 @@ async def ingest_official_fetch(
         metadata=metadata,
         trusted_text=trusted,
         raw_document_hash=raw_document_hash,
+        extraction_method=extraction_method,
         official_url=final_url,
         retrieval_method="official_fetch",
         fetch_result=fetch_result,
@@ -294,6 +376,7 @@ async def _ingest(
     metadata: dict,
     trusted_text: str,
     raw_document_hash: str | None,
+    extraction_method: str | None,
     official_url: str,
     retrieval_method: str,
     fetch_result: FetchResult | None,
@@ -317,13 +400,13 @@ async def _ingest(
         return await _create_new_record(
             session, metadata, source_type, canonical_key,
             trusted_text, content_hash, official_url,
-            retrieval_method, raw_document_hash, is_official_fetch,
+            retrieval_method, raw_document_hash, extraction_method, is_official_fetch,
             extraction_version=extraction_version,
         )
     return await _ingest_into_existing(
         session, record, metadata, source_type, canonical_key,
         trusted_text, content_hash, official_url,
-        retrieval_method, raw_document_hash, is_official_fetch,
+        retrieval_method, raw_document_hash, extraction_method, is_official_fetch,
         extraction_version=extraction_version,
     )
 
@@ -331,7 +414,7 @@ async def _ingest(
 async def _create_new_record(
     session, metadata, source_type, canonical_key,
     trusted_text, content_hash, official_url,
-    retrieval_method, raw_document_hash, is_official_fetch,
+    retrieval_method, raw_document_hash, extraction_method, is_official_fetch,
     extraction_version: str = PARSER_VERSION,
 ):
     record = await SourceRecordRepository.create(
@@ -351,6 +434,8 @@ async def _create_new_record(
     version = await _create_version_with_paragraphs(
         session, record, source_type, trusted_text, content_hash,
         retrieval_method, raw_document_hash, metadata,
+        extraction_method=extraction_method,
+        parser_version=extraction_version,
     )
     await SourceRecordRepository.set_current_version(session, record, version.id)
     await SourceRecordRepository.mark_checked(session, record, successful=True)
@@ -367,7 +452,7 @@ async def _create_new_record(
 async def _ingest_into_existing(
     session, record, metadata, source_type, canonical_key,
     trusted_text, content_hash, official_url,
-    retrieval_method, raw_document_hash, is_official_fetch,
+    retrieval_method, raw_document_hash, extraction_method, is_official_fetch,
     extraction_version: str = PARSER_VERSION,
 ):
     await SourceRecordRepository.mark_checked(session, record, successful=True)
@@ -404,6 +489,7 @@ async def _ingest_into_existing(
     version = await _create_version_with_paragraphs(
         session, record, source_type, trusted_text, content_hash,
         retrieval_method, raw_document_hash, metadata,
+        extraction_method=extraction_method,
         supersedes_version_id=record.current_version_id,
         parser_version=extraction_version,
     )
@@ -445,9 +531,15 @@ async def _produce_official_verification(session, record_id, version_id, content
 
 async def _create_version_with_paragraphs(
     session, record, source_type, normalized, content_hash,
-    retrieval_method, raw_document_hash, metadata, supersedes_version_id=None,
+    retrieval_method, raw_document_hash, metadata,
+    extraction_method: str | None = None,
+    supersedes_version_id=None,
     parser_version: str = PARSER_VERSION,
 ):
+    mjson: dict = {"source_type": source_type}
+    if extraction_method is not None:
+        mjson["extraction_method"] = extraction_method
+
     version = await SourceVersionRepository.create(
         session,
         source_record_id=record.id,
@@ -459,7 +551,7 @@ async def _create_version_with_paragraphs(
         supersedes_version_id=supersedes_version_id,
         valid_from=metadata.get("effective_date", "") or metadata.get("valid_from", ""),
         valid_to=metadata.get("valid_to", ""),
-        metadata_json={"source_type": source_type},
+        metadata_json=mjson,
     )
     for sp in para.split_paragraphs(source_type, normalized):
         await SourceParagraphRepository.create(

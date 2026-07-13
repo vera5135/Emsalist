@@ -33,6 +33,25 @@ from dataclasses import dataclass
 from app.services.source_fetcher import FetchResult
 from app.services.source_providers.shared import html_to_text
 
+EXTRACTION_METHOD_PROVIDER_HTML = "provider_html_extract"
+EXTRACTION_METHOD_RAW_TEXT = "raw_text"
+
+ALLOWED_EXTRACTION_METHODS: frozenset[str] = frozenset({
+    EXTRACTION_METHOD_PROVIDER_HTML,
+    EXTRACTION_METHOD_RAW_TEXT,
+})
+
+_EXTRACTION_VERSION_MAX_LENGTH = 100
+
+
+def validate_extraction_version(extraction_version: str) -> None:
+    if not extraction_version:
+        raise ValueError("extraction_version must not be empty")
+    if len(extraction_version) > _EXTRACTION_VERSION_MAX_LENGTH:
+        raise ValueError(f"extraction_version exceeds {_EXTRACTION_VERSION_MAX_LENGTH} chars")
+    if any(ord(c) < 32 for c in extraction_version):
+        raise ValueError("extraction_version contains control characters")
+
 
 @dataclass
 class ExtractedContent:
