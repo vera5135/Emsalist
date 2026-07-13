@@ -393,9 +393,10 @@ def render_evidence_document(report: SmokeExecutionReport) -> str:
         "",
         "## Browser-deferred providers",
         "",
-        "Yargıtay, Danıştay and AYM browser discovery remains deferred to P2.6D. "
-        "They were not live-smoked in P2.6C. Uyuşmazlık was also excluded from "
-        "this smoke because its current provider capability declares `requires_browser=True`.",
+        "Yargıtay, Danıştay, AYM and Uyuşmazlık browser/current-surface discovery "
+        "validation remains deferred to P2.6D. They were not live-smoked in P2.6C; "
+        "Uyuşmazlık was excluded because its accepted current provider capability "
+        "declares `requires_browser=True`.",
         "",
         "This evidence contains no raw query, external identifier, title, decision number, "
         "URL path/query, response body, headers, cookies, or raw exception message.",
