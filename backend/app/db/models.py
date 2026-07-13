@@ -1115,8 +1115,13 @@ class SourceUsage(Base):
 
 # -- P2.6C Official provider ingestion runs --
 class SourceIngestionRun(Base):
-    """One controlled provider ingestion run. Stores ONLY safe counters and
-    codes — never raw source text or private query credentials."""
+    """One controlled provider ingestion run.
+
+    Stores its identifier, provider code, run type/status, bounded durable
+    non-query parameters, counters, timestamps, safe error codes, and
+    created-by traceability. It never stores raw fetched source content or raw
+    provider search query text.
+    """
 
     __tablename__ = "source_ingestion_runs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
@@ -1143,8 +1148,13 @@ class SourceIngestionRun(Base):
 
 
 class SourceIngestionItem(Base):
-    """Per-candidate traceability within a run. Stores hashes/codes only —
-    never raw fetched HTML/text or private queries."""
+    """Controlled per-candidate traceability within a provider run.
+
+    Stores its identifier, run/provider references, provider external
+    identifier, candidate URL hash, dedupe key, canonical source/version
+    references, status, outcome, safe error code, and timestamps. It never
+    stores raw fetched source content or raw provider search query text.
+    """
 
     __tablename__ = "source_ingestion_items"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)

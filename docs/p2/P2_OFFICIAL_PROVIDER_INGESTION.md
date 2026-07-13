@@ -76,8 +76,20 @@ eksik tipe özgü numara ya da gövde içinde sıradan bir mevzuat atfı
 
 ## Ingestion run modeli
 
-- `source_ingestion_runs` — sağlayıcı, tür, durum, sayaçlar, safe error code.
-- `source_ingestion_items` — aday başına izlenebilirlik; sadece hash/kod depolar (ham kaynak metni veya sorgu bilgisi İÇERMEZ).
+- `source_ingestion_runs` — kontrollü operasyonel metadata; run ID, sağlayıcı
+  kodu, run türü/durumu, bounded kalıcı non-query parametreler, sayaçlar,
+  timestamp'ler, `created_by` izlenebilirliği ve safe error code depolar.
+- `source_ingestion_items` — kontrollü aday izlenebilirlik metadata'sı;
+  item/run ID'leri, sağlayıcı kodu, sağlayıcının `external_id` değeri, candidate
+  URL hash'i, dedupe key, `SourceRecord`/`SourceVersion` referansları,
+  durum/outcome, safe error code ve timestamp'ler depolar. `external_id` yalnız
+  sağlayıcı izlenebilirlik metadata'sıdır; kanonik hukuk kimliği veya resmî
+  trust/evidence değildir.
+
+Run/item satırları ham fetch edilmiş kaynak gövdesini veya ham provider arama
+sorgusu metnini depolamaz. `candidate_url_hash` bir hash'tir; `dedupe_key` ise
+sağlayıcının stabil `external_id` semantiğini içerebilir ve evrensel olarak
+opaque/hash-only kabul edilmez.
 
 Run türleri: `discover_only`, `fetch_and_ingest`, `exact_source`, `bounded_window`.
 Run statüleri: `queued`, `running`, `completed`, `completed_with_errors`, `failed`, `cancelled`.

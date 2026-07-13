@@ -77,7 +77,13 @@ namespace. Legacy rows without subtype provenance remain unknown/legacy.
 - Provider status is I/O-free and fail-closed; browser prerequisites precede
   transport/telemetry states.
 - Metrics use low-cardinality provider, operation, status, and safe-code labels.
-- Run/item persistence excludes raw provider bodies and queries.
+- Run/item persistence stores controlled operational and candidate-traceability
+  metadata, including run/item/provider identifiers, provider `external_id`,
+  URL hashes, dedupe keys, canonical source/version references, statuses,
+  outcomes, counters, timestamps, created-by traceability, and safe codes.
+- Provider `external_id` is traceability metadata, not canonical legal identity,
+  official evidence, or trust evidence. Run/item rows exclude raw fetched source
+  bodies and raw provider search query text.
 - Queued API runs reject raw `query`; direct CLI `--query` reaches discovery
   in memory only, is not persisted, and cannot be replayed from `cursor_json`.
 - The live-smoke report exposes only safe outcomes, counts, optional safe HTTP
@@ -85,6 +91,7 @@ namespace. Legacy rows without subtype provenance remain unknown/legacy.
 
 ## Tests
 
+- Final forensic blocker focused suite: `25 passed`
 - Controlled smoke harness: `25 passed`
 - Provider suite: `75 passed`
 - Transport/security: `74 passed`
@@ -93,9 +100,15 @@ namespace. Legacy rows without subtype provenance remain unknown/legacy.
 - P2.6 routes: `40 passed`
 - Article locator: `27 passed`
 - API/OpenAPI: `28 passed, 1 warning`
-- Full local backend: `1426 passed, 80 skipped, 5 warnings`; zero failures/errors
+- Latest local full backend: `1451 passed, 80 environment-gated skipped, 4 warnings`;
+  `1531 collected`, zero failures
+- Independently verified exact-head GitHub P1.14 JUnit for
+  `36a5f24d3d464eebd994403780dada04bbb6def9`: `1531 tests`, `0 failures`,
+  `0 errors`, `0 skipped`
+- GitHub pytest summary at that exact head: `1531 passed, 4 warnings`
 
-The local skips are environment-gated tests. The committed smoke tests use fake
+Local evidence is `1451 passed + 80 environment-gated skipped`; GitHub P1.14
+executed all `1531` tests with `0 skipped`. The committed smoke tests use fake
 transports/resolvers only and perform no external DNS or TCP.
 
 ## Known limitations

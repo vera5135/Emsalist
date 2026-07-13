@@ -1,7 +1,9 @@
-"""P2.6C — Persistence for official provider ingestion runs/items.
+"""P2.6C — Persistence for controlled official-provider ingestion runs/items.
 
-Stores only safe counters, hashes and codes — never raw source text or private
-query credentials.
+Stores controlled operational and traceability metadata, bounded durable
+non-query run parameters, counters, hashes, provider external identifiers,
+canonical source/version references, statuses, outcomes, and safe error codes.
+It never stores raw fetched source content or raw provider search query text.
 """
 from __future__ import annotations
 
