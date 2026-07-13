@@ -256,11 +256,19 @@ P2.6C non-browser smoke browser detail indirmez. CAPTCHA/access-control bypass,
 stealth/evasion ve proxy rotation yasaktır. Fixture smoke testleri controlled
 live smoke kanıtı değildir.
 
+Tek kontrollü canlı oturum `2026-07-13T20:16:52.381881+00:00` tarihinde,
+`40611aa26ee086407912675cde58d3e89b0c626c` exact SHA üzerinde çalıştırıldı.
+Mevzuat ve Resmî Gazete için discovery gerçek pinned transport yolu üzerinden
+denendi ve her ikisi de güvenli `fetch_failed` sonucu verdi; aday/detail fetch
+ve canonical ingestion oluşmadı. Bu sonuçlar uzaktaki provider'ı başarıya
+zorlamak için tekrar çalıştırılmadı. Güvenli evidence:
+`docs/p2/P2_6C_CONTROLLED_LIVE_SMOKE.md`.
+
 ## Kapsam dışı
 
 - Canlı zamanlanmış periodic provider ingestion (cron/scheduler integration yok — schedule-ready tasarım)
 - Browser discovery P2.6D'ye ertelendi; browser gerektiren gerçek yüzeyler P2.6C canlı kabulü değildir.
-- Kontrollü live smoke evidence ve final PR acceptance tamamlanmadan P2.6C tamamlanmış sayılmaz.
+- Kontrollü live smoke evidence kaydedildi; final PR documentation/acceptance tamamlanmadan P2.6C tamamlanmış sayılmaz.
 - Mobil sağlayıcı yönetim UI (editor/admin backend altyapısı)
 - Authentication/CAPTCHA gerektiren sağlayıcı yüzeylerinin bypass edilmesi
 - OCR, UDF parser, dosya tabanlı ingestion (P2.5 kapsamı)

@@ -1,0 +1,110 @@
+# PR #16 — P2.6C Official Provider Ingestion
+
+## Summary
+
+Adds six closed-registry official-provider adapter contracts and connects their
+exact detail bytes to the existing P2.6 canonical ingestion/trust path. Provider
+discovery and parser output remain untrusted; `verified_official` requires the
+destination-pinned `source_fetcher`, extraction provenance, exact version hash,
+and version-scoped official-fetch evidence.
+
+## Provider state
+
+| Provider | Adapter fixture contract | Live discovery state |
+|---|---|---|
+| Yargıtay | discovery/fetch/parse/ingestion fixture-tested | Browser-required; deferred to P2.6D; fail-closed |
+| Danıştay | discovery/fetch/parse/ingestion fixture-tested | Browser-required; deferred to P2.6D; fail-closed |
+| AYM | Norm/Bireysel parse and trust boundaries fixture-tested | Browser-required; deferred to P2.6D; fail-closed |
+| Uyuşmazlık | discovery/fetch/parse/ingestion fixture-tested | Current capability is browser-required; excluded from P2.6C non-browser smoke |
+| Mevzuat | discovery/fetch/parse/ingestion and article locators fixture-tested | Eligible controlled smoke attempted; safe outcome `fetch_failed` |
+| Resmî Gazete | issue/instrument distinction fixture-tested | Eligible controlled smoke attempted; safe outcome `fetch_failed` |
+
+The controlled live smoke does not make all six providers production-live. The
+Yargıtay, Danıştay and AYM browser strategy work is formally deferred to
+[P2.6D](P2_6D_BROWSER_PROVIDER_DISCOVERY.md). No selectors were invented from
+legacy fixtures. The current Uyuşmazlık capability also remains browser-required
+and was automatically excluded by the same capability policy.
+
+## Controlled non-browser live evidence
+
+One operator-confirmed bounded observation was executed at
+`2026-07-13T20:16:52.381881+00:00` from exact SHA
+`40611aa26ee086407912675cde58d3e89b0c626c`, using harness version
+`p2.6c-live-smoke-1`.
+
+- Eligibility came from the closed registry/capability contract.
+- Both `OFFICIAL_PROVIDER_LIVE_SMOKE=true` and `--confirm-live-smoke` were required.
+- Mevzuat: discovery attempted once; `fetch_failed`; zero candidates; no detail fetch.
+- Resmî Gazete: discovery attempted once; `fetch_failed`; zero candidates; no detail fetch.
+- No canonical ingestion or database write was performed.
+- Browser-required providers were not contacted.
+- The smoke was not rerun to chase a preferred remote outcome.
+
+Safe evidence: [P2_6C_CONTROLLED_LIVE_SMOKE.md](P2_6C_CONTROLLED_LIVE_SMOKE.md).
+The evidence contains no raw query, external ID, source title/text, E/K number,
+URL path/query, response body, headers, cookies, or raw exception.
+
+## Security and trust boundaries
+
+- All provider networking uses the existing destination validation and pinned
+  `HttpxSourceTransport`; provider modules do not use direct HTTP clients.
+- Redirect hops, public-IP validation, DNS rebinding defense, TLS hostname and
+  Host authority, proxy isolation, timeout, content type, and response-size
+  controls remain centralized in `source_fetcher`.
+- Discovery metadata never becomes official evidence.
+- Exact fetched bytes are extracted and passed through `ingest_official_fetch`;
+  evidence remains bound to the exact `SourceVersion.content_hash`.
+- Retry is limited to the shared provider network-operation executor. Parse,
+  canonical writes, and evidence creation are not retried.
+- Challenge, access denial, rate limit, structure change, and transport absence
+  use controlled safe codes and provider-wide stop semantics.
+
+## Article locator provenance
+
+Article-aware instruments preserve a closed subtype vocabulary for regular,
+additional, provisional, and repeated articles. Canonical Turkish labels and
+collision-safe locator keys are stored in existing paragraph locator JSON.
+`official_gazette_issue` remains a publication container rather than an article
+namespace. Legacy rows without subtype provenance remain unknown/legacy.
+
+## Safe operations and observability
+
+- Provider status is I/O-free and fail-closed; browser prerequisites precede
+  transport/telemetry states.
+- Metrics use low-cardinality provider, operation, status, and safe-code labels.
+- Run/item persistence excludes raw provider bodies and queries.
+- The live-smoke report exposes only safe outcomes, counts, optional safe HTTP
+  metadata, content size/type, and hostname-only final destinations.
+
+## Tests
+
+- Controlled smoke harness: `25 passed`
+- Provider suite: `75 passed`
+- Transport/security: `74 passed`
+- Extraction provenance: `33 passed`
+- P2.6 services: `30 passed`
+- P2.6 routes: `40 passed`
+- Article locator: `27 passed`
+- API/OpenAPI: `28 passed, 1 warning`
+- Full local backend: `1426 passed, 80 skipped, 5 warnings`; zero failures/errors
+
+The local skips are environment-gated tests. The committed smoke tests use fake
+transports/resolvers only and perform no external DNS or TCP.
+
+## Known limitations
+
+- Browser discovery is deferred to P2.6D and is not production-live accepted.
+- The controlled live observation recorded safe `fetch_failed` outcomes; it did
+  not prove successful candidate/detail retrieval.
+- No periodic scheduler integration is included.
+- No browser/CAPTCHA bypass, OCR, search, embeddings, LLM reasoning, or P2.7 work
+  is included.
+- Final PR/CI acceptance remains separate; this document is proposed body text
+  and has not been applied to GitHub.
+
+## Rollback
+
+No migration or schema rollback is required. Disable all
+`OFFICIAL_PROVIDER_*_ENABLED` flags and `OFFICIAL_PROVIDER_LIVE_SMOKE` to stop
+provider activity immediately. Code rollback is a normal revert of the narrow
+PR commits; existing canonical source/version/evidence rows remain intact.
