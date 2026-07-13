@@ -99,12 +99,21 @@ mobile/
 - [x] Widget test suite (45 tests)
 - [x] Mobile CI pipeline (format, analyze, test, iOS simulator build per flavor)
 
+## P2.5B native document picker
+
+The case-scoped document upload screen uses the operating system's native
+picker through `file_picker` 11.0.2. It accepts PDF, TXT, DOCX, UDF, JPG, JPEG,
+and PNG files. Cancellation returns to the screen without an error.
+
+Empty files and files larger than 15 MB are rejected before upload with a
+controlled user-facing message. These client checks are upload preflight/UX
+only; backend validation remains the authoritative security and size boundary.
+
 ## Out of scope for P2.1
 
 - Real authentication and secure token storage
 - Real backend API integration
 - Case creation, listing, and conversation persistence
-- Document upload and processing
 - Legal source ingestion and search
 - AI-powered drafting
 - Push notifications

@@ -5,11 +5,12 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/state_widgets.dart';
 import '../application/document_providers.dart';
+import '../data/document_picker.dart';
 import '../domain/document_item.dart';
 
-/// Documents screen for a case: list, upload (via a new-note composer for now),
-/// per-document status, and navigation to the analysis detail. User-facing
-/// text is non-technical; parser exceptions and queue internals are hidden.
+/// Documents screen for a case: native file upload, per-document status, and
+/// navigation to the analysis detail. User-facing text is non-technical;
+/// parser exceptions and queue internals are hidden.
 class DocumentsScreen extends ConsumerWidget {
   const DocumentsScreen({required this.caseId, super.key});
 
@@ -21,23 +22,20 @@ class DocumentsScreen extends ConsumerWidget {
   }
 
   Future<void> _upload(BuildContext context, WidgetRef ref) async {
-    final _NoteUpload? note = await showModalBottomSheet<_NoteUpload>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (BuildContext ctx) => const _UploadSheet(),
-    );
-    if (note == null) {
-      return;
-    }
     try {
+      final PickedDocument? document = await ref
+          .read(documentPickerProvider)
+          .pickDocument();
+      if (document == null) {
+        return;
+      }
       await ref
           .read(documentRepositoryProvider)
           .upload(
             caseId,
-            bytes: note.bytes,
-            filename: note.filename,
-            mimeType: 'text/plain',
+            bytes: document.bytes,
+            filename: document.filename,
+            mimeType: document.mimeType,
           );
       ref.invalidate(documentsProvider(caseId));
     } on DuplicateDocumentException {
@@ -45,6 +43,12 @@ class DocumentsScreen extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Bu belge bu dosyada zaten mevcut.')),
         );
+      }
+    } on DocumentPickerException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } on ApiException catch (e) {
       if (context.mounted) {
@@ -246,93 +250,6 @@ class _DocumentCard extends ConsumerWidget {
       default:
         return Icons.insert_drive_file_outlined;
     }
-  }
-}
-
-class _NoteUpload {
-  const _NoteUpload({required this.bytes, required this.filename});
-  final List<int> bytes;
-  final String filename;
-}
-
-class _UploadSheet extends StatefulWidget {
-  const _UploadSheet();
-
-  @override
-  State<_UploadSheet> createState() => _UploadSheetState();
-}
-
-class _UploadSheetState extends State<_UploadSheet> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _bodyController = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _bodyController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final EdgeInsets insets = MediaQuery.viewInsetsOf(context);
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppConstants.spacingLg,
-        right: AppConstants.spacingLg,
-        top: AppConstants.spacingSm,
-        bottom: AppConstants.spacingLg + insets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text('Belge Ekle', style: theme.textTheme.titleLarge),
-          const SizedBox(height: AppConstants.spacingXs),
-          Text(
-            'Metin belgesi olarak ekleyin. Dosya seçici sonraki sürümde eklenecek.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Belge adı',
-              hintText: 'ör. Satış sözleşmesi',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-          TextField(
-            controller: _bodyController,
-            minLines: 3,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: 'Belge metni',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingLg),
-          FilledButton(
-            onPressed: () {
-              final String body = _bodyController.text.trim();
-              if (body.isEmpty) {
-                return;
-              }
-              final String name = _nameController.text.trim();
-              final String filename = '${name.isEmpty ? 'belge' : name}.txt';
-              Navigator.of(
-                context,
-              ).pop(_NoteUpload(bytes: body.codeUnits, filename: filename));
-            },
-            child: const Text('Yükle'),
-          ),
-        ],
-      ),
-    );
   }
 }
 

@@ -390,8 +390,9 @@ uydurulmaz.
 
 - Gerçek OCR, chundked upload, virüs tarayıcı, signed-URL object storage ve
   DocumentAnalysisRun sürümleme kapsam dışıdır.
-- Mobil dosya seçici (native `file_picker`) henüz yok; upload akışı in-app metin
-  belgesiyle uçtan uca çalışır ve native picker sonradan seam üzerinden eklenir.
+- Mobil upload native `file_picker` kullanır; PDF/TXT/DOCX/UDF/JPG/JPEG/PNG
+  dosyaları platform seçicisinden alınır. Dosya bytes, ad, MIME türü ve 15 MB
+  istemci sınırı backend'e gönderilmeden önce doğrulanır.
 - Rollback: migration `87be64670347` tek adımda `downgrade -1` ile geri alınır;
   yeni rotalar router mount kaldırılarak devre dışı bırakılabilir; eski dosya
   tabanlı `/documents/upload` etkilenmez.

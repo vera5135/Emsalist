@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:emsalist_mobile/features/documents/application/document_providers.dart';
 import 'package:emsalist_mobile/features/documents/data/document_api.dart';
+import 'package:emsalist_mobile/features/documents/data/document_picker.dart';
 import 'package:emsalist_mobile/features/documents/data/document_repository.dart';
 import 'package:emsalist_mobile/features/documents/presentation/documents_screen.dart';
 import 'package:flutter/material.dart';
@@ -11,12 +14,26 @@ import 'support/fake_api_client.dart';
 const String _caseId = 'c1';
 const String _base = '/api/v1/cases/$_caseId/documents';
 
-Widget _host(FakeApiClient client) {
+class _FakeDocumentPicker implements DocumentPicker {
+  _FakeDocumentPicker(this.result);
+
+  final PickedDocument? result;
+  int calls = 0;
+
+  @override
+  Future<PickedDocument?> pickDocument() async {
+    calls += 1;
+    return result;
+  }
+}
+
+Widget _host(FakeApiClient client, {DocumentPicker? picker}) {
   return ProviderScope(
     overrides: <Override>[
       documentRepositoryProvider.overrideWithValue(
         DocumentRepository(DocumentApi(client)),
       ),
+      if (picker != null) documentPickerProvider.overrideWithValue(picker),
     ],
     child: const MaterialApp(home: DocumentsScreen(caseId: _caseId)),
   );
@@ -43,6 +60,58 @@ Map<String, dynamic> _doc({
 }
 
 void main() {
+  testWidgets('picker cancellation leaves upload flow unchanged', (
+    WidgetTester tester,
+  ) async {
+    final FakeApiClient client = FakeApiClient()
+      ..whenGet(_base, <String, dynamic>{
+        'items': <dynamic>[],
+        'total': 0,
+        'has_more': false,
+      });
+    final _FakeDocumentPicker picker = _FakeDocumentPicker(null);
+
+    await tester.pumpWidget(_host(client, picker: picker));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Belge Ekle'));
+    await tester.pumpAndSettle();
+
+    expect(picker.calls, 1);
+    expect(client.uploadPaths, isEmpty);
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
+  testWidgets('native picker uploads selected file bytes', (
+    WidgetTester tester,
+  ) async {
+    final FakeApiClient client = FakeApiClient()
+      ..whenGet(_base, <String, dynamic>{
+        'items': <dynamic>[],
+        'total': 0,
+        'has_more': false,
+      })
+      ..whenPost(_base, _doc(name: 'sozlesme.pdf'));
+    final _FakeDocumentPicker picker = _FakeDocumentPicker(
+      PickedDocument(
+        bytes: Uint8List.fromList(<int>[0x25, 0x50, 0x44, 0x46]),
+        filename: 'sozlesme.pdf',
+        mimeType: 'application/pdf',
+      ),
+    );
+
+    await tester.pumpWidget(_host(client, picker: picker));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Belge Ekle'));
+    await tester.pumpAndSettle();
+
+    expect(picker.calls, 1);
+    expect(client.uploadPaths, contains(_base));
+    expect(
+      client.uploadBodies.single,
+      containsPair('filename', 'sozlesme.pdf'),
+    );
+  });
+
   testWidgets('empty state when no documents', (WidgetTester tester) async {
     final FakeApiClient client = FakeApiClient()
       ..whenGet(_base, <String, dynamic>{
