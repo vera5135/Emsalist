@@ -232,18 +232,17 @@ async def ingest_official_fetch(
     *,
     metadata: dict,
     fetch_result: FetchResult,
+    raw_document_hash: str | None = None,
+    extraction_method: str | None = None,
+    extraction_version: str | None = None,
 ) -> IngestResult:
     """Ingest via server-side secure official fetch.
 
-    Security invariants (fail-closed):
-    - fetch_result.content is the SOLE canonical content; raw_text is ignored.
-    - fetch_result.status_code must be 2xx.
-    - fetch_result.content must be non-empty.
-    - fetch_result.final_url must be allowlisted.
-    - content_type must be in ALLOWED_CONTENT_TYPES.
-    - content_hash is computed from the fetched bytes.
-    - evidence_url = final_url (binding).
-    - evidence_hash = version content_hash (exact match).
+    - fetch_result.content is the sole canonical content.
+    - When [raw_document_hash] is passed (P2.6C extraction), it is persisted
+      as the raw-fetch provenance hash. [extraction_version] becomes the
+      parser_version on the SourceVersion row so the extraction provenance
+      chain is verifiable.
     """
     # Validate fetch_result integrity.
     if not fetch_result:
@@ -262,7 +261,6 @@ async def ingest_official_fetch(
     if content_type and content_type not in ALLOWED_CONTENT_TYPES:
         raise ValueError(f"unsupported content_type: {content_type}")
 
-    # Compute canonical content from the fetched bytes ONLY.
     text = _decode_fetched_bytes(content)
     trusted = para.normalize_text(text)
 
@@ -270,10 +268,11 @@ async def ingest_official_fetch(
         session,
         metadata=metadata,
         trusted_text=trusted,
-        raw_document_hash=None,
+        raw_document_hash=raw_document_hash,
         official_url=final_url,
         retrieval_method="official_fetch",
         fetch_result=fetch_result,
+        extraction_version=extraction_version or PARSER_VERSION,
     )
 
 
@@ -297,6 +296,7 @@ async def _ingest(
     official_url: str,
     retrieval_method: str,
     fetch_result: FetchResult | None,
+    extraction_version: str = PARSER_VERSION,
 ) -> IngestResult:
     """Core ingestion engine. [trusted_text] is the canonical content."""
     source_type = normalize_source_type(metadata.get("source_type", ""))
@@ -317,11 +317,13 @@ async def _ingest(
             session, metadata, source_type, canonical_key,
             trusted_text, content_hash, official_url,
             retrieval_method, raw_document_hash, is_official_fetch,
+            extraction_version=extraction_version,
         )
     return await _ingest_into_existing(
         session, record, metadata, source_type, canonical_key,
         trusted_text, content_hash, official_url,
         retrieval_method, raw_document_hash, is_official_fetch,
+        extraction_version=extraction_version,
     )
 
 
@@ -329,6 +331,7 @@ async def _create_new_record(
     session, metadata, source_type, canonical_key,
     trusted_text, content_hash, official_url,
     retrieval_method, raw_document_hash, is_official_fetch,
+    extraction_version: str = PARSER_VERSION,
 ):
     record = await SourceRecordRepository.create(
         session,
@@ -364,6 +367,7 @@ async def _ingest_into_existing(
     session, record, metadata, source_type, canonical_key,
     trusted_text, content_hash, official_url,
     retrieval_method, raw_document_hash, is_official_fetch,
+    extraction_version: str = PARSER_VERSION,
 ):
     await SourceRecordRepository.mark_checked(session, record, successful=True)
     existing = await SourceVersionRepository.get_by_hash(session, record.id, content_hash)
@@ -400,6 +404,7 @@ async def _ingest_into_existing(
         session, record, source_type, trusted_text, content_hash,
         retrieval_method, raw_document_hash, metadata,
         supersedes_version_id=record.current_version_id,
+        parser_version=extraction_version,
     )
     if record.current_version_id:
         prev = await SourceVersionRepository.get(session, record.current_version_id)
@@ -440,6 +445,7 @@ async def _produce_official_verification(session, record_id, version_id, content
 async def _create_version_with_paragraphs(
     session, record, source_type, normalized, content_hash,
     retrieval_method, raw_document_hash, metadata, supersedes_version_id=None,
+    parser_version: str = PARSER_VERSION,
 ):
     version = await SourceVersionRepository.create(
         session,
@@ -447,7 +453,7 @@ async def _create_version_with_paragraphs(
         content_hash=content_hash,
         normalized_text=normalized,
         retrieval_method=retrieval_method,
-        parser_version=PARSER_VERSION,
+        parser_version=parser_version,
         raw_document_hash=raw_document_hash,
         supersedes_version_id=supersedes_version_id,
         valid_from=metadata.get("effective_date", "") or metadata.get("valid_from", ""),
