@@ -84,6 +84,55 @@ services:
           cpus: "0.25"
           memory: "256M"
 
+  worker:
+    image: emsalist-api:latest
+    container_name: emsalist-worker
+    restart: unless-stopped
+    stop_grace_period: 45s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    environment:
+      EMSALIST_ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://emsalist:${DB_PASSWORD:-emsalist_dev_pwd}@postgres:5432/emsalist
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-min-32-chars-long}
+      AUTH_MODE: ${AUTH_MODE:-jwt}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,api}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:8000}
+      EMSALIST_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      EMSALIST_LOG_FORMAT: json
+      EMSALIST_LOG_SERVICE_NAME: emsalist-worker
+      EMSALIST_STORAGE_ROOT: /data
+      EMSALIST_CASE_STORE_DIR: /tmp/case_store
+      EMSALIST_DOCUMENT_STORE_DIR: /tmp/document_store
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      BACKUP_ENCRYPTION_ENABLED: ${BACKUP_ENCRYPTION_ENABLED:-false}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
+    command:
+      - python
+      - -m
+      - app.scripts.run_worker
+      - --recover
+      - --concurrency
+      - ${WORKER_CONCURRENCY:-1}
+    healthcheck:
+      disable: true
+    volumes:
+      - upload_data:/data/uploads
+      - export_data:/data/exports
+      - backup_data:/data/backups
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+        reservations:
+          cpus: "0.10"
+          memory: "128M"
+
 volumes:
   pgdata:
     name: emsalist_pgdata
