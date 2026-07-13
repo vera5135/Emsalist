@@ -34,6 +34,11 @@ from app.services.source_extraction import extract_content_from_fetch, make_extr
 from app.services.source_ingestion_service import ingest_official_fetch
 from app.services.source_providers import registry
 from app.services.source_providers.base import (
+    ERR_ACCESS_DENIED,
+    ERR_CHALLENGE,
+    ERR_RATE_LIMITED,
+    ERR_STRUCTURE_CHANGED,
+    ERR_TRANSPORT_UNAVAILABLE,
     RUN_DISCOVER_ONLY,
     RUN_EXACT_SOURCE,
     RUN_MODES,
@@ -42,6 +47,14 @@ from app.services.source_providers.base import (
     ProviderError,
 )
 from app.services.source_providers.shared import assert_meaningful_body
+
+_PROVIDER_WIDE_STOP_CODES = frozenset({
+    ERR_CHALLENGE,
+    ERR_STRUCTURE_CHANGED,
+    ERR_TRANSPORT_UNAVAILABLE,
+    ERR_ACCESS_DENIED,
+    ERR_RATE_LIMITED,
+})
 
 
 @dataclass
@@ -169,12 +182,14 @@ async def _execute_loop(
     t0 = time.monotonic()
     next_cursor: dict = dict(cursor or {})
     last_error = ""
+    provider_stop = False
 
     try:
         candidates = await _collect_candidates(
             provider, run_type=run_type, query=query, from_date=from_date,
             to_date=to_date, max_items=max_items, cursor=cursor,
-            external_id=external_id, transport=transport,
+            external_id=external_id, transport=transport, resolver=resolver,
+            sleeper=sleep,
         )
     except ProviderError as e:
         run.discovered_count = 0
@@ -214,7 +229,8 @@ async def _execute_loop(
         await sleep(provider.request_policy.min_interval_seconds)
         try:
             outcome = await _fetch_parse_ingest(
-                db, provider, cand, transport=transport, resolver=resolver)
+                db, provider, cand, transport=transport, resolver=resolver,
+                sleeper=sleep)
         except ProviderError as e:
             last_error = e.code
             run.failed_count += 1
@@ -228,6 +244,9 @@ async def _execute_loop(
                     db, item, status="failed", safe_error_code=e.code)
             metrics.official_source_provider_error.inc(
                 labels={"provider_code": provider_code, "safe_error_code": e.code})
+            if e.code in _PROVIDER_WIDE_STOP_CODES:
+                provider_stop = True
+                break
             continue
         except (ValueError, CanonicalKeyError) as e:
             code = "canonical_key_error" if isinstance(e, CanonicalKeyError) else "ingest_rejected"
@@ -268,7 +287,12 @@ async def _execute_loop(
         )
         await db.commit()
 
-    if run.failed_count and (run.ingested_count or run.duplicate_count or run.new_version_count):
+    successful_work = bool(
+        run.ingested_count or run.duplicate_count or run.new_version_count
+    )
+    if provider_stop:
+        status = RUN_COMPLETED_WITH_ERRORS if successful_work else RUN_FAILED
+    elif run.failed_count and successful_work:
         status = RUN_COMPLETED_WITH_ERRORS
     elif run.failed_count and not run.discovered_count == 0:
         status = RUN_COMPLETED_WITH_ERRORS if run.discovered_count > run.failed_count else RUN_FAILED
@@ -288,22 +312,33 @@ async def _execute_loop(
 
 async def _collect_candidates(
     provider, *, run_type, query, from_date, to_date, max_items, cursor,
-    external_id, transport,
+    external_id, transport, resolver, sleeper,
 ) -> list[ProviderDiscoveryCandidate]:
     if run_type == RUN_EXACT_SOURCE:
         if not external_id:
             raise ProviderError("missing_identifier", "exact_source requires an external_id")
         return [provider.build_exact_candidate(external_id)]
-    page = await provider.discover(
-        query=query, cursor=(cursor or {}).get("page") if cursor else None,
-        limit=max_items, from_date=from_date, to_date=to_date,
-        transport=transport, resolver=provider.default_resolver(),
+    page = await _execute_provider_network_operation(
+        provider,
+        operation="discover",
+        sleeper=sleeper,
+        call=lambda: provider.discover(
+            query=query, cursor=(cursor or {}).get("page") if cursor else None,
+            limit=max_items, from_date=from_date, to_date=to_date,
+            transport=transport,
+            resolver=resolver or provider.default_resolver(),
+        ),
     )
     return page.candidates[:max_items]
 
 
-async def _fetch_parse_ingest(db, provider, cand, *, transport, resolver):
-    fetch_result = await provider.fetch(cand, transport=transport, resolver=resolver)
+async def _fetch_parse_ingest(db, provider, cand, *, transport, resolver, sleeper):
+    fetch_result = await _execute_provider_network_operation(
+        provider,
+        operation="fetch",
+        sleeper=sleeper,
+        call=lambda: provider.fetch(cand, transport=transport, resolver=resolver),
+    )
     parsed: ParsedOfficialSource = await provider.parse(cand, fetch_result)
     # Content-quality gate (defense in depth; providers also gate in parse()).
     assert_meaningful_body(parsed.raw_text)
@@ -324,6 +359,41 @@ async def _fetch_parse_ingest(db, provider, cand, *, transport, resolver):
         extraction_method=extracted.extraction_method,
         extraction_version=extracted.parser_version,
     )
+
+
+async def _execute_provider_network_operation(provider, *, operation: str, sleeper, call):
+    """Execute one provider network operation with the shared retry policy."""
+    policy = provider.request_policy
+    attempt_index = 0
+    while True:
+        try:
+            return await call()
+        except ProviderError as e:
+            if not e.retryable or attempt_index >= policy.max_retries:
+                raise
+            if (
+                e.code == ERR_RATE_LIMITED
+                and e.retry_after_seconds is not None
+                and e.retry_after_seconds > policy.backoff_max_seconds
+            ):
+                raise
+            if e.code == ERR_RATE_LIMITED and e.retry_after_seconds is not None:
+                delay = e.retry_after_seconds
+            else:
+                delay = min(
+                    policy.backoff_base_seconds * (2 ** attempt_index),
+                    policy.backoff_max_seconds,
+                )
+            delay = max(delay, policy.min_interval_seconds)
+            metrics.official_source_provider_retry_total.inc(
+                labels={
+                    "provider_code": provider.provider_code,
+                    "operation": operation,
+                    "safe_error_code": e.code,
+                }
+            )
+            await sleeper(delay)
+            attempt_index += 1
 
 
 def _apply_outcome(run, provider_code: str, outcome: str) -> None:

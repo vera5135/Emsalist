@@ -26,9 +26,12 @@ stub that returns objects with status_code, headers, content, location.
 from __future__ import annotations
 
 import ipaddress
+import math
 import socket
 import ssl
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from types import TracebackType
 from typing import Callable
 from urllib.parse import urljoin, urlparse
@@ -94,9 +97,18 @@ _EC = {
 
 
 class SourceFetchError(Exception):
-    def __init__(self, code: str, message: str):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        http_status: int | None = None,
+        retry_after_seconds: float | None = None,
+    ):
         self.code = code
         self.message = message
+        self.http_status = http_status
+        self.retry_after_seconds = retry_after_seconds
         super().__init__(message)
 
 
@@ -134,6 +146,50 @@ def _ip_is_safe(ip_str: str) -> bool:
 def default_resolver(hostname: str) -> list[str]:
     infos = socket.getaddrinfo(hostname, None)
     return list({str(info[4][0]) for info in infos})
+
+
+def _validated_timeout_seconds(timeout_seconds: int) -> int:
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, int)
+        or not 1 <= timeout_seconds <= 300
+    ):
+        raise ValueError("timeout_seconds must be an integer from 1 to 300")
+    return timeout_seconds
+
+
+def parse_retry_after_seconds(
+    raw_value: str | None,
+    *,
+    now: datetime | None = None,
+) -> float | None:
+    """Parse a safe Retry-After value without retaining the raw header."""
+    if raw_value is None:
+        return None
+    value = str(raw_value).strip()
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+        if seconds.is_integer():
+            seconds = int(seconds)
+        if not math.isfinite(float(seconds)) or float(seconds) < 0:
+            return None
+        return float(seconds)
+    except ValueError:
+        pass
+
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    current = now or datetime.now(UTC)
+    delta = (parsed.astimezone(UTC) - current.astimezone(UTC)).total_seconds()
+    if not math.isfinite(delta) or delta < 0:
+        return None
+    return float(delta)
 
 
 # ── Typed validated destination (P2.6C) ───────────────────────────────────
@@ -182,7 +238,10 @@ def validate_destination(
     if not _host_allowed(hostname):
         raise SourceFetchError("domain_not_allowed", _EC["domain_not_allowed"])
 
-    resolved = resolver(hostname)
+    try:
+        resolved = resolver(hostname)
+    except Exception:
+        raise SourceFetchError("dns_failed", _EC["dns_failed"]) from None
     if not resolved:
         raise SourceFetchError("dns_failed", _EC["dns_failed"])
     for ip in resolved:
@@ -375,13 +434,7 @@ class HttpxSourceTransport:
             [ValidatedDestination], httpcore.NetworkBackend
         ] | None = None,
     ):
-        if (
-            isinstance(timeout_seconds, bool)
-            or not isinstance(timeout_seconds, int)
-            or not 1 <= timeout_seconds <= 300
-        ):
-            raise ValueError("timeout_seconds must be an integer from 1 to 300")
-        self._timeout = timeout_seconds
+        self._timeout = _validated_timeout_seconds(timeout_seconds)
         self._max_bytes = max_bytes
         self._network_backend_factory = _network_backend_factory
 
@@ -394,7 +447,12 @@ class HttpxSourceTransport:
         raise SourceFetchError("destination_not_validated",
                                _EC["destination_not_validated"])
 
-    def fetch_pinned(self, dest: ValidatedDestination) -> _StubResponse:
+    def fetch_pinned(
+        self,
+        dest: ValidatedDestination,
+        *,
+        timeout_seconds: int | None = None,
+    ) -> _StubResponse:
         """Fetch [dest.url] through a pool pinned to dest.validated_ips.
 
         Connects only to IPs in the validated set. TLS SNI, hostname
@@ -402,19 +460,24 @@ class HttpxSourceTransport:
 
         Uses httpcore.ConnectionPool directly — no httpx wrapping.
         """
+        request_timeout = (
+            self._timeout if timeout_seconds is None
+            else _validated_timeout_seconds(timeout_seconds)
+        )
         backend = None
         if self._network_backend_factory is not None:
             backend = self._network_backend_factory(dest)
         pool = _make_pinned_pool(
-            dest, self._timeout, network_backend=backend,
+            dest, request_timeout, network_backend=backend,
         )
         try:
-            return self._stream_httpcore(pool, dest)
+            return self._stream_httpcore(pool, dest, timeout_seconds=request_timeout)
         finally:
             pool.close()
 
     def _stream_httpcore(self, pool: httpcore.ConnectionPool,
-                         dest: ValidatedDestination) -> _StubResponse:
+                         dest: ValidatedDestination, *,
+                         timeout_seconds: int) -> _StubResponse:
         headers = [
             (b"host", _host_header_value(dest).encode("ascii")),
             (b"accept", b"text/html, text/plain, application/xhtml+xml, "
@@ -423,10 +486,10 @@ class HttpxSourceTransport:
         try:
             timeout_extensions = {
                 "timeout": {
-                    "connect": self._timeout,
-                    "read": self._timeout,
-                    "write": self._timeout,
-                    "pool": self._timeout,
+                    "connect": timeout_seconds,
+                    "read": timeout_seconds,
+                    "write": timeout_seconds,
+                    "pool": timeout_seconds,
                 },
             }
             with pool.stream(
@@ -506,7 +569,7 @@ def fetch_source(
     *,
     resolver=default_resolver,
     transport=None,
-    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    timeout: int | None = None,
     max_bytes: int = MAX_RESPONSE_BYTES,
 ) -> FetchResult:
     """Securely fetch a source URL with per-hop destination validation.
@@ -528,7 +591,7 @@ def fetch_source(
         chain.append(dest.url)
 
         if isinstance(transport, HttpxSourceTransport):
-            resp = transport.fetch_pinned(dest)
+            resp = transport.fetch_pinned(dest, timeout_seconds=timeout)
         else:
             resp = transport(dest.url)
 
@@ -539,11 +602,18 @@ def fetch_source(
             current = nxt
             continue
         if resp.status_code >= 400:
-            raise SourceFetchError("http_error", _EC["http_error"].format(resp.status_code))
+            raise SourceFetchError(
+                "http_error",
+                _EC["http_error"].format(resp.status_code),
+                http_status=resp.status_code,
+                retry_after_seconds=parse_retry_after_seconds(
+                    resp.headers.get("retry-after"),
+                ),
+            )
         content_type = (resp.headers.get("content-type", "") or "").split(";")[0].strip().lower()
         if content_type and content_type not in ALLOWED_CONTENT_TYPES:
             raise SourceFetchError("unsupported_content_type",
-                                   f"{_EC['unsupported_content_type']} ({content_type})")
+                                   _EC["unsupported_content_type"])
         content = resp.content or b""
         if len(content) > max_bytes:
             raise SourceFetchError("response_too_large", _EC["response_too_large"])

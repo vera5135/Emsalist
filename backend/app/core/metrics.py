@@ -353,6 +353,12 @@ official_source_provider_error = Counter(
     ("provider_code", "safe_error_code"),
 )
 
+official_source_provider_retry_total = Counter(
+    "emsalist_official_source_provider_retry_total",
+    "Official provider network operation retries",
+    ("provider_code", "operation", "safe_error_code"),
+)
+
 
 def record_http_request(
     method: str, path: str, status_code: int, duration_s: float,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import ssl
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import httpcore
@@ -21,9 +22,12 @@ from app.services.source_fetcher import (
     create_live_transport,
     create_real_transport,
     fetch_source,
+    parse_retry_after_seconds,
     validate_destination,
     validate_url,
 )
+from app.services.source_providers import registry
+from app.services.source_providers.base import ProviderRequestPolicy
 
 SAFE_IP = "93.184.216.34"
 SAFE_IP_B = "93.184.216.35"
@@ -335,6 +339,30 @@ def test_too_many_redirects_preserved():
     assert e.value.code == "too_many_redirects"
 
 
+def test_http_error_carries_safe_status_and_retry_after_only():
+    transport = lambda _url: _StubResponse(
+        status_code=429,
+        headers={"content-type": "text/html", "retry-after": "5"},
+        content=b"<html>private throttling page</html>",
+    )
+    with pytest.raises(SourceFetchError) as exc:
+        fetch_source(YARGITAY_URL, resolver=_resolver(SAFE_IP), transport=transport)
+    assert exc.value.code == "http_error"
+    assert exc.value.http_status == 429
+    assert exc.value.retry_after_seconds == 5
+    assert "private throttling" not in exc.value.message
+
+
+def test_retry_after_parser_accepts_delta_and_http_date_rejects_unsafe_values():
+    now = datetime(2026, 7, 13, 12, 0, tzinfo=UTC)
+    assert parse_retry_after_seconds("3", now=now) == 3
+    assert parse_retry_after_seconds(
+        "Mon, 13 Jul 2026 12:00:10 GMT", now=now,
+    ) == 10
+    for raw in ("-1", "nan", "inf", "not a date", ""):
+        assert parse_retry_after_seconds(raw, now=now) is None
+
+
 # ── Error codes ─────────────────────────────────────────────────────────
 def test_fetch_timeout_safe_error():
     from app.services.source_fetcher import _EC
@@ -508,6 +536,28 @@ def test_actual_pinned_path_propagates_timeouts_tls_sni_and_closes():
     assert captures["check_hostname"] is True
     assert captures["verify_mode"] == ssl.CERT_REQUIRED
     assert backend.streams and all(stream.closed for stream in backend.streams)
+
+
+def test_provider_request_policy_timeout_reaches_actual_pinned_request():
+    raw = (b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
+           b"<html>actual provider path result</html>")
+    captures = {}
+    backend = _FakePinnedBackend(raw, captures)
+    provider = registry.get_definition("yargitay")
+    policy = ProviderRequestPolicy(
+        min_interval_seconds=0,
+        request_timeout_seconds=15,
+    )
+    with patch.object(provider, "request_policy", policy):
+        provider._secure_fetch(
+            YARGITAY_URL,
+            resolver=_resolver(SAFE_IP),
+            transport=_real_transport(backend, timeout=7),
+        )
+    assert captures["connect_timeouts"] == [15]
+    assert set(captures["read_timeouts"]) == {15}
+    assert set(captures["write_timeouts"]) == {15}
+    assert captures["tls_timeout"] == 15
 
 
 @pytest.mark.parametrize(

@@ -43,6 +43,7 @@ ERR_UNSUPPORTED_REQUIRES_AUTH = "unsupported_requires_auth"
 ERR_MANUAL_REVIEW_REQUIRED = "manual_review_required"
 ERR_PARSE_FAILED = "parse_failed"
 ERR_UNSUPPORTED_MODE = "unsupported_mode"
+ERR_TRANSPORT_UNAVAILABLE = "transport_unavailable"
 
 # ── Provider status vocabulary ─────────────────────────────────────────────
 STATUS_AVAILABLE = "available"
@@ -59,9 +60,20 @@ STATUS_MANUAL_REVIEW_REQUIRED = "manual_review_required"
 class ProviderError(Exception):
     """Provider-level failure carrying a SAFE error code (never raw HTML)."""
 
-    def __init__(self, code: str, message: str = ""):
+    def __init__(
+        self,
+        code: str,
+        message: str = "",
+        *,
+        retryable: bool = False,
+        retry_after_seconds: float | None = None,
+        http_status: int | None = None,
+    ):
         self.code = code
         self.message = message or code
+        self.retryable = retryable
+        self.retry_after_seconds = retry_after_seconds
+        self.http_status = http_status
         super().__init__(self.message)
 
 
@@ -239,7 +251,57 @@ class OfficialSourceProvider:
                 timeout=self.request_policy.request_timeout_seconds,
             )
         except SourceFetchError as e:
-            raise ProviderError(ERR_SSRF_BLOCKED, e.code) from e
+            raise self._provider_error_from_fetch_error(e) from e
+
+    def _provider_error_from_fetch_error(self, e) -> ProviderError:
+        """Map fetcher failures to safe provider errors and retry metadata."""
+        ssrf_codes = frozenset({
+            "empty_url",
+            "unsafe_scheme",
+            "credentials_in_url",
+            "no_hostname",
+            "blocked_host",
+            "blocked_ip",
+            "ip_literal_not_allowed",
+            "domain_not_allowed",
+            "dns_unsafe_ip",
+            "destination_not_validated",
+            "redirect_loop",
+            "too_many_redirects",
+        })
+        if e.code in ssrf_codes:
+            return ProviderError(ERR_SSRF_BLOCKED, e.code)
+        if e.code in {"no_transport", "transport_unavailable"}:
+            return ProviderError(ERR_TRANSPORT_UNAVAILABLE, e.code)
+        if e.code == "http_error":
+            status = e.http_status
+            if status == 429:
+                return ProviderError(
+                    ERR_RATE_LIMITED,
+                    e.code,
+                    retryable=True,
+                    retry_after_seconds=e.retry_after_seconds,
+                    http_status=status,
+                )
+            if status in {401, 403}:
+                return ProviderError(ERR_ACCESS_DENIED, e.code, http_status=status)
+            retryable = (
+                status in self.request_policy.retryable_statuses
+                if status is not None else False
+            )
+            return ProviderError(
+                ERR_FETCH_FAILED, e.code, retryable=retryable,
+                http_status=status,
+            )
+        if e.code in {"fetch_timeout", "connect_error", "network_error", "dns_failed"}:
+            return ProviderError(ERR_FETCH_FAILED, e.code, retryable=True)
+        if e.code in {
+            "tls_error",
+            "response_too_large",
+            "unsupported_content_type",
+        }:
+            return ProviderError(ERR_FETCH_FAILED, e.code)
+        return ProviderError(ERR_FETCH_FAILED, e.code)
 
     async def parse(
         self, candidate: ProviderDiscoveryCandidate, fetch_result
