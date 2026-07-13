@@ -41,6 +41,8 @@ from app.services.source_fetcher import (
     ALLOWED_CONTENT_TYPES,
     ALLOWED_DOMAINS,
     FetchResult,
+    domains_within_global_allowlist,
+    url_matches_allowed_domains,
 )
 from app.services.source_verification import (
     CONFLICTING,
@@ -119,14 +121,17 @@ class IngestResult:
     outcome: str
 
 
-def _official_domain(url: str) -> bool:
-    from urllib.parse import urlparse
-
-    host = (urlparse(url).hostname or "").lower().rstrip(".")
-    for domain in ALLOWED_DOMAINS:
-        if host == domain or host.endswith("." + domain):
-            return True
-    return False
+def _official_domain(
+    url: str,
+    expected_official_domains: tuple[str, ...] | None = None,
+) -> bool:
+    if not url_matches_allowed_domains(url, ALLOWED_DOMAINS):
+        return False
+    if expected_official_domains is None:
+        return True
+    if not domains_within_global_allowlist(expected_official_domains):
+        return False
+    return url_matches_allowed_domains(url, expected_official_domains)
 
 
 _METADATA_CONFLICT_FIELDS = frozenset({
@@ -340,6 +345,7 @@ async def ingest_official_fetch(
     raw_document_hash: str | None = None,
     extraction_method: str | None = None,
     extraction_version: str | None = None,
+    expected_official_domains: tuple[str, ...] | None = None,
 ) -> IngestResult:
     """Ingest via server-side secure official fetch.
 
@@ -360,7 +366,7 @@ async def ingest_official_fetch(
     final_url = fetch_result.final_url
     if not final_url:
         raise ValueError("fetch_result final_url is empty")
-    if not _official_domain(final_url):
+    if not _official_domain(final_url, expected_official_domains):
         raise ValueError("fetch_result final_url is not allowlisted official domain")
     content_type = (fetch_result.content_type or "").split(";")[0].strip().lower()
     if content_type and content_type not in ALLOWED_CONTENT_TYPES:

@@ -206,6 +206,33 @@ class OfficialSourceProvider:
     capabilities: ProviderCapabilities = ProviderCapabilities()
     request_policy: ProviderRequestPolicy = ProviderRequestPolicy()
 
+    def validate_contract(self) -> None:
+        """Fail closed when a fetch-capable provider lacks a safe domain scope."""
+        if not self.capabilities.fetch:
+            return
+        from app.services.source_fetcher import domains_within_global_allowlist
+
+        if not domains_within_global_allowlist(self.official_domains):
+            raise ProviderError(ERR_SSRF_BLOCKED, "provider_domain_scope_invalid")
+
+    def is_official_url(self, url: str) -> bool:
+        """Return whether *url* is globally official and owned by this provider."""
+        from app.services.source_fetcher import (
+            ALLOWED_DOMAINS,
+            url_matches_allowed_domains,
+        )
+
+        self.validate_contract()
+        return (
+            url_matches_allowed_domains(url, ALLOWED_DOMAINS)
+            and url_matches_allowed_domains(url, self.official_domains)
+        )
+
+    def validate_official_url(self, url: str) -> None:
+        """Reject a URL outside the executing provider's closed origin scope."""
+        if not self.is_official_url(url):
+            raise ProviderError(ERR_SSRF_BLOCKED, "provider_origin_not_allowed")
+
     async def discover(
         self,
         *,
@@ -243,12 +270,14 @@ class OfficialSourceProvider:
             fetch_source,
         )
 
+        self.validate_contract()
         try:
             return fetch_source(
                 url,
                 resolver=resolver or default_resolver,
                 transport=transport,
                 timeout=self.request_policy.request_timeout_seconds,
+                allowed_domains=self.official_domains,
             )
         except SourceFetchError as e:
             raise self._provider_error_from_fetch_error(e) from e

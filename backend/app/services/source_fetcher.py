@@ -29,6 +29,7 @@ import ipaddress
 import math
 import socket
 import ssl
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
@@ -121,12 +122,44 @@ class FetchResult:
     redirect_chain: list[str] = field(default_factory=list)
 
 
-def _host_allowed(hostname: str) -> bool:
-    host = hostname.lower().rstrip(".")
-    for domain in ALLOWED_DOMAINS:
-        if host == domain or host.endswith("." + domain):
+def host_matches_allowed_domains(
+    hostname: str,
+    allowed_domains: Collection[str],
+) -> bool:
+    """Return whether *hostname* is exactly or below a controlled domain.
+
+    Both host and domain names are normalized to lowercase without a trailing
+    dot. Substring matching is deliberately forbidden.
+    """
+    host = (hostname or "").lower().rstrip(".")
+    if not host:
+        return False
+    for raw_domain in allowed_domains:
+        domain = (raw_domain or "").lower().rstrip(".")
+        if domain and (host == domain or host.endswith("." + domain)):
             return True
     return False
+
+
+def url_matches_allowed_domains(
+    url: str,
+    allowed_domains: Collection[str],
+) -> bool:
+    """Apply :func:`host_matches_allowed_domains` to a URL hostname."""
+    try:
+        hostname = urlparse(url).hostname or ""
+    except (TypeError, ValueError):
+        return False
+    return host_matches_allowed_domains(hostname, allowed_domains)
+
+
+def domains_within_global_allowlist(allowed_domains: Collection[str]) -> bool:
+    """Validate a non-empty provider domain scope against the global boundary."""
+    domains = tuple(allowed_domains or ())
+    return bool(domains) and all(
+        host_matches_allowed_domains(domain, ALLOWED_DOMAINS)
+        for domain in domains
+    )
 
 
 def _ip_is_safe(ip_str: str) -> bool:
@@ -206,7 +239,9 @@ class ValidatedDestination:
 
 
 def validate_destination(
-    url: str, resolver=default_resolver
+    url: str,
+    resolver=default_resolver,
+    allowed_domains: Collection[str] | None = None,
 ) -> ValidatedDestination:
     """Validate a single URL and return a typed immutable destination.
 
@@ -235,7 +270,11 @@ def validate_destination(
     except ValueError:
         pass
 
-    if not _host_allowed(hostname):
+    if not host_matches_allowed_domains(hostname, ALLOWED_DOMAINS):
+        raise SourceFetchError("domain_not_allowed", _EC["domain_not_allowed"])
+    if allowed_domains is not None and not host_matches_allowed_domains(
+        hostname, allowed_domains,
+    ):
         raise SourceFetchError("domain_not_allowed", _EC["domain_not_allowed"])
 
     try:
@@ -260,8 +299,14 @@ def validate_destination(
 
 
 # Backward-compatible wrapper — returns validated IPs only.
-def validate_url(url: str, resolver=default_resolver) -> list[str]:
-    dest = validate_destination(url, resolver=resolver)
+def validate_url(
+    url: str,
+    resolver=default_resolver,
+    allowed_domains: Collection[str] | None = None,
+) -> list[str]:
+    dest = validate_destination(
+        url, resolver=resolver, allowed_domains=allowed_domains,
+    )
     return list(dest.validated_ips)
 
 
@@ -571,6 +616,7 @@ def fetch_source(
     transport=None,
     timeout: int | None = None,
     max_bytes: int = MAX_RESPONSE_BYTES,
+    allowed_domains: Collection[str] | None = None,
 ) -> FetchResult:
     """Securely fetch a source URL with per-hop destination validation.
 
@@ -587,7 +633,11 @@ def fetch_source(
     current = url
     chain: list[str] = []
     for _hop in range(MAX_REDIRECTS + 1):
-        dest = validate_destination(current, resolver=resolver)
+        dest = validate_destination(
+            current,
+            resolver=resolver,
+            allowed_domains=allowed_domains,
+        )
         chain.append(dest.url)
 
         if isinstance(transport, HttpxSourceTransport):

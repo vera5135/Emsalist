@@ -62,14 +62,18 @@ def get(provider_code: str) -> OfficialSourceProvider:
         raise ProviderError("unknown_provider", f"unknown provider: {provider_code}")
     if not is_enabled(provider_code):
         raise ProviderError("provider_disabled", f"provider disabled: {provider_code}")
-    return _PROVIDERS[provider_code]
+    provider = _PROVIDERS[provider_code]
+    provider.validate_contract()
+    return provider
 
 
 def get_definition(provider_code: str) -> OfficialSourceProvider:
     """Return the provider definition regardless of enablement (metadata only)."""
     if provider_code not in _PROVIDERS:
         raise ProviderError("unknown_provider", f"unknown provider: {provider_code}")
-    return _PROVIDERS[provider_code]
+    provider = _PROVIDERS[provider_code]
+    provider.validate_contract()
+    return provider
 
 
 def enabled() -> list[str]:

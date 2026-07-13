@@ -364,6 +364,9 @@ async def _fetch_parse_ingest(db, provider, cand, *, transport, resolver, sleepe
         sleeper=sleeper,
         call=lambda: provider.fetch(cand, transport=transport, resolver=resolver),
     )
+    # Defense in depth: even a faulty/fake provider.fetch implementation may
+    # not hand foreign globally-allowlisted bytes to parse or canonical trust.
+    provider.validate_official_url(fetch_result.final_url)
     parsed: ParsedOfficialSource = await provider.parse(cand, fetch_result)
     # Content-quality gate (defense in depth; providers also gate in parse()).
     assert_meaningful_body(parsed.raw_text)
@@ -382,6 +385,7 @@ async def _fetch_parse_ingest(db, provider, cand, *, transport, resolver, sleepe
         raw_document_hash=extracted.raw_document_hash,
         extraction_method=extracted.extraction_method,
         extraction_version=extracted.parser_version,
+        expected_official_domains=provider.official_domains,
     )
 
 
