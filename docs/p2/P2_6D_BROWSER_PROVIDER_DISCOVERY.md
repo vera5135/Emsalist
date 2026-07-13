@@ -15,10 +15,19 @@ P2.6D in-scope surfaces are:
 - Danıştay Karar Arama
 - AYM Norm Denetimi
 - AYM Bireysel Başvuru
+- Uyuşmazlık Mahkemesi decision search surface
 
 P2.6C preserves `requires_browser=True` and the fail-closed
 `browser_discovery_unavailable` operational state. It does not claim these
 providers are live-ready.
+
+Uyuşmazlık enters P2.6D because its accepted current provider capability
+declares `requires_browser=True`, while its current live discovery surface has
+not been validated through a controlled browser inventory. This assignment does
+not claim that the current website definitely requires JavaScript, that the
+historically assumed `/aramalist` contract remains current, or that any legacy
+UYAP surface is the accepted discovery endpoint. P2.6D must determine the real
+current official surface.
 
 ## Required trust boundary
 
@@ -65,3 +74,20 @@ read-only controlled browser inventory of the current official surfaces. The
 inventory must establish current selectors/interactions, listing response
 shape, candidate identifier syntax, pagination, and challenge markers without
 opening decision detail content or committing captured browser artifacts.
+
+## Uyuşmazlık inventory requirements
+
+The controlled P2.6D inventory for Uyuşmazlık must determine:
+
+- the current official discovery origin;
+- whether discovery is actually browser-required;
+- the current search interaction;
+- the listing request/response contract;
+- candidate identifier syntax and whether a stable official candidate ID exists;
+- pagination behavior;
+- challenge and access-control markers; and
+- whether the current official surface exposes a safe non-browser discovery contract.
+
+Real inventory may conclude that Uyuşmazlık does not require browser discovery.
+If so, a future implementation may change `requires_browser` based on executable
+current-surface evidence. P2.6C does not make that change without the inventory.

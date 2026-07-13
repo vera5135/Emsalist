@@ -15,15 +15,15 @@ and version-scoped official-fetch evidence.
 | Yargıtay | discovery/fetch/parse/ingestion fixture-tested | Browser-required; deferred to P2.6D; fail-closed |
 | Danıştay | discovery/fetch/parse/ingestion fixture-tested | Browser-required; deferred to P2.6D; fail-closed |
 | AYM | Norm/Bireysel parse and trust boundaries fixture-tested | Browser-required; deferred to P2.6D; fail-closed |
-| Uyuşmazlık | discovery/fetch/parse/ingestion fixture-tested | Current capability is browser-required; excluded from P2.6C non-browser smoke |
+| Uyuşmazlık | discovery/fetch/parse/ingestion fixture-tested | Browser-required under the accepted current capability; excluded from P2.6C non-browser smoke; current discovery-surface validation deferred to P2.6D |
 | Mevzuat | discovery/fetch/parse/ingestion and article locators fixture-tested | Eligible controlled smoke attempted; safe outcome `fetch_failed` |
 | Resmî Gazete | issue/instrument distinction fixture-tested | Eligible controlled smoke attempted; safe outcome `fetch_failed` |
 
-The controlled live smoke does not make all six providers production-live. The
-Yargıtay, Danıştay and AYM browser strategy work is formally deferred to
-[P2.6D](P2_6D_BROWSER_PROVIDER_DISCOVERY.md). No selectors were invented from
-legacy fixtures. The current Uyuşmazlık capability also remains browser-required
-and was automatically excluded by the same capability policy.
+The controlled live smoke does not make all six providers production-live.
+Yargıtay, Danıştay, AYM and Uyuşmazlık browser/current-surface discovery work is
+formally deferred to [P2.6D](P2_6D_BROWSER_PROVIDER_DISCOVERY.md). No selectors
+or endpoints were inferred from legacy fixtures. AYM retains distinct Norm
+Denetimi and Bireysel Başvuru surfaces for future inventory.
 
 ## Controlled non-browser live evidence
 

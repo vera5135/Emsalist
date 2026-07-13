@@ -62,7 +62,7 @@ Hiçbir sağlayıcı kodu doğrudan trust üretemez. `record.verification_status
 | Yargıtay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; canlı browser discovery P2.6D'ye ertelendi ve P2.6C'de `browser_discovery_unavailable` ile fail-closed kalır. |
 | Danıştay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; canlı browser discovery P2.6D'ye ertelendi. Board/daire bilgisi numbered chamber'a indirgenmez. |
 | AYM | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; Norm Denetimi ve Bireysel Başvuru browser discovery P2.6D'ye ertelendi. Eksik canonical karar numarası uydurulmaz. |
-| Uyuşmazlık Mah. | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Mevcut capability `requires_browser=True` olduğu için non-browser live smoke'a otomatik olarak uygun değildir. Görüntü/indirme temsil farklılığında aynı içerik duplicate oluşturmaz. |
+| Uyuşmazlık Mah. | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Kabul edilen mevcut capability `requires_browser=True`; P2.6C non-browser live smoke için `not_eligible`/`not_attempted`. Güncel discovery-surface doğrulaması P2.6D'ye ertelendi. |
 | Mevzuat | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Mevzuat Bilgi Sistemi. Madde/Ek Madde/Geçici Madde/Mükerrer Madde alt türü ve citable locator provenance korunur. Navigasyon/kurabiye kromu kanonik içeriğe karışmaz. |
 | Resmî Gazete | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gazete sayısı vs yayımlanmış enstrüman ayırımı. Enstrüman segmentasyonu belirsiz ise uydurulmaz; `manual_review_required`. |
 
@@ -126,7 +126,8 @@ Operasyonel durum çözümleme sırası saf ve I/O'suzdur:
 9. son terminal run `completed_with_errors` ise → `degraded`
 10. son terminal run `completed` ise → `available`
 
-Yargıtay, Danıştay ve AYM için browser discovery P2.6D'ye ertelenmiştir.
+Yargıtay, Danıştay, AYM ve Uyuşmazlık için browser discovery/current-surface
+doğrulaması P2.6D'ye ertelenmiştir.
 Capability bayrağı değiştirilmez ve browser prerequisite karşılanmadan durum
 `transport_unavailable`, `fixture_tested_only` veya `available` seviyesine
 ilerlemez.
