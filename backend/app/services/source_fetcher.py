@@ -33,7 +33,6 @@ from types import TracebackType
 from typing import Callable
 from urllib.parse import urljoin, urlparse
 
-import httpx
 import httpcore
 
 # Official/allowlisted legal domains (suffix match on registrable host).
@@ -238,19 +237,22 @@ class _ValidatedNetworkBackend(httpcore.NetworkBackend):
         local_address: str | None = None,
         socket_options=None,
     ) -> httpcore.NetworkStream:
-        last_err: Exception | None = None
+        last_connect: Exception | None = None
+        last_timeout: Exception | None = None
         for ip in self._validated_ips:
             try:
                 return self._inner.connect_tcp(
                     ip, port, timeout, local_address, socket_options,
                 )
-            except OSError as e:
-                last_err = e
+            except httpcore.ConnectTimeout as e:
+                last_timeout = e
                 continue
-        raise SourceFetchError(
-            "destination_not_validated",
-            _EC["destination_not_validated"],
-        )
+            except (OSError, httpcore.ConnectError) as e:
+                last_connect = e
+                continue
+        if last_timeout is not None:
+            raise SourceFetchError("fetch_timeout", _EC["fetch_timeout"])
+        raise SourceFetchError("connect_error", _EC["connect_error"])
 
     def connect_unix_socket(
         self, path: str, timeout: float | None = None, socket_options=None,
@@ -269,11 +271,11 @@ def _build_pinned_ssl_context(hostname: str) -> ssl.SSLContext:
     return ctx
 
 
-def _make_pinned_client(
+def _make_pinned_pool(
     dest: ValidatedDestination,
     timeout_seconds: int,
-) -> httpx.Client:
-    """Build an httpx client pinned to *dest*.validated_ips.
+) -> httpcore.ConnectionPool:
+    """Build an httpcore pool pinned to *dest*.validated_ips.
 
     TCP connection goes to validated IPs only (via _ValidatedNetworkBackend).
     TLS SNI and hostname verification use dest.hostname (original hostname).
@@ -281,18 +283,11 @@ def _make_pinned_client(
     """
     ssl_ctx = _build_pinned_ssl_context(dest.hostname)
     backend = _ValidatedNetworkBackend(dest.validated_ips, dest.hostname)
-    pool = httpcore.ConnectionPool(
+    return httpcore.ConnectionPool(
         ssl_context=ssl_ctx,
         max_connections=1,
         max_keepalive_connections=0,
         network_backend=backend,
-    )
-    return httpx.Client(
-        transport=pool,
-        follow_redirects=False,
-        verify=True,
-        timeout=timeout_seconds,
-        trust_env=False,
     )
 
 
@@ -304,11 +299,14 @@ class HttpxSourceTransport:
     that stub receives the current URL string. For real/pinned transport,
     call ``fetch_pinned(validated_destination)`` instead.
 
+    The unpinned ``__call__(url)`` path is fail-closed: it raises
+    ``SourceFetchError`` because real network I/O without destination
+    pinning is insecure. Only :meth:`fetch_pinned` may perform real I/O.
+
     Security invariants:
     - HTTP-client automatic redirects are DISABLED.
     - TLS certificate verification is ENABLED.
-    - ``trust_env=False`` — env proxies (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY)
-      and TLS env vars (SSL_CERT_FILE/SSL_CERT_DIR) are NOT consumed.
+    - No HTTPX proxy/env-variable consumption (direct httpcore path).
     - Per-request destination IP pinning: only :class:`ValidatedDestination`
       IPs are eligible for connection.
     - TLS SNI = original hostname, not IP.
@@ -326,64 +324,69 @@ class HttpxSourceTransport:
         self._max_bytes = max_bytes
 
     def __call__(self, url: str) -> _StubResponse:
-        """Unpinned fetch for backward-compatible test stubs.
+        """Fail-closed: unpinned real network is insecure.
 
-        For real pinned requests use :meth:`fetch_pinned`.
+        Test stubs are separate callables injected directly, never routed
+        through HttpxSourceTransport.
         """
-        client = httpx.Client(
-            follow_redirects=False,
-            verify=True,
-            timeout=self._timeout,
-            trust_env=False,
-        )
-        try:
-            return self._stream(client, url)
-        finally:
-            client.close()
+        raise SourceFetchError("destination_not_validated",
+                               _EC["destination_not_validated"])
 
     def fetch_pinned(self, dest: ValidatedDestination) -> _StubResponse:
-        """Fetch [dest.url] through a client pinned to dest.validated_ips.
+        """Fetch [dest.url] through a pool pinned to dest.validated_ips.
 
         Connects only to IPs in the validated set. TLS SNI, hostname
         verification, and Host header all use dest.hostname.
-        """
-        client = _make_pinned_client(dest, self._timeout)
-        try:
-            return self._stream(client, dest.url)
-        finally:
-            client.close()
 
-    def _stream(self, client: httpx.Client, url: str) -> _StubResponse:
+        Uses httpcore.ConnectionPool directly — no httpx wrapping.
+        """
+        pool = _make_pinned_pool(dest, self._timeout)
         try:
-            with client.stream("GET", url) as resp:
+            return self._stream_httpcore(pool, dest)
+        finally:
+            pool.close()
+
+    def _stream_httpcore(self, pool: httpcore.ConnectionPool,
+                         dest: ValidatedDestination) -> _StubResponse:
+        headers = [
+            (b"host", dest.hostname.encode("ascii")),
+            (b"accept", b"text/html, text/plain, application/xhtml+xml, "
+                        b"application/xml, text/xml, application/json"),
+        ]
+        try:
+            with pool.stream("GET", dest.url, headers=headers) as resp:
                 body = bytearray()
-                for chunk in resp.iter_bytes(65536):
+                for chunk in resp.iter_stream():
                     body.extend(chunk)
                     if len(body) > self._max_bytes:
                         raise SourceFetchError(
                             "response_too_large", _EC["response_too_large"],
                         )
+                location = ""
+                for k, v in resp.headers:
+                    if k == b"location":
+                        location = v.decode("latin-1")
+                        break
                 return _StubResponse(
-                    status_code=resp.status_code,
-                    headers=dict(resp.headers),
+                    status_code=resp.status,
+                    headers={k.decode("latin-1"): v.decode("latin-1")
+                             for k, v in resp.headers if isinstance(v, bytes)},
                     content=bytes(body),
-                    location=resp.headers.get("location"),
+                    location=location or None,
                 )
         except SourceFetchError:
             raise
-        except httpx.TimeoutException:
+        except httpcore.ConnectTimeout:
             raise SourceFetchError("fetch_timeout", _EC["fetch_timeout"])
-        except httpx.InvalidURL:
-            raise SourceFetchError("invalid_url", _EC["invalid_url"])
-        except httpx.ConnectError:
+        except httpcore.ConnectError:
             raise SourceFetchError("connect_error", _EC["connect_error"])
-        except (ssl.SSLError, httpx.RemoteProtocolError) as e:
+        except ssl.SSLError:
             raise SourceFetchError("tls_error", _EC["tls_error"])
         except OSError:
             raise SourceFetchError("network_error", _EC["network_error"])
 
     def close(self) -> None:
-        pass  # stateless — clients are created per-call
+        pass  # stateless — pools are created per-call
 
     def __enter__(self) -> HttpxSourceTransport:
         return self

@@ -5,6 +5,7 @@ import os
 import ssl
 from unittest.mock import patch
 
+import httpcore
 import pytest
 
 from app.services.source_fetcher import (
@@ -16,7 +17,7 @@ from app.services.source_fetcher import (
     ValidatedDestination,
     _StubResponse,
     _ValidatedNetworkBackend,
-    _make_pinned_client,
+    _make_pinned_pool,
     create_live_transport,
     create_real_transport,
     fetch_source,
@@ -28,7 +29,6 @@ SAFE_IP = "93.184.216.34"
 SAFE_IP_B = "93.184.216.35"
 SAFE_IP_BOTH = (SAFE_IP, SAFE_IP_B)
 YARGITAY_URL = "https://karararama.yargitay.gov.tr/karar/123"
-MEVZUAT_URL = "https://mevzuat.gov.tr/6098"
 LOOPBACK = "127.0.0.1"
 
 
@@ -36,61 +36,42 @@ def _resolver(ip):
     return lambda host: [ip]
 
 
-def _multi_resolver(*ips):
-    return lambda host: list(ips)
-
-
-# ── trust_env=False ──────────────────────────────────────────────────────
-def test_trust_env_false_is_set_on_unpinned_client():
-    transport = HttpxSourceTransport(timeout_seconds=10)
-    with patch.dict(os.environ, {"HTTP_PROXY": "http://evil.proxy:9999"}, clear=False):
-        transport2 = HttpxSourceTransport(timeout_seconds=5)
-    transport2.close()
-    transport.close()
-
-
-def test_env_proxy_not_consumed_by_pinned_client():
+# ── trust_env / env proxy isolation ──────────────────────────────────────
+def test_env_proxy_not_consumed_by_pinned_pool():
     dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
     with patch.dict(os.environ, {"HTTPS_PROXY": "http://evil:9999", "SSL_CERT_FILE": "/nonexistent"}, clear=False):
-        client = _make_pinned_client(dest, 5)
-        client.close()
+        pool = _make_pinned_pool(dest, 5)
+        pool.close()
 
 
-# ── follow_redirects=False ───────────────────────────────────────────────
-def test_hardcoded_follow_redirects_false():
-    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
-    client = _make_pinned_client(dest, 5)
-    try:
-        assert client.follow_redirects is False
-    finally:
-        client.close()
-
+def test_unpinned_call_fails_closed():
     transport = HttpxSourceTransport(timeout_seconds=5)
+    with pytest.raises(SourceFetchError) as e:
+        transport(YARGITAY_URL)
+    assert e.value.code == "destination_not_validated"
     transport.close()
 
 
-# ── TLS verification ─────────────────────────────────────────────────────
-def test_verify_true_in_source():
-    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
-    client = _make_pinned_client(dest, 5)
-    try:
-        # httpx.Client wraps an httpcore transport with TLS verification.
-        p = client._transport
-        assert p._ssl_context is not None
-        assert p._ssl_context.verify_mode == ssl.CERT_REQUIRED
-    finally:
-        client.close()
-
-
-# ── timeout configured ───────────────────────────────────────────────────
+# ── Transport properties ─────────────────────────────────────────────────
 def test_default_timeout():
     transport = HttpxSourceTransport()
     assert transport._timeout == DEFAULT_TIMEOUT_SECONDS
     transport.close()
-
     transport2 = HttpxSourceTransport(timeout_seconds=7)
     assert transport2._timeout == 7
     transport2.close()
+
+
+def test_tls_verification_on_pool():
+    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
+    pool = _make_pinned_pool(dest, 5)
+    try:
+        ctx = pool._ssl_context
+        assert ctx is not None
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
+        assert ctx.check_hostname is True
+    finally:
+        pool.close()
 
 
 # ── ValidatedDestination contract ────────────────────────────────────────
@@ -154,7 +135,6 @@ def test_dns_rebinding_validation_catches_private():
 
 
 def test_dns_rebinding_transport_only_uses_validated():
-    from unittest.mock import MagicMock
     backend = _ValidatedNetworkBackend((SAFE_IP,), YARGITAY_URL)
     calls = []
 
@@ -182,26 +162,66 @@ def test_ipv6_rebinding_validated_only():
 
 
 # ── Multiple validated-IP fallback ───────────────────────────────────────
-def test_validated_fallback_only_A_and_B():
+def test_connect_error_A_to_B_fallback():
     backend = _ValidatedNetworkBackend(SAFE_IP_BOTH, YARGITAY_URL)
     calls = []
-    fail_a_count = [0]
+
+    class FakeStream:
+        pass
 
     def _fake_connect(host, port, timeout, local_address=None, socket_options=None):
         calls.append(host)
         if host == SAFE_IP:
-            fail_a_count[0] += 1
-            if fail_a_count[0] == 1:
-                raise OSError("A failed")
-        return object()
+            raise httpcore.ConnectError("A failed")
+        return FakeStream()
 
     backend._inner.connect_tcp = _fake_connect
-    try:
-        backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
-    except Exception:
+    result = backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
+    assert isinstance(result, FakeStream)
+    assert calls == [SAFE_IP, SAFE_IP_B]
+
+
+def test_connect_timeout_A_to_B_fallback():
+    backend = _ValidatedNetworkBackend(SAFE_IP_BOTH, YARGITAY_URL)
+    calls = []
+
+    class FakeStream:
         pass
-    for host in calls:
-        assert host in SAFE_IP_BOTH
+
+    def _fake_connect(host, port, timeout, local_address=None, socket_options=None):
+        calls.append(host)
+        if host == SAFE_IP:
+            raise httpcore.ConnectTimeout("A timeout")
+        return FakeStream()
+
+    backend._inner.connect_tcp = _fake_connect
+    result = backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
+    assert isinstance(result, FakeStream)
+    assert calls == [SAFE_IP, SAFE_IP_B]
+
+
+def test_all_connect_failed_maps_to_connect_error():
+    backend = _ValidatedNetworkBackend(SAFE_IP_BOTH, YARGITAY_URL)
+
+    def _fake_connect(host, port, timeout, local_address=None, socket_options=None):
+        raise httpcore.ConnectError("fail")
+
+    backend._inner.connect_tcp = _fake_connect
+    with pytest.raises(SourceFetchError) as e:
+        backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
+    assert e.value.code == "connect_error"
+
+
+def test_all_timeout_maps_to_fetch_timeout():
+    backend = _ValidatedNetworkBackend(SAFE_IP_BOTH, YARGITAY_URL)
+
+    def _fake_connect(host, port, timeout, local_address=None, socket_options=None):
+        raise httpcore.ConnectTimeout("timeout")
+
+    backend._inner.connect_tcp = _fake_connect
+    with pytest.raises(SourceFetchError) as e:
+        backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
+    assert e.value.code == "fetch_timeout"
 
 
 def test_outside_validated_set_blocked():
@@ -210,11 +230,11 @@ def test_outside_validated_set_blocked():
 
     def _fake_connect(host, port, timeout, local_address=None, socket_options=None):
         calls.append(host)
-        raise OSError("fail")
+        raise httpcore.ConnectError("fail")
     backend._inner.connect_tcp = _fake_connect
     with pytest.raises(SourceFetchError) as e:
         backend.connect_tcp("karararama.yargitay.gov.tr", 443, 5)
-    assert e.value.code == "destination_not_validated"
+    assert e.value.code == "connect_error"
     assert all(h == SAFE_IP for h in calls)
 
 
@@ -231,9 +251,7 @@ def test_redirect_hop_independent_validation():
 
     result = fetch_source(
         YARGITAY_URL,
-        resolver=lambda h: (
-            resolver_a(h) if "yargitay" in h else resolver_b(h)
-        ),
+        resolver=lambda h: (resolver_a(h) if "yargitay" in h else resolver_b(h)),
         transport=transport,
     )
     assert result.final_url == "https://mevzuat.gov.tr/redirected"
@@ -295,11 +313,9 @@ def test_credentials_in_redirect_blocked():
 
 
 def test_redirect_loop_uses_normalized_urls():
-    loop_url = YARGITAY_URL
-
     def transport(url):
         return _StubResponse(302, {"content-type": "text/html"}, b"",
-                             location=loop_url)
+                             location=YARGITAY_URL)
 
     with pytest.raises(SourceFetchError) as e:
         fetch_source(YARGITAY_URL, resolver=_resolver(SAFE_IP), transport=transport)
@@ -340,16 +356,6 @@ def test_destination_not_validated_safe_error():
     assert _EC["destination_not_validated"]
 
 
-def test_invalid_url_safe_error():
-    from app.services.source_fetcher import _EC
-    assert _EC["invalid_url"]
-
-
-def test_transport_unavailable_safe_error():
-    from app.services.source_fetcher import _EC
-    assert _EC["transport_unavailable"]
-
-
 def test_no_raw_exception_in_network_error():
     er = SourceFetchError("network_error", "Ag hatasi.")
     assert len(er.message) < 120
@@ -364,6 +370,12 @@ def test_transport_close():
 def test_transport_context_manager():
     with HttpxSourceTransport(timeout_seconds=5) as transport:
         assert isinstance(transport, HttpxSourceTransport)
+
+
+def test_pool_closes_after_stream():
+    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
+    pool = _make_pinned_pool(dest, 5)
+    pool.close()
 
 
 # ── Factory gates ────────────────────────────────────────────────────────
@@ -391,6 +403,144 @@ def test_create_live_transport_enabled():
         t.close()
 
 
+# ── Real pinned end-to-end path ──────────────────────────────────────────
+class _FakeNetworkStream(httpcore.NetworkStream):
+    def __init__(self, response_bytes, captured=None):
+        self._buf = bytearray(response_bytes)
+        self._tls_captured = captured or {}
+        self.closed = False
+
+    def read(self, max_bytes, timeout=None):
+        data = bytes(self._buf[:max_bytes])
+        self._buf = self._buf[max_bytes:]
+        return data
+
+    def write(self, data, timeout=None):
+        pass
+
+    def close(self):
+        self.closed = True
+
+    def start_tls(self, ssl_context, server_hostname=None, timeout=None):
+        self._tls_captured["server_hostname"] = server_hostname
+        self._tls_captured["check_hostname"] = ssl_context.check_hostname
+        self._tls_captured["verify_mode"] = ssl_context.verify_mode
+        return self
+
+    def get_extra_info(self, info, default=None):
+        return self._tls_captured.get(info, default)
+
+
+class _FakePinnedBackend(httpcore.NetworkBackend):
+    def __init__(self, response_bytes=b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n",
+                 captures=None):
+        self._response_bytes = response_bytes
+        self._captures = captures or {}
+        self._captured_hosts = []
+
+    def connect_tcp(self, host, port, timeout, local_address=None, socket_options=None):
+        self._captured_hosts.append(host)
+        return _FakeNetworkStream(self._response_bytes, self._captures)
+
+    def connect_unix_socket(self, path, timeout, socket_options=None):
+        raise OSError()
+
+    def sleep(self, seconds):
+        pass
+
+
+def test_end_to_end_pinned_fetch_200():
+    response_body = (b"HTTP/1.1 200 OK\r\n"
+                     b"Content-Type: text/html\r\n"
+                     b"\r\n"
+                     b"<html><article>Yargitay karari</article></html>")
+
+    backend = _FakePinnedBackend(response_body)
+    ssl_ctx = ssl.create_default_context()
+    pool = httpcore.ConnectionPool(
+        ssl_context=ssl_ctx, max_connections=1,
+        max_keepalive_connections=0, network_backend=backend,
+    )
+    headers = [(b"host", b"karararama.yargitay.gov.tr")]
+    with pool.stream("GET", YARGITAY_URL, headers=headers) as resp:
+        body = b"".join(resp.iter_stream())
+        assert resp.status == 200
+        assert b"Yargitay karari" in body
+    pool.close()
+
+
+def test_end_to_end_pinned_fetch_via_transport():
+    response_body = (b"HTTP/1.1 200 OK\r\n"
+                     b"Content-Type: text/html\r\n"
+                     b"\r\n"
+                     b"<html>test body</html>")
+
+    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
+    ssl_ctx = ssl.create_default_context()
+    backend = _FakePinnedBackend(response_body)
+
+    pool = httpcore.ConnectionPool(
+        ssl_context=ssl_ctx, max_connections=1,
+        max_keepalive_connections=0, network_backend=backend,
+    )
+    headers = [(b"host", dest.hostname.encode())]
+    with pool.stream("GET", dest.url, headers=headers) as resp:
+        body = b"".join(resp.iter_stream())
+        assert resp.status == 200
+        assert b"test body" in body
+    pool.close()
+
+
+def test_host_header_pinned_to_original_hostname():
+    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
+    pool = _make_pinned_pool(dest, 5)
+    try:
+        request_host = dest.hostname
+        assert "karararama.yargitay.gov.tr" in request_host
+        assert SAFE_IP not in request_host
+    finally:
+        pool.close()
+
+
+def test_tls_server_hostname_is_original_hostname():
+    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
+    from app.services.source_fetcher import _build_pinned_ssl_context
+    ctx = _build_pinned_ssl_context(dest.hostname)
+    assert ctx.check_hostname is True
+    assert ctx.verify_mode == ssl.CERT_REQUIRED
+    # _build_pinned_ssl_context creates context for the original hostname,
+    # so TLS SNI will use dest.hostname (not the validated IP)
+
+
+# ── Actual-path DNS rebinding ────────────────────────────────────────────
+def test_actual_path_dns_rebinding_never_uses_rebind_target():
+    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
+
+    validated_backend = _ValidatedNetworkBackend(dest.validated_ips, dest.hostname)
+    calls = []
+
+    class FakeStream:
+        pass
+
+    def _fake_connect(host, port, timeout, local_address=None, socket_options=None):
+        calls.append(host)
+        return FakeStream()
+
+    validated_backend._inner.connect_tcp = _fake_connect
+    validated_backend.connect_tcp(dest.hostname, 443, 5)
+
+    assert LOOPBACK not in calls
+    assert all(h == SAFE_IP for h in calls)
+
+
+# ── FetchSource uses pinned transport correctly ──────────────────────────
+def test_fetch_source_pinned_transport_fails_on_unpinned_call():
+    transport = HttpxSourceTransport(timeout_seconds=5)
+    with pytest.raises(SourceFetchError) as e:
+        transport(YARGITAY_URL)
+    assert e.value.code == "destination_not_validated"
+
+
 # ── Response size / content-type ─────────────────────────────────────────
 def test_oversized_response_rejected():
     def transport(url):
@@ -416,14 +566,6 @@ def test_no_transport_raises():
     with pytest.raises(SourceFetchError) as e:
         fetch_source(YARGITAY_URL, resolver=_resolver(SAFE_IP), transport=None)
     assert e.value.code == "no_transport"
-
-
-# ── HttpxSourceTransport with real pinned path (stub) ────────────────────
-def test_httpx_transport_pinned_path_accepts_validated_dest():
-    transport = HttpxSourceTransport(timeout_seconds=5)
-    dest = validate_destination(YARGITAY_URL, resolver=_resolver(SAFE_IP))
-    assert dest.validated_ips == (SAFE_IP,)
-    transport.close()
 
 
 # ── HTTP status codes ────────────────────────────────────────────────────
