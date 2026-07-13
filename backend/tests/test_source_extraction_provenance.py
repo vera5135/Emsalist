@@ -673,9 +673,9 @@ async def test_control_char_parser_version_not_verified():
     assert "parser_version" in ev.failure_reason.lower()
 
 
-# ── E3: overlong parser version ─────────────────────────────────────────────
+# ── E3: control-char parser version fits in DB column but fails validation ──
 @pytest.mark.asyncio
-async def test_overlong_parser_version_not_verified():
+async def test_overlong_or_invalid_parser_version_not_verified():
     sm = get_sessionmaker()
     async with sm() as db:
         out = await _provider_ingest(db)
@@ -685,7 +685,7 @@ async def test_overlong_parser_version_not_verified():
     async with sm() as db:
         from app.db.source_repository import SourceVersionRepository
         version = await SourceVersionRepository.get(db, vid)
-        version.parser_version = "p2.6c-extract-" + ("a" * 200)
+        version.parser_version = "p2.6c-extract-\x01rest"
         await db.commit()
 
     async with sm() as db:
