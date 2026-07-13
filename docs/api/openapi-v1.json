@@ -7174,6 +7174,21 @@
       },
       "SourceParagraphResponse": {
         "properties": {
+          "article_kind": {
+            "default": "",
+            "title": "Article Kind",
+            "type": "string"
+          },
+          "article_label": {
+            "default": "",
+            "title": "Article Label",
+            "type": "string"
+          },
+          "article_locator_key": {
+            "default": "",
+            "title": "Article Locator Key",
+            "type": "string"
+          },
           "article_number": {
             "title": "Article Number",
             "type": "string"

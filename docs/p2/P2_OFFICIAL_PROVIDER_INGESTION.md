@@ -63,7 +63,7 @@ Hiçbir sağlayıcı kodu doğrudan trust üretemez. `record.verification_status
 | Danıştay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gerçek yüzey JS yüzeyi; browser gerektirir. Board/daire bilgisi korunur, numbered chamber'a indirgenmez. |
 | AYM | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gerçek yüzey JS yüzeyi. Bireysel başvuru (Başvuru No, karar no olmadan) `manual_review_required` hata koduyla işaretlenir; data uydurulmaz. |
 | Uyuşmazlık Mah. | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Halihazırda allowlist'te olan UYAP emsal yüzeyi üzerinden. Görüntü/indirme temsil farklılığında aynı içerik duplicate oluşturmaz. |
-| Mevzuat | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Mevzuat Bilgi Sistemi. Madde/Ek Madde/Geçici Madde parsing. Navigasyon/kurabiye kromu kanonik içeriğe karışmaz. |
+| Mevzuat | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Mevzuat Bilgi Sistemi. Madde/Ek Madde/Geçici Madde/Mükerrer Madde alt türü ve citable locator provenance korunur. Navigasyon/kurabiye kromu kanonik içeriğe karışmaz. |
 | Resmî Gazete | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gazete sayısı vs yayımlanmış enstrüman ayırımı. Enstrüman segmentasyonu belirsiz ise uydurulmaz; `manual_review_required`. |
 
 ## Ingestion run modeli
@@ -177,12 +177,51 @@ yapısı değişirse `provider_structure_changed` safe error code döner.
 - Aynı kanonik key + aynı `content_hash` → P2.6 `duplicate_verified` (versiyon çoğaltma YOK)
 - Değişen resmî içerik → yeni `SourceVersion`, eski versiyon korunur
 
+## Madde alt türü ve citable locator provenance
+
+Madde locator'ının tek kaynağı normalize edilmiş kanonik hukuk metnindeki satır
+başına bağlı, deterministik başlıktır. Provider discovery metadata'sı bu karara
+girdi değildir. Kapalı vocabulary:
+
+- `regular_article` → `Madde N`
+- `additional_article` → `Ek Madde N`
+- `provisional_article` → `Geçici Madde N`
+- `repeated_article` → `Mükerrer Madde N`
+
+Ekli numaralar boşlukları kaldırılmış ve harf eki kararlı büyük harfe çevrilmiş
+biçimde korunur (`1 / a` → `1/A`); baştaki sıfırlar integer dönüşümüyle
+silinmez. Gösterim etiketi Türkçedir. Locator key, alt tür ile numarayı birlikte
+taşır (`provisional_article:1`), dolayısıyla `Madde 1` ve `Geçici Madde 1`
+çakışmaz.
+
+Article-aware yeni `SourceVersion` satırlarında
+`metadata_json.paragraph_locator_version = "p2.6c-article-locator-1"` bulunur.
+Article-located `SourceParagraph.locator_json` yalnızca kontrollü
+`locator_type`, `article_kind`, `article_number`, `article_label`,
+`article_locator_key`, `article_locator_method` ve `article_locator_version`
+alanlarını taşır. `article_locator_method` değeri `deterministic_heading`'dir.
+Bu metadata extraction trust kanıtı değildir ve `verified_official` statüsü
+üretemez.
+
+Article-aware türler `legislation`, `regulation`, `communique`, `circular` ve
+`presidential_decree` ile sınırlıdır. `official_gazette_issue` bir yayın
+konteyneridir ve kendi başına madde namespace'i değildir; sayı metninde
+`Madde 1` geçse bile issue-level locator üretilmez. Deterministik biçimde ayrı
+bir kanonik kayıt olarak segmentlenmiş Resmî Gazete enstrümanı (örneğin
+`regulation`) kendi kanonik metninden locator alabilir. Belirsiz enstrüman
+segmentasyonu için mevcut `manual_review_required` davranışı korunur.
+
+Geçmiş satırlar backfill edilmez. `article_number` bulunup kontrollü alt tür
+provenance'ı bulunmayan paragraph, `regular_article` varsayılmaz; unknown/legacy
+olarak ele alınır. Gelecekteki P2.7 tüketicileri de eksik alt türü unknown/legacy
+saymalıdır. Aynı hash ile `duplicate_verified` sonucu mevcut immutable version
+ve paragraph setini sırf yeni locator metadata'sı eklemek için yeniden yazmaz.
+
 ## Kapsam dışı
 
 - Canlı zamanlanmış periodic provider ingestion (cron/scheduler integration yok — schedule-ready tasarım)
 - Browser discovery uygulanmadı; browser gerektiren gerçek yüzeyler canlı kabul sayılmaz.
 - Kontrollü live smoke acceptance henüz tamamlanmadı; fixture testleri canlı provider kabulü değildir.
-- Article subtype provenance henüz tamamlanmadı.
 - Mobil sağlayıcı yönetim UI (editor/admin backend altyapısı)
 - Authentication/CAPTCHA gerektiren sağlayıcı yüzeylerinin bypass edilmesi
 - OCR, UDF parser, dosya tabanlı ingestion (P2.5 kapsamı)

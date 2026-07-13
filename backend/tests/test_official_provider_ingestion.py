@@ -155,7 +155,9 @@ MEVZUAT_DETAIL = (
     "Yürürlük Tarihi: 01.07.2012\n"
     "Madde 1\nBu Kanunun amacı borç ilişkilerini düzenlemektir ve kapsamı geniştir.\n"
     "Ek Madde 1\nEk hükümler bu madde altında düzenlenmiştir.\n"
+    "Ek Madde 2/A\nEk bentli hükümler bu madde altında düzenlenmiştir.\n"
     "Geçici Madde 1\nGeçiş hükümleri burada yer alır.\n"
+    "Mükerrer Madde 1\nMükerrer hükümler burada yer alır.\n"
     "</main></body></html>"
 ).encode("utf-8")
 MEVZUAT_NAV_ONLY = (
@@ -165,7 +167,7 @@ MEVZUAT_NAV_ONLY = (
 RG_ISSUE_DETAIL = (
     "<html><body><h1>Resmî Gazete</h1><main>"
     "Sayı: 32345 Tarih: 12.07.2026\n"
-    "Bu sayıda yayımlanan düzenlemeler ve kararlar listelenmiştir. İçerik uzundur."
+    "Madde 1\nBu sayıda yayımlanan düzenlemeler ve kararlar listelenmiştir. İçerik uzundur."
     "</main></body></html>"
 ).encode("utf-8")
 UI_ONLY_DETAIL = _html("Arama")
@@ -472,8 +474,20 @@ async def test_mevzuat_article_parsing_and_nav_excluded(enabled_all):
             SourceVersion.source_record_id == rec.id))).scalars().first()
         paras = (await db.execute(select(SourceParagraph).where(
             SourceParagraph.source_version_id == ver.id))).scalars().all()
-    articles = {p.article_number for p in paras if p.article_number}
-    assert "1" in articles
+    locators = {p.locator_json.get("article_locator_key"): p for p in paras if p.article_number}
+    assert set(locators) == {
+        "regular_article:1",
+        "additional_article:1",
+        "additional_article:2/A",
+        "provisional_article:1",
+        "repeated_article:1",
+    }
+    assert locators["regular_article:1"].article_number == "1"
+    assert locators["additional_article:2/A"].heading_path == "Ek Madde 2/A"
+    assert locators["provisional_article:1"].heading_path == "Geçici Madde 1"
+    assert locators["regular_article:1"].text.startswith("Madde 1 ")
+    assert ver.metadata_json["paragraph_locator_version"] == "p2.6c-article-locator-1"
+    assert rec.verification_status == "verified_official"
     # Navigation/cookie chrome never becomes a paragraph.
     assert all("Çerez" not in p.text for p in paras)
 
@@ -500,8 +514,52 @@ async def test_resmi_gazete_issue_ingest(enabled_all):
     maker = get_sessionmaker()
     async with maker() as db:
         rec = (await db.execute(select(SourceRecord))).scalars().first()
+        version = await db.get(SourceVersion, rec.current_version_id)
+        paragraphs = (await db.execute(select(SourceParagraph).where(
+            SourceParagraph.source_version_id == version.id))).scalars().all()
     assert rec.source_type == "official_gazette_issue"
     assert rec.publication_date == "2026-07-12"
+    assert "paragraph_locator_version" not in version.metadata_json
+    assert all(p.article_number == "" for p in paragraphs)
+    assert all(p.locator_json == {} for p in paragraphs)
+
+
+@pytest.mark.asyncio
+async def test_resmi_gazete_segmented_regulation_has_article_locators(enabled_all):
+    search = _search_html(
+        '<a class="gazete-instrument" data-instrument-type="yonetmelik" '
+        'data-instrument-id="I-10" href="https://resmigazete.gov.tr/eskiler/regulation.htm">Yönetmelik</a>'
+    )
+    body = (
+        "<html><body><h1>Örnek Yönetmelik</h1><main>"
+        "Mevzuat No: 456 Tarih: 12.07.2026\n"
+        "Madde 1\nBu yönetmeliğin amacı belirlenmiştir.\n"
+        "Geçici Madde 1\nGeçiş uygulaması belirlenmiştir."
+        "</main></body></html>"
+    ).encode("utf-8")
+    summary = await _run(
+        provider_code="resmi_gazete",
+        run_type="fetch_and_ingest",
+        transport=make_transport({
+            "fihrist": StubResp(content=search),
+            "regulation.htm": StubResp(content=body),
+        }),
+        max_items=1,
+    )
+    assert summary.ingested == 1
+    maker = get_sessionmaker()
+    async with maker() as db:
+        rec = (await db.execute(select(SourceRecord))).scalars().first()
+        version = await db.get(SourceVersion, rec.current_version_id)
+        paragraphs = (await db.execute(select(SourceParagraph).where(
+            SourceParagraph.source_version_id == version.id))).scalars().all()
+    assert rec.source_type == "regulation"
+    assert rec.verification_status == "verified_official"
+    assert version.metadata_json["paragraph_locator_version"] == "p2.6c-article-locator-1"
+    assert {p.locator_json.get("article_locator_key") for p in paragraphs if p.article_number} == {
+        "regular_article:1",
+        "provisional_article:1",
+    }
 
 
 @pytest.mark.asyncio
