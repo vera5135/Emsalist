@@ -34,6 +34,7 @@ from app.services import source_paragraphs as para
 from app.services.source_canonical_key import build_canonical_key, normalize_source_type
 from app.services.source_extraction import (
     ALLOWED_EXTRACTION_METHODS,
+    is_extraction_aware_parser_version,
     validate_extraction_version,
 )
 from app.services.source_fetcher import (
@@ -188,7 +189,9 @@ async def get_version_official_evidence(
 
     is_provider_extracted = bool(
         (version.metadata_json or {}).get("extraction_method")
-    ) or version.raw_document_hash is not None
+    ) or version.raw_document_hash is not None or is_extraction_aware_parser_version(
+        version.parser_version
+    )
 
     if is_provider_extracted:
         if not _RAW_HASH_RE.match(version.raw_document_hash or ""):
@@ -200,7 +203,7 @@ async def get_version_official_evidence(
             return VersionEvidence.fail(
                 "provider-extracted version: extraction_method missing or unknown"
             )
-        if not version.parser_version or version.parser_version == PARSER_VERSION:
+        if not is_extraction_aware_parser_version(version.parser_version):
             return VersionEvidence.fail(
                 "provider-extracted version: parser_version is not extraction-aware"
             )

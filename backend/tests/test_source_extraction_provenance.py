@@ -626,3 +626,130 @@ async def test_raw_text_extraction_method_accepted():
         version = await SourceVersionRepository.get(db, result.source_version_id)
     assert version.metadata_json.get("extraction_method") == EXTRACTION_METHOD_RAW_TEXT
     assert result.verification_status == VERIFIED_OFFICIAL
+
+
+# ── E1: dual-marker-removal downgrade regression ────────────────────────────
+@pytest.mark.asyncio
+async def test_dual_marker_removal_downgrade_not_verified():
+    sm = get_sessionmaker()
+    async with sm() as db:
+        out = await _provider_ingest(db)
+        rec_id = out["result"].source_record_id
+        vid = out["result"].source_version_id
+
+    async with sm() as db:
+        from app.db.source_repository import SourceVersionRepository
+        version = await SourceVersionRepository.get(db, vid)
+        version.raw_document_hash = None
+        mj = dict(version.metadata_json or {})
+        mj.pop("extraction_method", None)
+        version.metadata_json = mj
+        await db.commit()
+
+    async with sm() as db:
+        ev = await get_version_official_evidence(db, rec_id, vid)
+    assert not ev.valid
+    assert "raw_document_hash" in ev.failure_reason.lower()
+
+
+# ── E2: control character parser version ────────────────────────────────────
+@pytest.mark.asyncio
+async def test_control_char_parser_version_not_verified():
+    sm = get_sessionmaker()
+    async with sm() as db:
+        out = await _provider_ingest(db)
+        rec_id = out["result"].source_record_id
+        vid = out["result"].source_version_id
+
+    async with sm() as db:
+        from app.db.source_repository import SourceVersionRepository
+        version = await SourceVersionRepository.get(db, vid)
+        version.parser_version = "p2.6c-extract-1\nmalformed"
+        await db.commit()
+
+    async with sm() as db:
+        ev = await get_version_official_evidence(db, rec_id, vid)
+    assert not ev.valid
+    assert "parser_version" in ev.failure_reason.lower()
+
+
+# ── E3: overlong parser version ─────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_overlong_parser_version_not_verified():
+    sm = get_sessionmaker()
+    async with sm() as db:
+        out = await _provider_ingest(db)
+        rec_id = out["result"].source_record_id
+        vid = out["result"].source_version_id
+
+    async with sm() as db:
+        from app.db.source_repository import SourceVersionRepository
+        version = await SourceVersionRepository.get(db, vid)
+        version.parser_version = "p2.6c-extract-" + ("a" * 200)
+        await db.commit()
+
+    async with sm() as db:
+        ev = await get_version_official_evidence(db, rec_id, vid)
+    assert not ev.valid
+    assert "parser_version" in ev.failure_reason.lower()
+
+
+# ── E4: unknown non-default parser version ──────────────────────────────────
+@pytest.mark.asyncio
+async def test_unknown_parser_version_not_verified():
+    sm = get_sessionmaker()
+    async with sm() as db:
+        out = await _provider_ingest(db)
+        rec_id = out["result"].source_record_id
+        vid = out["result"].source_version_id
+
+    async with sm() as db:
+        from app.db.source_repository import SourceVersionRepository
+        version = await SourceVersionRepository.get(db, vid)
+        version.parser_version = "totally-custom-parser-1"
+        await db.commit()
+
+    async with sm() as db:
+        ev = await get_version_official_evidence(db, rec_id, vid)
+    assert not ev.valid
+    assert "parser_version" in ev.failure_reason.lower()
+
+
+# ── E5: valid future namespaced extraction version ──────────────────────────
+@pytest.mark.asyncio
+async def test_valid_future_extraction_version_accepted():
+    sm = get_sessionmaker()
+    async with sm() as db:
+        raw_html = _html_fixture("Future version test body.")
+        raw_hash = hashlib.sha256(raw_html).hexdigest()
+
+        fetch_result = FetchResult(
+            final_url=OFFICIAL_URL, status_code=200,
+            content=raw_html, content_type="text/html",
+        )
+        extracted = extract_content_from_fetch(
+            fetch_result,
+            source_type="supreme_court_decision",
+            parser_version="p2.6c-extract-2",
+        )
+        extracted_fr = make_extracted_fetch_result(fetch_result, extracted)
+
+        result = await ingest_official_fetch(
+            db, metadata=OFFICIAL_META,
+            fetch_result=extracted_fr,
+            raw_document_hash=raw_hash,
+            extraction_method=EXTRACTION_METHOD_PROVIDER_HTML,
+            extraction_version="p2.6c-extract-2",
+        )
+        await db.commit()
+
+    assert result.verification_status == VERIFIED_OFFICIAL
+
+    async with sm() as db:
+        from app.db.source_repository import SourceVersionRepository
+        version = await SourceVersionRepository.get(db, result.source_version_id)
+    assert version.parser_version == "p2.6c-extract-2"
+
+    async with sm() as db:
+        ev = await get_version_official_evidence(db, result.source_record_id, result.source_version_id)
+    assert ev.valid

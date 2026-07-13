@@ -43,6 +43,8 @@ ALLOWED_EXTRACTION_METHODS: frozenset[str] = frozenset({
 
 _EXTRACTION_VERSION_MAX_LENGTH = 100
 
+EXTRACTION_PARSER_VERSION_PREFIX = "p2.6c-extract-"
+
 
 def validate_extraction_version(extraction_version: str) -> None:
     if not extraction_version:
@@ -51,6 +53,16 @@ def validate_extraction_version(extraction_version: str) -> None:
         raise ValueError(f"extraction_version exceeds {_EXTRACTION_VERSION_MAX_LENGTH} chars")
     if any(ord(c) < 32 for c in extraction_version):
         raise ValueError("extraction_version contains control characters")
+
+
+def is_extraction_aware_parser_version(parser_version: str | None) -> bool:
+    if not parser_version:
+        return False
+    try:
+        validate_extraction_version(parser_version)
+    except ValueError:
+        return False
+    return parser_version.startswith(EXTRACTION_PARSER_VERSION_PREFIX)
 
 
 @dataclass
