@@ -56,6 +56,8 @@ _PROVIDER_WIDE_STOP_CODES = frozenset({
     ERR_RATE_LIMITED,
 })
 
+ERR_PERSISTED_QUERY_NOT_SUPPORTED = "persisted_query_not_supported"
+
 
 @dataclass
 class RunSummary:
@@ -122,7 +124,7 @@ async def run_ingestion(
                             f"{provider_code} does not support {run_type}")
 
     params = {
-        "query": query, "from_date": from_date, "to_date": to_date,
+        "from_date": from_date, "to_date": to_date,
         "max_items": max_items, "external_id": external_id,
     }
     run = await SourceIngestionRunRepository.create(
@@ -143,23 +145,46 @@ async def execute_run(
 ) -> RunSummary:
     """Execute a previously-created queued run in place (CLI/worker path).
 
-    Reads persisted run parameters (query, from_date, to_date, max_items,
-    external_id) from cursor_json. The provider resolves external_id into a
-    safe candidate — no caller-supplied URL.
+    Reads persisted non-query run parameters from cursor_json. Raw provider
+    search text is never a queued-run parameter; a forged or legacy persisted
+    query fails closed before provider discovery or transport execution.
     """
     run = await SourceIngestionRunRepository.get(db, run_id)
     if run is None:
         raise ProviderError("unknown_run", f"run not found: {run_id}")
     if run.status not in ("queued",):
         raise ProviderError("run_not_queued", f"run status is {run.status}")
+    params = run.cursor_json or {}
+    if "query" in params:
+        await SourceIngestionRunRepository.finalize(
+            db,
+            run,
+            status=RUN_FAILED,
+            last_safe_error_code=ERR_PERSISTED_QUERY_NOT_SUPPORTED,
+        )
+        await db.commit()
+        metrics.official_source_provider_run_total.inc(
+            labels={
+                "provider_code": run.provider_code,
+                "run_type": run.run_type,
+                "status": RUN_FAILED,
+            }
+        )
+        metrics.official_source_provider_error.inc(
+            labels={
+                "provider_code": run.provider_code,
+                "safe_error_code": ERR_PERSISTED_QUERY_NOT_SUPPORTED,
+            }
+        )
+        return _summary(run)
+
     provider = registry.get(run.provider_code)
     if not _capability_supports(provider, run.run_type):
         raise ProviderError("unsupported_mode",
                             f"{run.provider_code} does not support {run.run_type}")
-    params = run.cursor_json or {}
     return await _execute_loop(
         db, run, provider, run_type=run.run_type,
-        query=params.get("query"),
+        query=None,
         from_date=params.get("from_date"),
         to_date=params.get("to_date"),
         max_items=params.get("max_items", 50),

@@ -48,7 +48,6 @@ class CreateRunRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     run_type: str = Field(min_length=1, max_length=30)
-    query: str | None = Field(default=None, max_length=500)
     from_date: str | None = Field(default=None, max_length=20)
     to_date: str | None = Field(default=None, max_length=20)
     max_items: int = Field(default=50, ge=1, le=500)

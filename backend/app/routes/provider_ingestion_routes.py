@@ -172,9 +172,10 @@ async def create_run(
     if not _capability_supports(definition, body.run_type):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Sağlayıcı bu run_type'ı desteklemiyor.")
-    # Persist run parameters (no secrets) in cursor_json for the runner.
+    # Persist only bounded, non-query run parameters for the runner. Raw
+    # provider search text is intentionally unsupported by the queued API.
     params = {
-        "query": body.query, "from_date": body.from_date, "to_date": body.to_date,
+        "from_date": body.from_date, "to_date": body.to_date,
         "max_items": body.max_items, "external_id": body.external_id,
     }
     run = await SourceIngestionRunRepository.create(
