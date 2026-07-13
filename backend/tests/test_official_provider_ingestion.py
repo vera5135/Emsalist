@@ -803,11 +803,12 @@ async def _run_fake_provider(provider: SequencedProvider, *, sleeper=None):
 async def test_injected_resolver_used_for_discovery_and_fetch_no_external_dns(enabled_all):
     calls = []
 
-    def fail_getaddrinfo(*_args, **_kw):
+    def fail_default_resolver(*_args, **_kw):
         calls.append(_args)
         raise AssertionError("external DNS must not be used")
 
-    with patch("socket.getaddrinfo", side_effect=fail_getaddrinfo):
+    with patch("app.services.source_fetcher.default_resolver",
+               side_effect=fail_default_resolver):
         discover_summary = await _run(
             provider_code="mevzuat",
             run_type="discover_only",
@@ -843,7 +844,8 @@ async def test_injected_resolver_used_for_discovery_and_fetch_no_external_dns(en
 async def test_discover_only_all_providers_use_injected_resolver(
     enabled_all, provider_code, search_key, link,
 ):
-    with patch("socket.getaddrinfo", side_effect=AssertionError("external DNS")) as dns:
+    with patch("app.services.source_fetcher.default_resolver",
+               side_effect=AssertionError("external DNS")) as dns:
         summary = await _run(
             provider_code=provider_code,
             run_type="discover_only",
