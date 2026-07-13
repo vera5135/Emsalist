@@ -165,6 +165,47 @@ class VersionEvidence:
         return cls(False, None, None, None, reason)
 
 
+@dataclass(frozen=True)
+class VersionExtractionProvenanceState:
+    present: bool
+    valid: bool
+    failure_reason: str | None = None
+
+
+def version_extraction_provenance_state(version) -> VersionExtractionProvenanceState:
+    """Return the authoritative immutable extraction-provenance state."""
+    metadata = version.metadata_json or {}
+    raw_document_hash = version.raw_document_hash
+    extraction_method = metadata.get("extraction_method")
+    extraction_parser = is_extraction_aware_parser_version(version.parser_version)
+    present = (
+        raw_document_hash is not None
+        or extraction_method is not None
+        or extraction_parser
+    )
+    if not present:
+        return VersionExtractionProvenanceState(present=False, valid=False)
+    if not _RAW_HASH_RE.fullmatch(raw_document_hash or ""):
+        return VersionExtractionProvenanceState(
+            present=True,
+            valid=False,
+            failure_reason="provider-extracted version: raw_document_hash missing or malformed",
+        )
+    if extraction_method not in ALLOWED_EXTRACTION_METHODS:
+        return VersionExtractionProvenanceState(
+            present=True,
+            valid=False,
+            failure_reason="provider-extracted version: extraction_method missing or unknown",
+        )
+    if not extraction_parser:
+        return VersionExtractionProvenanceState(
+            present=True,
+            valid=False,
+            failure_reason="provider-extracted version: parser_version is not extraction-aware",
+        )
+    return VersionExtractionProvenanceState(present=True, valid=True)
+
+
 async def get_version_official_evidence(
     session: AsyncSession, record_id: str, version_id: str
 ) -> VersionEvidence:
@@ -187,26 +228,9 @@ async def get_version_official_evidence(
     if version is None:
         return VersionEvidence.fail("version not found")
 
-    is_provider_extracted = bool(
-        (version.metadata_json or {}).get("extraction_method")
-    ) or version.raw_document_hash is not None or is_extraction_aware_parser_version(
-        version.parser_version
-    )
-
-    if is_provider_extracted:
-        if not _RAW_HASH_RE.match(version.raw_document_hash or ""):
-            return VersionEvidence.fail(
-                "provider-extracted version: raw_document_hash missing or malformed"
-            )
-        ext_method = (version.metadata_json or {}).get("extraction_method")
-        if not ext_method or ext_method not in ALLOWED_EXTRACTION_METHODS:
-            return VersionEvidence.fail(
-                "provider-extracted version: extraction_method missing or unknown"
-            )
-        if not is_extraction_aware_parser_version(version.parser_version):
-            return VersionEvidence.fail(
-                "provider-extracted version: parser_version is not extraction-aware"
-            )
+    provenance = version_extraction_provenance_state(version)
+    if provenance.present and not provenance.valid:
+        return VersionEvidence.fail(provenance.failure_reason or "invalid extraction provenance")
 
     verifications = await SourceVerificationRepository.list_for_record(
         session, record_id
@@ -396,6 +420,11 @@ async def _ingest(
         and bool(official_url)
         and _official_domain(official_url)
     )
+    incoming_provider_extracted = all((
+        raw_document_hash is not None,
+        extraction_method is not None,
+        extraction_version is not None,
+    ))
 
     record = await SourceRecordRepository.get_by_canonical_key(session, canonical_key)
 
@@ -410,6 +439,7 @@ async def _ingest(
         session, record, metadata, source_type, canonical_key,
         trusted_text, content_hash, official_url,
         retrieval_method, raw_document_hash, extraction_method, is_official_fetch,
+        incoming_provider_extracted=incoming_provider_extracted,
         extraction_version=extraction_version,
     )
 
@@ -456,6 +486,7 @@ async def _ingest_into_existing(
     session, record, metadata, source_type, canonical_key,
     trusted_text, content_hash, official_url,
     retrieval_method, raw_document_hash, extraction_method, is_official_fetch,
+    incoming_provider_extracted: bool,
     extraction_version: str = PARSER_VERSION,
 ):
     await SourceRecordRepository.mark_checked(session, record, successful=True)
@@ -467,6 +498,18 @@ async def _ingest_into_existing(
         if is_official_fetch:
             evidence = await get_version_official_evidence(session, record.id, existing.id)
             if not evidence.valid:
+                if incoming_provider_extracted:
+                    provenance = version_extraction_provenance_state(existing)
+                    if not (provenance.present and provenance.valid):
+                        # Immutable legacy/suspect versions cannot be retroactively
+                        # upgraded with provenance from a later extracted fetch.
+                        return IngestResult(
+                            record.id,
+                            existing.id,
+                            canonical_key,
+                            record.verification_status,
+                            OUTCOME_DUPLICATE,
+                        )
                 await _produce_official_verification(
                     session, record.id, existing.id, content_hash, official_url,
                 )
