@@ -57,23 +57,28 @@ jobs:
       - name: Run P2.7 PostgreSQL production acceptance tests
         working-directory: backend
         run: |
+          set -o pipefail
           python -m pytest tests/test_p27_production_acceptance.py -v --tb=short 2>&1 | tee pytest-output.txt
-          exit_code=${PIPESTATUS[0]}
+          exit_code=$?
 
-      - name: Verify zero skipped and exactly 31 passed
-        if: always()
-        working-directory: backend
-        run: |
           skipped=$(grep -c "SKIPPED" pytest-output.txt || true)
           passed=$(grep -c "PASSED" pytest-output.txt || true)
-          errors=$(grep -c "ERROR" pytest-output.txt || true)
+          failed=$(grep -c "FAILED" pytest-output.txt || true)
+
+          if [ "$exit_code" -ne 0 ]; then
+            echo "FAIL: pytest exited with code $exit_code"
+            exit $exit_code
+          fi
           if [ "$skipped" -gt 0 ]; then
-            echo "FAIL: $skipped test(s) were SKIPPED in CI — harness is misconfigured"
+            echo "FAIL: $skipped test(s) SKIPPED — harness misconfigured"
             exit 1
           fi
-          if [ "$errors" -gt 0 ]; then
-            echo "FAIL: $errors test(s) ERRORED — check logs above"
+          if [ "$failed" -gt 0 ]; then
+            echo "FAIL: $failed test(s) FAILED"
             exit 1
           fi
-          echo "All $passed P2.7 acceptance tests PASSED — zero skipped"
-          exit $exit_code
+          if [ "$passed" -ne 31 ]; then
+            echo "FAIL: expected 31 passed, got $passed"
+            exit 1
+          fi
+          echo "All 31 P2.7 production acceptance tests PASSED — zero skipped, zero failed"
