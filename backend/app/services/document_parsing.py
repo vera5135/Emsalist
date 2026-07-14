@@ -160,7 +160,8 @@ def _decode_turkish_text(content: bytes) -> str:
         controls = sum(
             1 for ch in text if unicodedata.category(ch) == "Cc" and ch not in "\n\r\t"
         )
-        mojibake = sum(text.count(tok) for tok in ("Ã", "Ä", "Å", "\ufffd"))
+        mojibake_markers = ("\u00c3", "\u00c4", "\u00c5", "\ufffd")
+        mojibake = sum(text.count(tok) for tok in mojibake_markers)
         turkish = sum(text.count(ch) for ch in "çğıöşüÇĞİÖŞÜ")
         score = turkish * 2 - controls * 20 - mojibake * 8
         if encoding.startswith("utf-8"):

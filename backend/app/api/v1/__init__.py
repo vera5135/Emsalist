@@ -64,8 +64,13 @@ from app.routes.source_routes import review_router as _source_review_router
 from app.routes.provider_ingestion_routes import provider_router as _provider_router
 from app.routes.provider_ingestion_routes import run_router as _provider_run_router
 
+# Legacy P1 compatibility APIs. The overlapping case/document routers are
+# explicitly marked deprecated at router level; they must not be used by new
+# mobile or backend integrations.
 api_v1_router.include_router(_case_router, include_in_schema=True)
 api_v1_router.include_router(_document_router, include_in_schema=True)
+
+# Canonical platform infrastructure and shared legal-analysis APIs.
 api_v1_router.include_router(_auth_router, include_in_schema=True)
 api_v1_router.include_router(_apple_auth_router, include_in_schema=True)
 api_v1_router.include_router(_job_router, include_in_schema=True)
@@ -84,6 +89,8 @@ api_v1_router.include_router(_grounding_router, include_in_schema=True)
 api_v1_router.include_router(_ai_run_router, include_in_schema=True)
 api_v1_router.include_router(_legal_issue_graph_router, include_in_schema=True)
 api_v1_router.include_router(_security_router, include_in_schema=True)
+
+# Canonical P2 case-scoped product APIs.
 api_v1_router.include_router(_case_chat_router, include_in_schema=True)
 api_v1_router.include_router(_conversation_router, include_in_schema=True)
 api_v1_router.include_router(_case_memory_router, include_in_schema=True)

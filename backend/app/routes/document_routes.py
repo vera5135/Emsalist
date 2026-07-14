@@ -1,4 +1,9 @@
-"""Document upload, analysis and lifecycle endpoints."""
+"""Deprecated P1 document intake endpoints.
+
+New clients must use the case-scoped P2 document pipeline at
+``/api/v1/cases/{case_id}/documents``. These routes remain available only for
+legacy web-client compatibility.
+"""
 
 from typing import Annotated
 
@@ -17,7 +22,11 @@ from app.services.auth_service import SecurityContext, resolve_current_user
 from app.services.auth_manager import require_case_read, require_case_write
 
 
-router = APIRouter(prefix="/documents", tags=["Document Intake"])
+router = APIRouter(
+    prefix="/documents",
+    tags=["Legacy / Document Intake"],
+    deprecated=True,
+)
 _MAX_UPLOAD = get_settings().max_upload_size_bytes
 
 
