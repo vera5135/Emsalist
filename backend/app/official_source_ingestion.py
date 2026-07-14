@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import inspect
 import sys
 
 from app.db.session import get_sessionmaker
@@ -35,6 +36,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run-id", dest="run_id", default="", help="execute a previously queued run")
     p.add_argument("--enable-live", action="store_true",
                    help="wire the real SSRF-safe transport (live network access)")
+    p.add_argument(
+        "--enable-browser-discovery", action="store_true",
+        help="wire the ephemeral browser candidate-discovery backend",
+    )
     return p
 
 
@@ -48,12 +53,18 @@ def _live_transport():
 async def _run(args) -> int:
     maker = get_sessionmaker()
     transport = _live_transport() if args.enable_live else None
+    browser_backend = None
+    if getattr(args, "enable_browser_discovery", False):
+        from app.services.browser_provider_discovery import create_browser_discovery_backend
+
+        browser_backend = create_browser_discovery_backend()
     try:
         async with maker() as db:
             try:
                 if args.run_id:
                     summary = await execute_run(
                         db, args.run_id, transport=transport,
+                        browser_backend=browser_backend,
                     )
                 else:
                     if not args.provider:
@@ -62,15 +73,25 @@ async def _run(args) -> int:
                     summary = await run_ingestion(
                         db, provider_code=args.provider, run_type=args.mode,
                         query=args.query, from_date=args.from_date, to_date=args.to_date,
-                        max_items=args.max_items, transport=transport, created_by="cli",
+                        max_items=args.max_items, transport=transport,
+                        browser_backend=browser_backend, created_by="cli",
                     )
             except ProviderError as e:
                 print(f"provider error: {e.code}", file=sys.stderr)
                 return 1
     finally:
-        close = getattr(transport, "close", None)
-        if callable(close):
-            close()
+        try:
+            close = getattr(transport, "close", None)
+            if callable(close):
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+        finally:
+            close = getattr(browser_backend, "close", None)
+            if callable(close):
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
     print(
         f"run={summary.run_id} provider={summary.provider_code} "
         f"mode={summary.run_type} status={summary.status} "

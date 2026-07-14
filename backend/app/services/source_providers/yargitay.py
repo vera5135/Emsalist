@@ -47,7 +47,7 @@ class YargitayProvider(OfficialSourceProvider):
     official_domains = ("karararama.yargitay.gov.tr", "yargitay.gov.tr")
     capabilities = ProviderCapabilities(
         discovery=True, fetch=True, parse=True,
-        incremental=False, bounded_window=True, requires_browser=True,
+        incremental=False, bounded_window=False, requires_browser=True,
     )
     request_policy = ProviderRequestPolicy(min_interval_seconds=3.0, max_concurrency=1)
 

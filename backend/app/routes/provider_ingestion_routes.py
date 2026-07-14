@@ -32,6 +32,7 @@ from app.models.provider_models import (
 from app.routes.source_routes import require_editor
 from app.services.auth_service import SecurityContext
 from app.services.source_providers import registry
+from app.services.browser_provider_discovery import browser_strategy_available
 from app.services.source_providers.base import (
     RUN_MODES,
     STATUS_AVAILABLE,
@@ -66,7 +67,10 @@ def _provider_status(code: str, definition, latest_terminal, latest_successful) 
     if definition.capabilities.requires_auth:
         return STATUS_UNSUPPORTED_REQUIRES_AUTH
     if definition.capabilities.requires_browser:
-        return STATUS_BROWSER_DISCOVERY_UNAVAILABLE
+        if not browser_strategy_available(code):
+            return STATUS_BROWSER_DISCOVERY_UNAVAILABLE
+        if not get_settings().official_provider_browser_discovery_enabled:
+            return STATUS_BROWSER_DISCOVERY_UNAVAILABLE
     if not _automatic_live_transport_configured():
         return STATUS_TRANSPORT_UNAVAILABLE
     terminal_error = (latest_terminal.last_safe_error_code if latest_terminal else "") or ""

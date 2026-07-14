@@ -32,9 +32,11 @@ from app.db.source_ingestion_repository import (
 from app.services.source_canonical_key import CanonicalKeyError
 from app.services.source_extraction import extract_content_from_fetch, make_extracted_fetch_result
 from app.services.source_ingestion_service import ingest_official_fetch
+from app.services.browser_provider_discovery import discover_browser_candidates
 from app.services.source_providers import registry
 from app.services.source_providers.base import (
     ERR_ACCESS_DENIED,
+    ERR_BROWSER_DISCOVERY_UNAVAILABLE,
     ERR_CHALLENGE,
     ERR_RATE_LIMITED,
     ERR_STRUCTURE_CHANGED,
@@ -106,6 +108,7 @@ async def run_ingestion(
     cursor: dict | None = None,
     external_id: str | None = None,
     transport=None,
+    browser_backend=None,
     resolver=None,
     created_by: str | None = None,
     sleeper=None,
@@ -135,13 +138,15 @@ async def run_ingestion(
     return await _execute_loop(
         db, run, provider, run_type=run_type, query=query, from_date=from_date,
         to_date=to_date, max_items=max_items, cursor=None,
-        external_id=external_id, transport=transport, resolver=resolver,
+        external_id=external_id, transport=transport, browser_backend=browser_backend,
+        resolver=resolver,
         sleeper=sleeper,
     )
 
 
 async def execute_run(
-    db: AsyncSession, run_id: str, *, transport=None, resolver=None, sleeper=None,
+    db: AsyncSession, run_id: str, *, transport=None, browser_backend=None,
+    resolver=None, sleeper=None,
 ) -> RunSummary:
     """Execute a previously-created queued run in place (CLI/worker path).
 
@@ -190,13 +195,14 @@ async def execute_run(
         max_items=params.get("max_items", 50),
         cursor=None,
         external_id=params.get("external_id"),
-        transport=transport, resolver=resolver, sleeper=sleeper,
+        transport=transport, browser_backend=browser_backend,
+        resolver=resolver, sleeper=sleeper,
     )
 
 
 async def _execute_loop(
     db: AsyncSession, run, provider, *, run_type, query, from_date, to_date,
-    max_items, cursor, external_id, transport, resolver, sleeper,
+    max_items, cursor, external_id, transport, browser_backend, resolver, sleeper,
 ) -> RunSummary:
     provider_code = provider.provider_code
     sleep = sleeper or _default_sleeper
@@ -213,7 +219,8 @@ async def _execute_loop(
         candidates = await _collect_candidates(
             provider, run_type=run_type, query=query, from_date=from_date,
             to_date=to_date, max_items=max_items, cursor=cursor,
-            external_id=external_id, transport=transport, resolver=resolver,
+            external_id=external_id, transport=transport,
+            browser_backend=browser_backend, resolver=resolver,
             sleeper=sleep,
         )
     except ProviderError as e:
@@ -337,12 +344,31 @@ async def _execute_loop(
 
 async def _collect_candidates(
     provider, *, run_type, query, from_date, to_date, max_items, cursor,
-    external_id, transport, resolver, sleeper,
+    external_id, transport, browser_backend, resolver, sleeper,
 ) -> list[ProviderDiscoveryCandidate]:
     if run_type == RUN_EXACT_SOURCE:
         if not external_id:
             raise ProviderError("missing_identifier", "exact_source requires an external_id")
         return [provider.build_exact_candidate(external_id)]
+    if provider.capabilities.requires_browser:
+        if browser_backend is None:
+            raise ProviderError(
+                ERR_BROWSER_DISCOVERY_UNAVAILABLE, "browser_backend_not_configured",
+            )
+        return (
+            await _execute_provider_network_operation(
+                provider,
+                operation="discover",
+                sleeper=sleeper,
+                call=lambda: discover_browser_candidates(
+                    provider,
+                    browser_backend,
+                    query=query,
+                    cursor=(cursor or {}).get("page") if cursor else None,
+                    limit=max_items,
+                ),
+            )
+        )[:max_items]
     page = await _execute_provider_network_operation(
         provider,
         operation="discover",

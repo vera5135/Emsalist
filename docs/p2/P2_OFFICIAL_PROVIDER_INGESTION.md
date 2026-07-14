@@ -79,10 +79,10 @@ Hiçbir sağlayıcı kodu doğrudan trust üretemez. `record.verification_status
 
 | Sağlayıcı | Discovery | Fetch | Parse | Kanonik ingestion | Incremental | Known limitation |
 |---|---|---|---|---|---|---|
-| Yargıtay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; canlı browser discovery P2.6D'ye ertelendi ve P2.6C'de `browser_discovery_unavailable` ile fail-closed kalır. |
-| Danıştay | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; canlı browser discovery P2.6D'ye ertelendi. Board/daire bilgisi numbered chamber'a indirgenmez. |
-| AYM | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | `requires_browser=True`; Norm Denetimi ve Bireysel Başvuru browser discovery P2.6D'ye ertelendi. Eksik canonical karar numarası uydurulmaz. |
-| Uyuşmazlık Mah. | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Kabul edilen mevcut capability `requires_browser=True`; P2.6C non-browser live smoke için `not_eligible`/`not_attempted`. Güncel discovery-surface doğrulaması P2.6D'ye ertelendi. |
+| Yargıtay | controlled blocker | fixture-tested | fixture-tested | fixture-tested | not_supported | P2.6D envanteri güvenli stabil aday-ID kontratı bulmadı. Üretim backend'i inventory-only girdiyi kabul etmez; discovery ve durum `browser_discovery_unavailable` ile fail-closed kalır. |
+| Danıştay | controlled blocker | fixture-tested | fixture-tested | fixture-tested | not_supported | Güncel form gözlendi, fakat stabil aday ID güvenle çıkarılamadı. Board/daire bilgisi yalnız exact detail byte'larından gelir. |
+| AYM | Individual browser discovery; Norm controlled blocker | fixture-tested | fixture-tested | fixture-tested | not_supported | İki sabit `bank_kind` korunur. Bireysel UUID `id` mevcut provider-owned detail kontratına gider; Norm için bankaya özgü exact-detail kontratı kanıtlanmadığından üretim fail-closed kalır. |
+| Uyuşmazlık Mah. | controlled blocker | fixture-tested | fixture-tested | fixture-tested | not_supported | Güncel form gözlendi; stabil ID veya güvenli non-browser kontrat kanıtlanmadı. `requires_browser=True` korunur ve fail-closed kalır. |
 | Mevzuat | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Mevzuat Bilgi Sistemi. Madde/Ek Madde/Geçici Madde/Mükerrer Madde alt türü ve citable locator provenance korunur. Navigasyon/kurabiye kromu kanonik içeriğe karışmaz. |
 | Resmî Gazete | fixture-tested | fixture-tested | fixture-tested | fixture-tested | not_supported | Gazete sayısı vs yayımlanmış enstrüman ayırımı. Enstrüman segmentasyonu belirsiz ise uydurulmaz; `manual_review_required`. |
 
@@ -120,6 +120,12 @@ ve yalnızca `OFFICIAL_PROVIDER_LIVE_SMOKE=1` ile yapılandırılır. Operatör
 CLI'sinde `--enable-live` açık opt-in sınırıdır ve SSRF-korumalı gerçek
 taşıyıcıyı kurar.
 
+Browser-required discovery ayrıca varsayılan kapalı
+`OFFICIAL_PROVIDER_BROWSER_DISCOVERY_ENABLED` operasyonel sınırına ve CLI'da
+ayrı `--enable-browser-discovery` opt-in'ine sahiptir. Playwright'ın kurulu
+olması keşfi otomatik açmaz. Browser yalnız aday kimliği üretir; exact detail
+byte'ları hâlâ ayrı `--enable-live` taşıyıcısıyla çekilir.
+
 Queued API run kontratı ham `query` kabul etmez (`extra="forbid"`); kalıcı
 `cursor_json` parametreleri yalnız `from_date`, `to_date`, `max_items` ve
 `external_id` alanlarıdır. Forged/legacy bir queued run içinde `query` anahtarı
@@ -143,6 +149,9 @@ CLI `--max-items` değeri kuyruktaki parametreyi sessizce ezmez. `--enable-live`
 verilmezse taşıyıcı `None` kalır ve gerçek ağ erişimi yapılmaz. `--enable-live`
 verilirse `create_real_transport()` kullanılır ve oluşturulan taşıyıcı kapanışta
 `close()` edilir.
+`--enable-browser-discovery` verilirse sabit strateji kayıtlı ephemeral browser
+backend'i bir kez kurulur ve başarı/hata yollarının tamamında kapatılır. Browser
+nesneleri ve sorgu hiçbir zaman `cursor_json` içine yazılmaz.
 
 ## API endpoint'leri
 
@@ -167,18 +176,21 @@ Operasyonel durum çözümleme sırası saf ve I/O'suzdur:
 
 1. disabled provider → `disabled`
 2. auth gerektiriyorsa → `unsupported_requires_auth`
-3. browser gerektiriyor ve browser discovery uygulanmadıysa → `browser_discovery_unavailable`
-4. otomatik/live transport yapılandırılmadıysa → `transport_unavailable`
-5. son terminal safe error `provider_structure_changed` ise → `provider_changed`
-6. son terminal safe error `challenge_detected` veya `manual_review_required` ise → `manual_review_required`
-7. başarılı veya kısmi başarılı operasyonel run yoksa → `fixture_tested_only`
-8. son terminal run `failed` ise → `degraded`
-9. son terminal run `completed_with_errors` ise → `degraded`
-10. son terminal run `completed` ise → `available`
+3. browser gerektiriyor ve doğrulanmış stratejisi yoksa → `browser_discovery_unavailable`
+4. browser runtime config kapalıysa → `browser_discovery_unavailable`
+5. otomatik/live transport yapılandırılmadıysa → `transport_unavailable`
+6. son terminal safe error `provider_structure_changed` ise → `provider_changed`
+7. son terminal safe error `challenge_detected` veya `manual_review_required` ise → `manual_review_required`
+8. başarılı veya kısmi başarılı operasyonel run yoksa → `fixture_tested_only`
+9. son terminal run `failed` ise → `degraded`
+10. son terminal run `completed_with_errors` ise → `degraded`
+11. son terminal run `completed` ise → `available`
 
-Yargıtay, Danıştay, AYM ve Uyuşmazlık için browser discovery/current-surface
-doğrulaması P2.6D'ye ertelenmiştir.
-Capability bayrağı değiştirilmez ve browser prerequisite karşılanmadan durum
+P2.6D AYM Bireysel yüzeyini doğrulanmış aday-ID stratejisiyle uygulamıştır.
+AYM Norm, Yargıtay, Danıştay ve Uyuşmazlık gerekli güncel ID/detail kontratı
+kanıtlanana dek kontrollü blocker olarak kalır. Browser yüzeylerinde tarih
+filtresi envanteri yapılmadığından `bounded_window` advertise edilmez. Capability bayrağı
+değiştirilmez ve browser prerequisite karşılanmadan durum
 `transport_unavailable`, `fixture_tested_only` veya `available` seviyesine
 ilerlemez.
 

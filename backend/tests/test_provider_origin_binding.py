@@ -27,6 +27,7 @@ from app.services.provider_ingestion_service import (
     _fetch_parse_ingest,
     run_ingestion,
 )
+from app.services.browser_provider_discovery import BrowserDiscoveryResult
 from app.services.source_fetcher import (
     FetchResult,
     SourceFetchError,
@@ -179,18 +180,25 @@ def test_six_provider_origin_matrix_accepts_own_and_rejects_foreign_domains():
 
 
 @pytest.mark.asyncio
-async def test_yargitay_foreign_discovery_href_never_fetches_or_creates_trust():
+async def test_yargitay_foreign_candidate_target_never_fetches_or_creates_trust():
     provider = YargitayProvider()
     provider.parse = AsyncMock(wraps=provider.parse)
-    search = (
-        b'<html><body><a class="karar-link" '
-        b'href="https://mevzuat.gov.tr/cross-provider-document">cross</a>'
-        b"</body></html>"
-    )
+
+    def foreign_candidate(_external_id):
+        return ProviderDiscoveryCandidate(
+            provider_code="yargitay",
+            source_type="supreme_court_decision",
+            detail_url="https://mevzuat.gov.tr/cross-provider-document",
+            external_id="Y-foreign",
+        )
+
+    provider.build_exact_candidate = foreign_candidate
+
+    class IdentifierOnlyBackend:
+        async def discover(self, strategy, **_kwargs):
+            return BrowserDiscoveryResult(strategy.surface_code, ("Y-foreign",))
 
     def respond(url: str):
-        if "aramalist" in url:
-            return StubResp(content=search)
         return StubResp(content=FOREIGN_BYTES)
 
     transport = RecordingTransport(respond)
@@ -207,14 +215,14 @@ async def test_yargitay_foreign_discovery_href_never_fetches_or_creates_trust():
                 query="fixture",
                 max_items=1,
                 transport=transport,
+                browser_backend=IdentifierOnlyBackend(),
                 resolver=public_resolver,
                 sleeper=no_sleep,
             )
 
     assert summary.status == "failed"
     assert summary.last_safe_error_code == ERR_SSRF_BLOCKED
-    assert len(transport.calls) == 1
-    assert "karararama.yargitay.gov.tr" in transport.calls[0]
+    assert transport.calls == []
     assert all("mevzuat.gov.tr" not in url for url in transport.calls)
     assert provider.parse.await_count == 0
 
