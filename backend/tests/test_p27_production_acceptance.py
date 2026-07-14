@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""P2.7 — Production acceptance integration tests against a seeded SQLite DB.
-
-Calls ACTUAL production services (execute_legal_search, execute_similar_search,
-submit_feedback) on a migration-applied SQLite database with comprehensive
-synthetic seed data across 8 legal domains.
-"""
+"""P2.7 — Production acceptance integration tests (PostgreSQL + Alembic)."""
 from __future__ import annotations
 
 import hashlib
@@ -18,9 +13,11 @@ from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+from alembic.config import Config
+from alembic import command
 
 from app.db.models import (
     Base,
@@ -60,7 +57,34 @@ from app.services.source_verification import (
     VERIFIED_SECONDARY,
 )
 
-TEST_DB = "sqlite+aiosqlite:///./test_p27_integration.db"
+# ── PostgreSQL configuration ────────────────────────────────────────────────────
+
+POSTGRES_HOST = os.environ.get("PGHOST", "127.0.0.1")
+POSTGRES_PORT = os.environ.get("PGPORT", "5432")
+POSTGRES_USER = os.environ.get("PGUSER", "postgres")
+POSTGRES_PASSWORD = os.environ.get("PGPASSWORD", "postgres")
+POSTGRES_DB = os.environ.get("PGDATABASE", "emsalist_p27_acceptance_test")
+
+TEST_DB_URL = (
+    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+    f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+)
+
+_ALEMBIC_INI = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
+
+# ── PostgreSQL availability check ──────────────────────────────────────────────
+
+try:
+    import asyncpg as _asyncpg_check  # noqa: F401
+    _PG_AVAILABLE = True
+except ImportError:
+    _PG_AVAILABLE = False
+
+if not _PG_AVAILABLE:
+    pytest.skip(
+        "PostgreSQL driver asyncpg not available — skipping P2.7 production DB tests",
+        allow_module_level=True,
+    )
 
 
 def _mock_id(prefix: str) -> str:
@@ -124,16 +148,71 @@ class DeterministicTestEmbeddingProvider(SearchEmbeddingProvider):
 # ── Database fixtures ──────────────────────────────────────────────────────────
 
 
+def _run_alembic_upgrade(db_url_async: str) -> None:
+    sync_url = db_url_async.replace("+asyncpg", "")
+    cfg = Config(_ALEMBIC_INI)
+    cfg.set_main_option("sqlalchemy.url", sync_url)
+    import sys as _sys
+    old = _sys.argv
+    try:
+        command.upgrade(cfg, "head")
+    finally:
+        _sys.argv = old
+
+
 @pytest_asyncio.fixture(scope="module")
 async def test_db():
-    engine = create_async_engine(TEST_DB, echo=False, poolclass=NullPool)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Create isolated PostgreSQL DB, apply Alembic migrations, return sessionmaker."""
+    import asyncpg as _pg
+
+    try:
+        sys_conn = await _pg.connect(
+            host=POSTGRES_HOST, port=int(POSTGRES_PORT),
+            user=POSTGRES_USER, password=POSTGRES_PASSWORD,
+            database="postgres",
+        )
+    except (ConnectionRefusedError, OSError, Exception) as e:
+        pytest.skip(
+            f"PostgreSQL not reachable at {POSTGRES_HOST}:{POSTGRES_PORT} — "
+            f"P2.7 production acceptance harness requires a running PostgreSQL server. "
+            f"({e})"
+        )
+        yield None
+        return
+
+    try:
+        existing = await sys_conn.fetchval("SELECT 1 FROM pg_database WHERE datname=$1", POSTGRES_DB)
+        if existing:
+            await sys_conn.execute(
+                f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                f"WHERE datname='{POSTGRES_DB}' AND pid <> pg_backend_pid()"
+            )
+            await sys_conn.execute(f'DROP DATABASE "{POSTGRES_DB}"')
+        await sys_conn.execute(f'CREATE DATABASE "{POSTGRES_DB}"')
+    finally:
+        await sys_conn.close()
+
+    _run_alembic_upgrade(TEST_DB_URL)
+
+    engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     yield maker
     await engine.dispose()
-    if os.path.exists("./test_p27_integration.db"):
-        os.remove("./test_p27_integration.db")
+
+    try:
+        sys_conn = await _pg.connect(
+            host=POSTGRES_HOST, port=int(POSTGRES_PORT),
+            user=POSTGRES_USER, password=POSTGRES_PASSWORD,
+            database="postgres",
+        )
+        await sys_conn.execute(
+            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            f"WHERE datname='{POSTGRES_DB}' AND pid <> pg_backend_pid()"
+        )
+        await sys_conn.execute(f'DROP DATABASE "{POSTGRES_DB}"')
+        await sys_conn.close()
+    except Exception:
+        pass
 
 
 @pytest_asyncio.fixture(autouse=True)
