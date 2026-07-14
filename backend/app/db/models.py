@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Index
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint, Index
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -858,6 +858,51 @@ class Risk(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     __table_args__ = (
         Index("ix_risks_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+# ── P2.8 Legal Issue Graph ────────────────────────────────────────────────────
+
+LEGAL_ISSUE_STATUSES = frozenset({
+    "proposed", "accepted", "disputed", "unsupported",
+    "satisfied", "failed", "needs_review",
+})
+
+
+class LegalIssue(Base):
+    __tablename__ = "legal_issues"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    parent_issue_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    issue_code: Mapped[str] = mapped_column(String(60), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="proposed")
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        Index("ix_legal_issues_tenant_case", "tenant_id", "case_id"),
+        Index("ix_legal_issues_case_parent", "case_id", "parent_issue_id"),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(LEGAL_ISSUE_STATUSES))})",
+            name="ck_legal_issues_status",
+        ),
+        CheckConstraint(
+            "confidence >= 0.0 AND confidence <= 1.0",
+            name="ck_legal_issues_confidence",
+        ),
+        ForeignKeyConstraint(
+            ["case_id", "parent_issue_id"],
+            ["legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issues_parent_hierarchy",
+            ondelete="RESTRICT",
+        ),
     )
 
 
