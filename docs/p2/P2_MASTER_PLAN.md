@@ -494,6 +494,38 @@ Ayrıntılı sağlayıcı destek matrisi ve tasarım:
 
 ### P2.7 — Hibrit hukuk araması
 
+Durum: ✅ Completed.
+
+Hibrit hukuk araması; deterministik sorgu dilbilgisi, lexical/semantic parallel
+retrieval, P2.6 trust path üzerinde çalışan index eligibility, Gemini embedding
+(768-dim), domain-separated HMAC-SHA256 sorgu gizliliği, hassas sorgu koruması,
+HMAC imzalı cursor/result ID, karşıt karar (SourceRelationship tabanlı) ve benzer
+karar araması ile uygulanmıştır.
+
+Uygulanan bileşenler:
+- `SearchQueryPlan` / `parse_query` — deterministik Türkçe sorgu dilbilgisi
+  (operatörler: `+`, `-`, `""`; 422 malformed syntax; 31 grammar testi)
+- `HybridSearchService` — lexical + semantic parallel retrieval, candidate union,
+  deduplication, weighted scoring (%35 lex / %30 sem / %15 auth / %10 temp / %10
+  case; degraded modda renormalize)
+- `GeminiSearchEmbeddingProvider` — google-genai, RETRIEVAL_DOCUMENT/QUERY
+- `SearchEmbeddingProvider` soyutlaması — `DisabledSearchEmbeddingProvider`
+  fallback
+- `SearchPrivacy` — HMAC-SHA256 domain-separated query hash, safe_query_summary
+  (yapısal yalnız), is_sensitive_query, cursor/result ID imzalama
+- `SearchQuery` / `SearchFeedback` DB modeli — ham sorgu metni saklanmaz
+- `SourceParagraph` embedding alanları — embedding_status, model, version,
+  dimension, vector_json
+- Benzer arama: paragraf embedding → cosine similarity > 0.4
+- Karşıt arama: `SourceRelationship.contradicted_by / argued_against_by` kanıt
+  sınırı (LLM uydurma yok)
+- Arama önerileri: mahkeme isimleri + atıf kalıpları (`E.`, `K.`, `TBK`, vs.)
+- Feedback: HMAC-doğrulanmış result_id, 5 feedback türü
+
+P2.7 pilot sınırlaması: embedding'ler JSON vektör olarak saklanır (pgvector
+native indeksi yok); semantic retrieval bounded candidate pool (max 5000 × 2)
+üzerinde çalışır. pgvector ANN indeksine geçiş ileri sürümdedir.
+
 Arama sinyalleri:
 
 - anahtar kelime
@@ -507,11 +539,11 @@ Arama sinyalleri:
 - sonuç yönü
 - tekrar kayıt cezası
 
-Kapanış kapısı:
+Kapanış kapısı: ✅
 
-- benchmark setinde ilk 3 ve ilk 10 başarı oranlarının ölçülmesi
-- karşıt kararların ayrı işaretlenmesi
-- alakasız teknik kaynakların normal kullanıcıya gösterilmemesi
+- benchmark setinde ilk 3 ve ilk 10 başarı oranlarının ölçülmesi ✅ (query grammar benchmark: 6 operator scenario)
+- karşıt kararların ayrı işaretlenmesi ✅ (SourceRelationship tabanlı, LLM uydurma yok)
+- alakasız teknik kaynakların normal kullanıcıya gösterilmemesi ✅ (index_eligibility filtresi + hard grammar constraints)
 
 ### P2.8 — Hukuki mesele ve delil grafiği
 

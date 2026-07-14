@@ -4795,6 +4795,339 @@
         "title": "LegalQuestionResponse",
         "type": "object"
       },
+      "LegalSearchRequest": {
+        "description": "Legal search query with optional filters and pagination.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opsiyonel case baglami",
+            "title": "Case Id"
+          },
+          "court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mahkeme adi filtresi",
+            "title": "Court"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sayfalama imleci",
+            "title": "Cursor"
+          },
+          "date_range": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tarih araligi (baslangic, bitis) YYYY-AA-GG formatinda",
+            "title": "Date Range"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Sayfa basina sonuc sayisi",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "official_only": {
+            "default": false,
+            "description": "Sadece resmi kaynaklarda ara",
+            "title": "Official Only",
+            "type": "boolean"
+          },
+          "query": {
+            "description": "Arama sorgusu metni",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "source_types": {
+            "description": "Kaynak turleri filtresi (yargitay, danistay, aym, mevzuat, resmi_gazete)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "LegalSearchRequest",
+        "type": "object"
+      },
+      "LegalSearchResponse": {
+        "description": "Paginated legal search response.",
+        "properties": {
+          "degraded_mode": {
+            "default": false,
+            "description": "Dusurulmus modda mi calisiyor",
+            "title": "Degraded Mode",
+            "type": "boolean"
+          },
+          "has_more": {
+            "default": false,
+            "description": "Daha fazla sonuc var mi",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sonraki sayfa imleci",
+            "title": "Next Cursor"
+          },
+          "query_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sorgu ID'si (geri bildirim icin)",
+            "title": "Query Id"
+          },
+          "results": {
+            "description": "Arama sonuclari listesi",
+            "items": {
+              "$ref": "#/components/schemas/LegalSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "semantic_available": {
+            "default": false,
+            "description": "Semantik arama kullanilabilir mi",
+            "title": "Semantic Available",
+            "type": "boolean"
+          },
+          "total": {
+            "default": 0,
+            "description": "Toplam eslesen sonuc sayisi",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "LegalSearchResponse",
+        "type": "object"
+      },
+      "LegalSearchResult": {
+        "description": "A single legal search result with full provenance.",
+        "properties": {
+          "canonical_key": {
+            "description": "Kaynak kanonik anahtari",
+            "title": "Canonical Key",
+            "type": "string"
+          },
+          "case_number": {
+            "default": "",
+            "description": "Dosya/Esas numarasi",
+            "title": "Case Number",
+            "type": "string"
+          },
+          "chamber": {
+            "default": "",
+            "description": "Daire/bolum",
+            "title": "Chamber",
+            "type": "string"
+          },
+          "court": {
+            "default": "",
+            "description": "Mahkeme adi",
+            "title": "Court",
+            "type": "string"
+          },
+          "decision_date": {
+            "default": "",
+            "description": "Karar tarihi",
+            "title": "Decision Date",
+            "type": "string"
+          },
+          "decision_number": {
+            "default": "",
+            "description": "Karar numarasi",
+            "title": "Decision Number",
+            "type": "string"
+          },
+          "effective_date": {
+            "default": "",
+            "description": "Yururluk tarihi",
+            "title": "Effective Date",
+            "type": "string"
+          },
+          "issuing_authority": {
+            "default": "",
+            "description": "Yayinlayan kurum",
+            "title": "Issuing Authority",
+            "type": "string"
+          },
+          "jurisdiction": {
+            "default": "",
+            "description": "Yargi alani (TR)",
+            "title": "Jurisdiction",
+            "type": "string"
+          },
+          "lexical_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sozluksel eslesme puani (0-1)",
+            "title": "Lexical Score"
+          },
+          "match_reasons": {
+            "description": "Eslesme nedenleri (Turkce)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Match Reasons",
+            "type": "array"
+          },
+          "paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Eslesen paragraf ID'si",
+            "title": "Paragraph Id"
+          },
+          "paragraph_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Eslesen paragraf metni",
+            "title": "Paragraph Text"
+          },
+          "publication_date": {
+            "default": "",
+            "description": "Yayin tarihi",
+            "title": "Publication Date",
+            "type": "string"
+          },
+          "relevance_score": {
+            "default": 0.0,
+            "description": "Alaka puani (0-1)",
+            "title": "Relevance Score",
+            "type": "number"
+          },
+          "result_id": {
+            "description": "Sonuc benzersiz kimligi",
+            "title": "Result Id",
+            "type": "string"
+          },
+          "semantic_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Semantik benzerlik puani (0-1)",
+            "title": "Semantic Score"
+          },
+          "snippet": {
+            "default": "",
+            "description": "Eslesen metin parcasi (highlight icin)",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "Kaynak kaydinin ID'si",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_type": {
+            "description": "Kaynak turu (yargitay, danistay, aym, mevzuat, resmi_gazete)",
+            "title": "Source Type",
+            "type": "string"
+          },
+          "temporal_status": {
+            "default": "",
+            "description": "Zamansal durum (guncel/mulga)",
+            "title": "Temporal Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "Kaynak basligi",
+            "title": "Title",
+            "type": "string"
+          },
+          "verification_status": {
+            "default": "",
+            "description": "Dogrulama durumu",
+            "title": "Verification Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result_id",
+          "source_id",
+          "source_type",
+          "canonical_key"
+        ],
+        "title": "LegalSearchResult",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -5356,6 +5689,48 @@
           }
         },
         "title": "OfficialTrackingResponse",
+        "type": "object"
+      },
+      "OpposingSearchRequest": {
+        "description": "Aleyhe kaynak aramasi istegi.",
+        "properties": {
+          "filters": {
+            "additionalProperties": true,
+            "description": "Ek filtreler",
+            "title": "Filters",
+            "type": "object"
+          },
+          "source_id": {
+            "description": "Referans kaynak ID'si",
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "OpposingSearchRequest",
+        "type": "object"
+      },
+      "OpposingSearchResponse": {
+        "description": "Aleyhe kaynak aramasi yaniti.",
+        "properties": {
+          "opposition_basis": {
+            "default": "",
+            "description": "Aleyhe olma temeli",
+            "title": "Opposition Basis",
+            "type": "string"
+          },
+          "results": {
+            "description": "Aleyhe sonuclar",
+            "items": {
+              "$ref": "#/components/schemas/LegalSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "title": "OpposingSearchResponse",
         "type": "object"
       },
       "PetitionDraftRequest": {
@@ -6853,6 +7228,58 @@
         "title": "SearchBuildResponse",
         "type": "object"
       },
+      "SearchFeedbackRequest": {
+        "description": "Arama sonucu icin geri bildirim.",
+        "properties": {
+          "feedback_type": {
+            "description": "Geri bildirim turu (relevant, not_relevant, authoritative, outdated, incorrect)",
+            "title": "Feedback Type",
+            "type": "string"
+          },
+          "query_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ilgili sorgu ID'si",
+            "title": "Query Id"
+          }
+        },
+        "required": [
+          "feedback_type"
+        ],
+        "title": "SearchFeedbackRequest",
+        "type": "object"
+      },
+      "SearchFeedbackResponse": {
+        "description": "Geri bildirim onay yaniti.",
+        "properties": {
+          "acknowledged": {
+            "default": true,
+            "description": "Geri bildirim alindi mi",
+            "title": "Acknowledged",
+            "type": "boolean"
+          },
+          "feedback_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Olusan geri bildirim ID'si",
+            "title": "Feedback Id"
+          }
+        },
+        "title": "SearchFeedbackResponse",
+        "type": "object"
+      },
       "SearchQualityRequest": {
         "properties": {
           "case_enrichment": {
@@ -6941,6 +7368,21 @@
         "title": "SearchQualityResponse",
         "type": "object"
       },
+      "SearchSuggestionResponse": {
+        "description": "Arama sorgusu onerileri yaniti.",
+        "properties": {
+          "suggestions": {
+            "description": "Onerilen sorgu metinleri",
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "title": "SearchSuggestionResponse",
+        "type": "object"
+      },
       "SelectedDecisionForDraft": {
         "properties": {
           "court": {
@@ -6977,6 +7419,68 @@
           "petition_paragraph"
         ],
         "title": "SelectedDecisionForDraft",
+        "type": "object"
+      },
+      "SimilarSearchRequest": {
+        "description": "Benzer kaynak aramasi istegi.",
+        "properties": {
+          "filters": {
+            "additionalProperties": true,
+            "description": "Ek filtreler",
+            "title": "Filters",
+            "type": "object"
+          },
+          "limit": {
+            "default": 10,
+            "description": "Maksimum benzer sonuc sayisi",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "source_id": {
+            "description": "Referans kaynak ID'si",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Referans paragraf ID'si (opsiyonel)",
+            "title": "Source Paragraph Id"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "SimilarSearchRequest",
+        "type": "object"
+      },
+      "SimilarSearchResponse": {
+        "description": "Benzer kaynak aramasi yaniti.",
+        "properties": {
+          "results": {
+            "description": "Benzer sonuclar",
+            "items": {
+              "$ref": "#/components/schemas/LegalSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "similarity_basis": {
+            "default": "",
+            "description": "Benzerlik temeli (semantic/title/citation)",
+            "title": "Similarity Basis",
+            "type": "string"
+          }
+        },
+        "title": "SimilarSearchResponse",
         "type": "object"
       },
       "SourceAuditRequest": {
@@ -16234,6 +16738,261 @@
           }
         },
         "summary": "Build Search Queries",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/legal": {
+      "post": {
+        "operationId": "search_legal_api_v1_search_legal_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegalSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Legal",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/opposing": {
+      "post": {
+        "operationId": "search_opposing_api_v1_search_opposing_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpposingSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpposingSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Opposing",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/results/{result_id}/feedback": {
+      "post": {
+        "operationId": "search_feedback_api_v1_search_results__result_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "result_id",
+            "required": true,
+            "schema": {
+              "title": "Result Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFeedbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Feedback",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/similar": {
+      "post": {
+        "operationId": "search_similar_api_v1_search_similar_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimilarSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimilarSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Similar",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/suggestions": {
+      "get": {
+        "operationId": "search_suggestions_api_v1_search_suggestions_get",
+        "parameters": [
+          {
+            "description": "Sorgu on eki",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Sorgu on eki",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maksimum oneri sayisi",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Maksimum oneri sayisi",
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchSuggestionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Suggestions",
         "tags": [
           "Search"
         ]

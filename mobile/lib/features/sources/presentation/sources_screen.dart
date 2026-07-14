@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
@@ -22,6 +23,11 @@ class SourcesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Kaynaklar'),
         actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Ara',
+            onPressed: () => context.push('/search'),
+          ),
           IconButton(
             icon: const Icon(Icons.track_changes_outlined),
             tooltip: 'Resmî Kaynak Takibi',
