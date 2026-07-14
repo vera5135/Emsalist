@@ -39,6 +39,7 @@ def compute_query_hash(query_plan, tenant_id: str, secret: str) -> str:
 async def compute_index_version(session: AsyncSession) -> str:
     from app.db.models import SourceRecord, SourceVersion, SourceVerification
     from app.config import get_settings
+    from app.services.source_ingestion_service import resolve_version_verification_status
 
     result = await session.execute(
         select(func.max(SourceRecord.updated_at))
@@ -57,48 +58,66 @@ async def compute_index_version(session: AsyncSession) -> str:
     )
     indexed_paragraphs = result.scalar_one()
 
-    result = await session.execute(
-        select(func.count(SourceVersion.id)).where(SourceVersion.status == "active")
-    )
-    active_versions = result.scalar_one()
-
-    # ── Exact-version trust fingerprint ───────────────────────────────────
-    # Hash current-version verification provenance rows
-    verif_rows = await session.execute(
-        select(
-            SourceVerification.id,
-            SourceVerification.source_record_id,
-            SourceVerification.source_version_id,
-            SourceVerification.verification_method,
-            SourceVerification.verifier_type,
-            SourceVerification.result,
-            SourceVerification.evidence_url,
-            SourceVerification.evidence_hash,
-        )
-        .join(SourceRecord, SourceVerification.source_record_id == SourceRecord.id)
-        .where(
-            SourceVerification.source_version_id == SourceRecord.current_version_id,
+    # ── Authoritative exact-version effective-trust fingerprint ────────────
+    current_records = await session.execute(
+        select(SourceRecord).where(
+            SourceRecord.current_version_id.isnot(None),
             SourceRecord.deleted_at.is_(None),
-        )
-        .order_by(SourceVerification.source_record_id, SourceVerification.source_version_id)
+        ).order_by(SourceRecord.id)
     )
-    verif_parts = []
-    for row in verif_rows.all():
-        verif_parts.append(
-            f"{row[1]}|{row[2]}|{row[3]}|{row[4]}|{row[5]}|{row[6] or ''}|{row[7] or ''}"
+    records = current_records.scalars().all()
+
+    trust_payload = []
+    for rec in records:
+        resolved = await resolve_version_verification_status(
+            session, rec.id, rec.current_version_id, rec.verification_status
         )
-    verif_hash = hashlib.sha256(";;".join(verif_parts).encode()).hexdigest()[:12]
+        verif_rows = await session.execute(
+            select(
+                SourceVerification.id,
+                SourceVerification.source_record_id,
+                SourceVerification.source_version_id,
+                SourceVerification.verification_method,
+                SourceVerification.verifier_type,
+                SourceVerification.result,
+                SourceVerification.evidence_url,
+                SourceVerification.evidence_hash,
+            ).where(
+                SourceVerification.source_record_id == rec.id,
+                SourceVerification.source_version_id == rec.current_version_id,
+            ).order_by(
+                SourceVerification.source_record_id,
+                SourceVerification.source_version_id,
+                SourceVerification.id,
+            )
+        )
+        verifications = []
+        for row in verif_rows.all():
+            verifications.append([
+                row[0], row[1], row[2], row[3], row[4], row[5],
+                row[6] or "", row[7] or "",
+            ])
+        trust_payload.append({
+            "rid": rec.id,
+            "cvid": rec.current_version_id,
+            "rec_st": rec.verification_status,
+            "eff_st": resolved,
+            "verifs": verifications,
+        })
+
+    trust_fingerprint = hashlib.sha256(
+        json.dumps(trust_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()[:16]
 
     settings = get_settings()
     components = [
         str(int(max_rec.timestamp()) if max_rec else 0),
         str(int(max_emb.timestamp()) if max_emb else 0),
         str(indexed_paragraphs),
-        str(active_versions),
-        verif_hash,
+        trust_fingerprint,
         settings.search_embedding_model,
         settings.search_embedding_version,
-        "p2.7-v6",
+        "p2.7-v7",
     ]
     fingerprint = hashlib.sha256("|".join(components).encode()).hexdigest()[:16]
     return fingerprint
