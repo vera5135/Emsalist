@@ -109,15 +109,54 @@ async def compute_index_version(session: AsyncSession) -> str:
         json.dumps(trust_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     ).hexdigest()[:16]
 
+    # ── Current-version embedding fingerprint ──────────────────────────────
+    emb_rows = await session.execute(
+        select(
+            SourceRecord.id,
+            SourceParagraph.source_version_id,
+            SourceParagraph.id,
+            SourceParagraph.embedding_status,
+            SourceParagraph.embedding_model,
+            SourceParagraph.embedding_version,
+            SourceParagraph.embedding_dimension,
+            SourceParagraph.embedding_vector_json,
+            SourceParagraph.embedding_updated_at,
+        )
+        .join(SourceRecord, SourceParagraph.source_version_id == SourceRecord.current_version_id)
+        .where(SourceRecord.deleted_at.is_(None))
+        .order_by(
+            SourceRecord.id,
+            SourceParagraph.source_version_id,
+            SourceParagraph.id,
+        )
+    )
+    emb_payload = []
+    for row in emb_rows.all():
+        raw_vec = row[7] or ""
+        vec_hash = hashlib.sha256(raw_vec.encode()).hexdigest()
+        upd = row[8].isoformat() if row[8] is not None else ""
+        emb_payload.append({
+            "rid": row[0],
+            "svid": row[1],
+            "pid": row[2],
+            "status": row[3] or "",
+            "model": row[4] or "",
+            "version": row[5] or "",
+            "dim": row[6],
+            "vh": vec_hash,
+            "upd": upd,
+        })
+    emb_fingerprint = hashlib.sha256(
+        json.dumps(emb_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()[:16]
+
     settings = get_settings()
     components = [
-        str(int(max_rec.timestamp()) if max_rec else 0),
-        str(int(max_emb.timestamp()) if max_emb else 0),
-        str(indexed_paragraphs),
         trust_fingerprint,
+        emb_fingerprint,
         settings.search_embedding_model,
         settings.search_embedding_version,
-        "p2.7-v7",
+        "p2.7-v8",
     ]
     fingerprint = hashlib.sha256("|".join(components).encode()).hexdigest()[:16]
     return fingerprint
