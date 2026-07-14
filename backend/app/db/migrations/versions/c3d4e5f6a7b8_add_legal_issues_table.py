@@ -42,6 +42,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], name='fk_legal_issues_tenant'),
         sa.ForeignKeyConstraint(['case_id'], ['cases.id'], name='fk_legal_issues_case'),
+        sa.UniqueConstraint('tenant_id', 'case_id', 'id', name='uq_legal_issues_tenant_case_id'),
         sa.CheckConstraint(
             f"status IN ({', '.join(repr(s) for s in _LEGAL_ISSUE_STATUSES)})",
             name='ck_legal_issues_status',
@@ -51,8 +52,8 @@ def upgrade() -> None:
             name='ck_legal_issues_confidence',
         ),
         sa.ForeignKeyConstraint(
-            ['case_id', 'parent_issue_id'],
-            ['legal_issues.case_id', 'legal_issues.id'],
+            ['tenant_id', 'case_id', 'parent_issue_id'],
+            ['legal_issues.tenant_id', 'legal_issues.case_id', 'legal_issues.id'],
             name='fk_legal_issues_parent_hierarchy',
             ondelete='RESTRICT',
         ),

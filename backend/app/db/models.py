@@ -887,6 +887,7 @@ class LegalIssue(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_legal_issues_tenant_case_id"),
         Index("ix_legal_issues_tenant_case", "tenant_id", "case_id"),
         Index("ix_legal_issues_case_parent", "case_id", "parent_issue_id"),
         CheckConstraint(
@@ -898,8 +899,8 @@ class LegalIssue(Base):
             name="ck_legal_issues_confidence",
         ),
         ForeignKeyConstraint(
-            ["case_id", "parent_issue_id"],
-            ["legal_issues.case_id", "legal_issues.id"],
+            ["tenant_id", "case_id", "parent_issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
             name="fk_legal_issues_parent_hierarchy",
             ondelete="RESTRICT",
         ),

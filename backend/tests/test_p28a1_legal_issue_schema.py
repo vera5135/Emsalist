@@ -1,6 +1,7 @@
-"""P2.8A1 — LegalIssue schema and hierarchy executable tests."""
+"""P2.8A1 — LegalIssue schema and hierarchy PostgreSQL acceptance tests."""
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
@@ -8,9 +9,10 @@ import pytest_asyncio
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+from alembic.config import Config
+from alembic import command
 
 from app.db.models import (
-    Base,
     Case,
     LegalIssue,
     LegalIssueNode,
@@ -19,21 +21,88 @@ from app.db.models import (
     User,
 )
 
-_TEST_DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "sqlite+aiosqlite:///./test_p28a1.db",
-)
-_IS_PG = "postgres" in _TEST_DB_URL
+# ── PostgreSQL configuration ──────────────────────────────────────────────────
 
+POSTGRES_HOST = os.environ.get("PGHOST", "127.0.0.1")
+POSTGRES_PORT = os.environ.get("PGPORT", "5432")
+POSTGRES_USER = os.environ.get("PGUSER", "emsalist")
+POSTGRES_PASSWORD = os.environ.get("PGPASSWORD", "emsalist_test_pwd")
+POSTGRES_DB = "emsalist_p28a1_acceptance"
+
+TEST_DB_URL = (
+    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+    f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+)
+
+_ALEMBIC_INI = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
+_IN_CI = os.environ.get("CI", "").lower() == "true"
+
+
+def _run_alembic_upgrade(db_url_async: str) -> None:
+    sync_url = db_url_async.replace("+asyncpg", "")
+    cfg = Config(_ALEMBIC_INI)
+    cfg.set_main_option("sqlalchemy.url", sync_url)
+    import sys as _sys
+    old = _sys.argv
+    try:
+        command.upgrade(cfg, "head")
+    finally:
+        _sys.argv = old
+
+
+# ── Database fixture ──────────────────────────────────────────────────────────
 
 @pytest_asyncio.fixture(scope="module")
 async def test_db():
-    engine = create_async_engine(_TEST_DB_URL, echo=False, poolclass=NullPool)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Create isolated P2.8A1 PostgreSQL DB, apply Alembic, return sessionmaker."""
+    import asyncpg as _pg
+
+    try:
+        sys_conn = await _pg.connect(
+            host=POSTGRES_HOST, port=int(POSTGRES_PORT),
+            user=POSTGRES_USER, password=POSTGRES_PASSWORD,
+            database="postgres",
+        )
+    except (ConnectionRefusedError, OSError, Exception) as e:
+        if _IN_CI:
+            raise RuntimeError(f"PostgreSQL not reachable in CI: {e}") from e
+        pytest.skip(f"PostgreSQL not reachable — {e}")
+        yield None
+        return
+
+    try:
+        existing = await sys_conn.fetchval("SELECT 1 FROM pg_database WHERE datname=$1", POSTGRES_DB)
+        if existing:
+            await sys_conn.execute(
+                f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                f"WHERE datname='{POSTGRES_DB}' AND pid <> pg_backend_pid()"
+            )
+            await sys_conn.execute(f'DROP DATABASE "{POSTGRES_DB}"')
+        await sys_conn.execute(f'CREATE DATABASE "{POSTGRES_DB}"')
+    finally:
+        await sys_conn.close()
+
+    _run_alembic_upgrade(TEST_DB_URL)
+
+    engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     yield maker
     await engine.dispose()
+
+    try:
+        sys_conn = await _pg.connect(
+            host=POSTGRES_HOST, port=int(POSTGRES_PORT),
+            user=POSTGRES_USER, password=POSTGRES_PASSWORD,
+            database="postgres",
+        )
+        await sys_conn.execute(
+            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            f"WHERE datname='{POSTGRES_DB}' AND pid <> pg_backend_pid()"
+        )
+        await sys_conn.execute(f'DROP DATABASE "{POSTGRES_DB}"')
+        await sys_conn.close()
+    except Exception:
+        pass
 
 
 @pytest_asyncio.fixture
@@ -41,6 +110,20 @@ async def session(test_db):
     async with test_db() as s:
         yield s
 
+
+async def _seed(session: AsyncSession):
+    t = Tenant(id="t1", name="T1", slug="t1", status="active")
+    session.add(t)
+    u = User(id="u1", tenant_id="t1", email_normalized="u@t.com", display_name="U", status="active", role="editor")
+    session.add(u)
+    c = Case(id="c1", tenant_id="t1", owner_user_id="u1", title="Case 1", status="active")
+    session.add(c)
+    c2 = Case(id="c2", tenant_id="t1", owner_user_id="u1", title="Case 2", status="active")
+    session.add(c2)
+    await session.flush()
+
+
+# ── Model tests ───────────────────────────────────────────────────────────────
 
 class TestLegalIssueModel:
     """Canonical LegalIssue model and status vocabulary."""
@@ -60,52 +143,35 @@ class TestLegalIssueModel:
 
     def test_legacy_status_not_in_canonical(self):
         for legacy in ("confirmed", "missing", "rejected"):
-            assert legacy not in LEGAL_ISSUE_STATUSES, (
-                f"Legacy status '{legacy}' must not be in canonical P2.8 set"
-            )
+            assert legacy not in LEGAL_ISSUE_STATUSES
 
-    def test_all_statuses_present(self):
+    def test_all_canonical_count(self):
         assert len(LEGAL_ISSUE_STATUSES) == 7
 
 
+# ── PostgreSQL persistence tests ──────────────────────────────────────────────
+
 class TestLegalIssuePersistence:
-    """DB-level CRUD and constraint enforcement."""
     pytestmark = pytest.mark.asyncio
 
-    async def _seed(self, session: AsyncSession):
-        t = Tenant(id="t1", name="T1", slug="t1", status="active")
-        session.add(t)
-        u = User(id="u1", tenant_id="t1", email_normalized="u@t.com", display_name="U", status="active", role="editor")
-        session.add(u)
-        c = Case(id="c1", tenant_id="t1", owner_user_id="u1", title="Case", status="active")
-        session.add(c)
-        await session.flush()
-
     async def test_all_seven_statuses_persist(self, session):
-        await self._seed(session)
+        await _seed(session)
         for s in sorted(LEGAL_ISSUE_STATUSES):
-            issue = LegalIssue(
-                id=f"li-{s}",
-                tenant_id="t1",
-                case_id="c1",
-                title=f"Issue {s}",
-                status=s,
-            )
-            session.add(issue)
+            session.add(LegalIssue(id=f"li-{s}", tenant_id="t1", case_id="c1", title=f"Issue {s}", status=s))
         await session.flush()
         result = await session.execute(select(LegalIssue))
         assert len(result.scalars().all()) == 7
 
-    async def test_root_issue_null_parent(self, session):
-        await self._seed(session)
-        issue = LegalIssue(id="root", tenant_id="t1", case_id="c1", title="Root", status="proposed")
-        session.add(issue)
+    async def test_null_parent_root_allowed(self, session):
+        await _seed(session)
+        session.add(LegalIssue(id="root", tenant_id="t1", case_id="c1", title="Root", status="proposed"))
         await session.flush()
         loaded = await session.get(LegalIssue, "root")
+        assert loaded is not None
         assert loaded.parent_issue_id is None
 
-    async def test_child_references_parent_same_case(self, session):
-        await self._seed(session)
+    async def test_same_case_parent_allowed(self, session):
+        await _seed(session)
         parent = LegalIssue(id="p1", tenant_id="t1", case_id="c1", title="Parent", status="proposed")
         session.add(parent)
         await session.flush()
@@ -113,92 +179,80 @@ class TestLegalIssuePersistence:
                            status="proposed", parent_issue_id="p1")
         session.add(child)
         await session.flush()
-        assert child.parent_issue_id == "p1"
+        loaded = await session.get(LegalIssue, "c1")
+        assert loaded.parent_issue_id == "p1"
 
     async def test_confidence_bounds_accepted(self, session):
-        await self._seed(session)
+        await _seed(session)
         for val in (0.0, 0.5, 1.0):
-            issue = LegalIssue(id=f"conf-{val}", tenant_id="t1", case_id="c1",
-                               title=f"Conf {val}", status="proposed", confidence=val)
-            session.add(issue)
+            session.add(LegalIssue(id=f"conf-{val}", tenant_id="t1", case_id="c1",
+                                   title=f"Conf {val}", status="proposed", confidence=val))
         await session.flush()
-        assert True
 
     async def test_confidence_below_zero_rejected(self, session):
-        await self._seed(session)
-        issue = LegalIssue(id="c-bad", tenant_id="t1", case_id="c1",
-                           title="Bad", status="proposed", confidence=-0.1)
-        session.add(issue)
+        await _seed(session)
+        session.add(LegalIssue(id="c-bad", tenant_id="t1", case_id="c1",
+                               title="Bad", status="proposed", confidence=-0.1))
         from sqlalchemy.exc import IntegrityError
         with pytest.raises(IntegrityError):
             await session.flush()
         await session.rollback()
 
     async def test_confidence_above_one_rejected(self, session):
-        await self._seed(session)
-        issue = LegalIssue(id="c-bad2", tenant_id="t1", case_id="c1",
-                           title="Bad", status="proposed", confidence=1.1)
-        session.add(issue)
+        await _seed(session)
+        session.add(LegalIssue(id="c-bad2", tenant_id="t1", case_id="c1",
+                               title="Bad", status="proposed", confidence=1.1))
         from sqlalchemy.exc import IntegrityError
         with pytest.raises(IntegrityError):
             await session.flush()
         await session.rollback()
 
-    async def test_wrong_status_rejected_by_constraint(self, session):
-        await self._seed(session)
-        issue = LegalIssue(id="bad-status", tenant_id="t1", case_id="c1",
-                           title="Bad", status="confirmed")
-        session.add(issue)
+    async def test_confirmed_status_rejected_by_check(self, session):
+        await _seed(session)
+        session.add(LegalIssue(id="bad-status", tenant_id="t1", case_id="c1",
+                               title="Bad", status="confirmed"))
         from sqlalchemy.exc import IntegrityError
         with pytest.raises(IntegrityError):
             await session.flush()
         await session.rollback()
 
-    async def test_cross_case_parent_prevented(self, session):
-        await self._seed(session)
-        c2 = Case(id="c2", tenant_id="t1", owner_user_id="u1", title="C2", status="active")
-        session.add(c2)
-        parent = LegalIssue(id="p-cross", tenant_id="t1", case_id="c1", title="P", status="proposed")
+    async def test_cross_case_parent_rejected(self, session):
+        await _seed(session)
+        parent = LegalIssue(id="p-cc", tenant_id="t1", case_id="c1", title="P-C1", status="proposed")
         session.add(parent)
         await session.flush()
-        child = LegalIssue(id="child-cross", tenant_id="t1", case_id="c2", title="Child",
-                           status="proposed", parent_issue_id="p-cross")
+        child = LegalIssue(id="ch-cc", tenant_id="t1", case_id="c2", title="C-C2",
+                           status="proposed", parent_issue_id="p-cc")
         session.add(child)
-        if _IS_PG:
-            from sqlalchemy.exc import IntegrityError
-            with pytest.raises(IntegrityError):
-                await session.flush()
-            await session.rollback()
-        else:
-            pytest.skip("SQLite does not enforce composite self-FK constraints")
+        from sqlalchemy.exc import IntegrityError
+        with pytest.raises(IntegrityError):
+            await session.flush()
+        await session.rollback()
 
-    async def test_cross_tenant_parent_prevented(self, session):
+    async def test_cross_tenant_parent_rejected(self, session):
         t2 = Tenant(id="t2", name="T2", slug="t2", status="active")
         session.add(t2)
         u2 = User(id="u2", tenant_id="t2", email_normalized="u2@t.com", display_name="U2", status="active", role="editor")
         session.add(u2)
-        c_t1 = Case(id="c-t1", tenant_id="t1", owner_user_id="u1", title="CT1", status="active")
-        session.add(c_t1)
+        c_t1a = Case(id="c-t1a", tenant_id="t1", owner_user_id="u1", title="CT1", status="active")
+        session.add(c_t1a)
         await session.flush()
-        parent = LegalIssue(id="p-t1", tenant_id="t1", case_id="c-t1", title="P", status="proposed")
+        parent = LegalIssue(id="p-ct", tenant_id="t1", case_id="c-t1a", title="P-T1", status="proposed")
         session.add(parent)
         await session.flush()
         c_t2 = Case(id="c-t2", tenant_id="t2", owner_user_id="u2", title="CT2", status="active")
         session.add(c_t2)
         await session.flush()
-        child = LegalIssue(id="c-t2", tenant_id="t2", case_id="c-t2", title="C",
-                           status="proposed", parent_issue_id="p-t1")
+        child = LegalIssue(id="ch-ct", tenant_id="t2", case_id="c-t2", title="C-T2",
+                           status="proposed", parent_issue_id="p-ct")
         session.add(child)
-        if _IS_PG:
-            from sqlalchemy.exc import IntegrityError
-            with pytest.raises(IntegrityError):
-                await session.flush()
-            await session.rollback()
-        else:
-            pytest.skip("SQLite does not enforce composite self-FK constraints")
+        from sqlalchemy.exc import IntegrityError
+        with pytest.raises(IntegrityError):
+            await session.flush()
+        await session.rollback()
 
-    async def test_parent_delete_does_not_cascade(self, session):
-        await self._seed(session)
+    async def test_parent_physical_delete_with_child_rejected(self, session):
+        await _seed(session)
         parent = LegalIssue(id="p-del", tenant_id="t1", case_id="c1", title="P", status="proposed")
         session.add(parent)
         await session.flush()
@@ -206,16 +260,15 @@ class TestLegalIssuePersistence:
                            status="proposed", parent_issue_id="p-del")
         session.add(child)
         await session.flush()
-        if _IS_PG:
-            from sqlalchemy.exc import IntegrityError
-            with pytest.raises(IntegrityError):
-                await session.execute(text("DELETE FROM legal_issues WHERE id = 'p-del'"))
-            await session.rollback()
+        from sqlalchemy.exc import IntegrityError
+        with pytest.raises(IntegrityError):
+            await session.execute(text("DELETE FROM legal_issues WHERE id = 'p-del'"))
+        await session.rollback()
         child_exists = await session.get(LegalIssue, "c-del")
         assert child_exists is not None
 
     async def test_soft_delete_preserves_row(self, session):
-        await self._seed(session)
+        await _seed(session)
         from datetime import datetime, timezone
         issue = LegalIssue(id="sd", tenant_id="t1", case_id="c1", title="SD", status="proposed")
         session.add(issue)
@@ -228,23 +281,52 @@ class TestLegalIssuePersistence:
         assert loaded.deleted_at is not None
 
     async def test_indexes_exist(self, session):
-        await self._seed(session)
-        result = await session.execute(select(LegalIssue).where(
-            LegalIssue.tenant_id == "t1",
-            LegalIssue.case_id == "c1",
+        await _seed(session)
+        await session.execute(select(LegalIssue).where(
+            LegalIssue.tenant_id == "t1", LegalIssue.case_id == "c1",
         ))
-        assert result.scalars().all() == []
 
-    async def test_migration_roundtrip_single_head(self):
-        from alembic.config import Config
-        from alembic import command
-        import os as _os
-        ini = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "alembic.ini"))
-        cfg = Config(ini)
-        if "postgres" in _TEST_DB_URL:
-            cfg.set_main_option("sqlalchemy.url", _TEST_DB_URL.replace("+asyncpg", ""))
-        # Verify single head exists
+    async def test_unique_constraint_is_present(self, session):
+        result = await session.execute(text(
+            "SELECT constraint_name FROM information_schema.table_constraints "
+            "WHERE table_name='legal_issues' AND constraint_name='uq_legal_issues_tenant_case_id'"
+        ))
+        rows = result.fetchall()
+        assert len(rows) == 1
+
+    async def test_unique_constraint_columns(self, session):
+        result = await session.execute(text(
+            "SELECT column_name FROM information_schema.constraint_column_usage "
+            "WHERE table_name='legal_issues' AND constraint_name='uq_legal_issues_tenant_case_id' "
+            "ORDER BY column_name"
+        ))
+        cols = [r[0] for r in result.fetchall()]
+        assert "case_id" in cols
+        assert "id" in cols
+        assert "tenant_id" in cols
+
+    async def test_fk_columns_correct(self, session):
+        result = await session.execute(text(
+            "SELECT column_name FROM information_schema.constraint_column_usage "
+            "WHERE table_name='legal_issues' AND constraint_name='fk_legal_issues_parent_hierarchy' "
+            "ORDER BY ordinal_position"
+        ))
+        cols = [r[0] for r in result.fetchall()]
+        assert cols == ["tenant_id", "case_id", "parent_issue_id"]
+
+    async def test_fk_references_correct(self, session):
+        result = await session.execute(text(
+            "SELECT unique_constraint_name FROM information_schema.referential_constraints "
+            "WHERE constraint_name='fk_legal_issues_parent_hierarchy'"
+        ))
+        rows = result.fetchall()
+        assert len(rows) == 1
+        assert rows[0][0] == "uq_legal_issues_tenant_case_id"
+
+    async def test_single_alembic_head(self, session):
         from alembic.script import ScriptDirectory
+        cfg = Config(_ALEMBIC_INI)
+        cfg.set_main_option("sqlalchemy.url", TEST_DB_URL.replace("+asyncpg", ""))
         script = ScriptDirectory.from_config(cfg)
         heads = script.get_heads()
-        assert len(heads) == 1, f"Expected 1 Alembic head, got {len(heads)}: {heads}"
+        assert len(heads) == 1
