@@ -61,9 +61,9 @@ from app.services.source_verification import (
 
 POSTGRES_HOST = os.environ.get("PGHOST", "127.0.0.1")
 POSTGRES_PORT = os.environ.get("PGPORT", "5432")
-POSTGRES_USER = os.environ.get("PGUSER", "postgres")
-POSTGRES_PASSWORD = os.environ.get("PGPASSWORD", "postgres")
-POSTGRES_DB = os.environ.get("PGDATABASE", "emsalist_p27_acceptance_test")
+POSTGRES_USER = os.environ.get("PGUSER", "emsalist")
+POSTGRES_PASSWORD = os.environ.get("PGPASSWORD", "emsalist_test_pwd")
+POSTGRES_DB = os.environ.get("PGDATABASE", "emsalist_test")
 
 TEST_DB_URL = (
     f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
@@ -74,6 +74,8 @@ _ALEMBIC_INI = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "a
 
 # ── PostgreSQL availability check ──────────────────────────────────────────────
 
+_IN_CI = os.environ.get("CI", "").lower() == "true"
+
 try:
     import asyncpg as _asyncpg_check  # noqa: F401
     _PG_AVAILABLE = True
@@ -81,6 +83,8 @@ except ImportError:
     _PG_AVAILABLE = False
 
 if not _PG_AVAILABLE:
+    if _IN_CI:
+        raise ImportError("PostgreSQL driver asyncpg not available — P2.7 CI acceptance harness requires it")
     pytest.skip(
         "PostgreSQL driver asyncpg not available — skipping P2.7 production DB tests",
         allow_module_level=True,
@@ -165,6 +169,14 @@ async def test_db():
     """Create isolated PostgreSQL DB, apply Alembic migrations, return sessionmaker."""
     import asyncpg as _pg
 
+    if _IN_CI:
+        _run_alembic_upgrade(TEST_DB_URL)
+        engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
+        maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        yield maker
+        await engine.dispose()
+        return
+
     try:
         sys_conn = await _pg.connect(
             host=POSTGRES_HOST, port=int(POSTGRES_PORT),
@@ -172,11 +184,9 @@ async def test_db():
             database="postgres",
         )
     except (ConnectionRefusedError, OSError, Exception) as e:
-        pytest.skip(
-            f"PostgreSQL not reachable at {POSTGRES_HOST}:{POSTGRES_PORT} — "
-            f"P2.7 production acceptance harness requires a running PostgreSQL server. "
-            f"({e})"
-        )
+        if _IN_CI:
+            raise RuntimeError(f"PostgreSQL not reachable in CI: {e}") from e
+        pytest.skip(f"PostgreSQL not reachable at {POSTGRES_HOST}:{POSTGRES_PORT} — ({e})")
         yield None
         return
 

@@ -1,0 +1,62 @@
+name: P2.7 Hybrid Search PostgreSQL Acceptance
+
+on:
+  push:
+    branches: [feat/p2.7-hybrid-search]
+  workflow_dispatch:
+
+jobs:
+  p27-acceptance-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_test_pwd
+          POSTGRES_DB: emsalist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      CI: "true"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: emsalist
+      PGPASSWORD: emsalist_test_pwd
+      PGDATABASE: emsalist_test
+      DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Alembic upgrade head
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      - name: Run P2.7 PostgreSQL production acceptance tests
+        working-directory: backend
+        run: python -m pytest tests/test_p27_production_acceptance.py -v --tb=short
+
+      - name: Verify no test was skipped
+        run: |
+          echo "All 31 P2.7 production acceptance tests must execute in CI."
+          echo "If any test was skipped, the harness is misconfigured."
