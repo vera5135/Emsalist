@@ -1142,7 +1142,7 @@ class SearchFeedback(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     search_query_id: Mapped[str] = mapped_column(String(32), ForeignKey("search_queries.id"), nullable=False, index=True)
-    result_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    result_id: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
     source_id: Mapped[str] = mapped_column(String(32), nullable=False)
     feedback_type: Mapped[str] = mapped_column(String(30), nullable=False)
     user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
