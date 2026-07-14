@@ -258,6 +258,7 @@ async def _seed_test_data(session: AsyncSession) -> None:
     # ── Tenant ──
     tenant = Tenant(id="test-tenant", name="Test Tenant", slug="test-tenant", status="active")
     session.add(tenant)
+    await session.flush()
 
     # ── Users ──
     user = User(
@@ -271,6 +272,7 @@ async def _seed_test_data(session: AsyncSession) -> None:
         status="active", role="editor",
     )
     session.add_all([user, user_other])
+    await session.flush()
 
     # ── Case ──
     case = Case(
