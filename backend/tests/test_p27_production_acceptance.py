@@ -63,7 +63,7 @@ POSTGRES_HOST = os.environ.get("PGHOST", "127.0.0.1")
 POSTGRES_PORT = os.environ.get("PGPORT", "5432")
 POSTGRES_USER = os.environ.get("PGUSER", "emsalist")
 POSTGRES_PASSWORD = os.environ.get("PGPASSWORD", "emsalist_test_pwd")
-POSTGRES_DB = os.environ.get("PGDATABASE", "emsalist_test")
+POSTGRES_DB = os.environ.get("PGDATABASE", "emsalist_p27_acceptance")
 
 TEST_DB_URL = (
     f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
@@ -174,16 +174,8 @@ def _run_alembic_upgrade(db_url_async: str) -> None:
 
 @pytest_asyncio.fixture(scope="module")
 async def test_db():
-    """Create isolated PostgreSQL DB, apply Alembic migrations, return sessionmaker."""
+    """Create isolated P2.7 database, apply Alembic migrations, return sessionmaker."""
     import asyncpg as _pg
-
-    if _IN_CI:
-        _run_alembic_upgrade(TEST_DB_URL)
-        engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
-        maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        yield maker
-        await engine.dispose()
-        return
 
     try:
         sys_conn = await _pg.connect(

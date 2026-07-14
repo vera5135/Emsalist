@@ -33,8 +33,6 @@ jobs:
       PGPORT: "5432"
       PGUSER: emsalist
       PGPASSWORD: emsalist_test_pwd
-      PGDATABASE: emsalist_test
-      DATABASE_URL: postgresql+asyncpg://emsalist:emsalist_test_pwd@localhost:5432/emsalist_test
 
     steps:
       - name: Checkout
@@ -49,10 +47,6 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements-test.txt
-
-      - name: Alembic upgrade head
-        working-directory: backend
-        run: python -m alembic upgrade head
 
       - name: Run P2.7 PostgreSQL production acceptance tests
         working-directory: backend
