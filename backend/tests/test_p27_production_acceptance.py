@@ -1071,20 +1071,49 @@ class TestCrossUserCursorRejected:
 @pytest.mark.asyncio
 class TestTrustSnapshotChange:
     async def test_trust_snapshot_change(self, db_session):
-        """Change verification status → index_version changed."""
+        """Exact-version verification provenance change → index_version changed."""
         from app.services.search_privacy import compute_index_version
+        from app.services.source_ingestion_service import resolve_version_verification_status
 
-        iv_before = await compute_index_version(db_session)
-
-        # Change verification status on a source record
+        # Use src-k-citation: starts as NEEDS_REVIEW (no verification evidence yet)
         rec_result = await db_session.execute(
-            select(SourceRecord).where(SourceRecord.id == "src-domain-kira")
+            select(SourceRecord).where(SourceRecord.id == "src-k-citation")
         )
         rec = rec_result.scalar_one_or_none()
         assert rec is not None
+        assert rec.verification_status == NEEDS_REVIEW
+
+        # Verify current effective status is NEEDS_REVIEW
+        ver_result = await db_session.execute(
+            select(SourceVersion).where(SourceVersion.id == rec.current_version_id)
+        )
+        ver = ver_result.scalar_one_or_none()
+        assert ver is not None
+
+        eff_before = await resolve_version_verification_status(db_session, rec.id, ver.id, rec.verification_status)
+        assert eff_before == NEEDS_REVIEW, f"Expected NEEDS_REVIEW, got {eff_before}"
+
+        iv_before = await compute_index_version(db_session)
+
+        # Add exact-current-version verification evidence
+        verif = SourceVerification(
+            id=_mock_id("sv-trust-change"),
+            source_record_id=rec.id,
+            source_version_id=ver.id,
+            verification_method="official_fetch_match",
+            verifier_type="official_match",
+            result=VERIFIED_OFFICIAL,
+            evidence_url="https://karararama.yargitay.gov.tr/k-2021-456",
+            evidence_hash=ver.content_hash,
+            notes="trust snapshot test evidence",
+        )
+        db_session.add(verif)
         rec.verification_status = VERIFIED_OFFICIAL
         rec.updated_at = _utcnow()
         await db_session.commit()
+
+        eff_after = await resolve_version_verification_status(db_session, rec.id, ver.id, rec.verification_status)
+        assert eff_after == VERIFIED_OFFICIAL, f"Expected VERIFIED_OFFICIAL, got {eff_after}"
 
         iv_after = await compute_index_version(db_session)
         assert iv_before != iv_after, (

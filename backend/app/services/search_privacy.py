@@ -37,7 +37,7 @@ def compute_query_hash(query_plan, tenant_id: str, secret: str) -> str:
 
 
 async def compute_index_version(session: AsyncSession) -> str:
-    from app.db.models import SourceRecord, SourceVersion
+    from app.db.models import SourceRecord, SourceVersion, SourceVerification
     from app.config import get_settings
 
     result = await session.execute(
@@ -62,19 +62,32 @@ async def compute_index_version(session: AsyncSession) -> str:
     )
     active_versions = result.scalar_one()
 
-    result = await session.execute(
-        select(func.count(SourceRecord.id)).where(
-            SourceRecord.verification_status.in_(("verified_official", "editor_verified"))
+    # ── Exact-version trust fingerprint ───────────────────────────────────
+    # Hash current-version verification provenance rows
+    verif_rows = await session.execute(
+        select(
+            SourceVerification.id,
+            SourceVerification.source_record_id,
+            SourceVerification.source_version_id,
+            SourceVerification.verification_method,
+            SourceVerification.verifier_type,
+            SourceVerification.result,
+            SourceVerification.evidence_url,
+            SourceVerification.evidence_hash,
         )
-    )
-    trusted_count = result.scalar_one()
-
-    result = await session.execute(
-        select(func.count(SourceParagraph.id)).where(
-            SourceParagraph.embedding_updated_at.isnot(None)
+        .join(SourceRecord, SourceVerification.source_record_id == SourceRecord.id)
+        .where(
+            SourceVerification.source_version_id == SourceRecord.current_version_id,
+            SourceRecord.deleted_at.is_(None),
         )
+        .order_by(SourceVerification.source_record_id, SourceVerification.source_version_id)
     )
-    embedding_touched = result.scalar_one()
+    verif_parts = []
+    for row in verif_rows.all():
+        verif_parts.append(
+            f"{row[1]}|{row[2]}|{row[3]}|{row[4]}|{row[5]}|{row[6] or ''}|{row[7] or ''}"
+        )
+    verif_hash = hashlib.sha256(";;".join(verif_parts).encode()).hexdigest()[:12]
 
     settings = get_settings()
     components = [
@@ -82,11 +95,10 @@ async def compute_index_version(session: AsyncSession) -> str:
         str(int(max_emb.timestamp()) if max_emb else 0),
         str(indexed_paragraphs),
         str(active_versions),
-        str(trusted_count),
-        str(embedding_touched),
+        verif_hash,
         settings.search_embedding_model,
         settings.search_embedding_version,
-        "p2.7-v5",
+        "p2.7-v6",
     ]
     fingerprint = hashlib.sha256("|".join(components).encode()).hexdigest()[:16]
     return fingerprint
