@@ -73,9 +73,9 @@ DICTIONARY_LETTERS = (
     "V",
     "Y",
     "Z",
-    "Â",
-    "Î",
-    "Û",
+    "\u00c2",
+    "\u00ce",
+    "\u00db",
 )
 
 

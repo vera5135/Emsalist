@@ -44,3 +44,8 @@ legal_sources/**/reports/
 
 # Tooling
 opencode.json
+
+# Local editor and manual backup files
+*.bak
+*.backup
+*~

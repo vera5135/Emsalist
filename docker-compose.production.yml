@@ -21,3 +21,20 @@ services:
       - upload_data:/data/uploads:rw
       - export_data:/data/exports:rw
       - backup_data:/data/backups:rw
+
+  worker:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+    environment:
+      EMSALIST_LOG_LEVEL: WARNING
+    read_only: true
+    tmpfs:
+      - /tmp:size=128M,mode=1777
+      - /app/app/legal_brain:size=64M,mode=1777
+    volumes:
+      - upload_data:/data/uploads:rw
+      - export_data:/data/exports:rw
+      - backup_data:/data/backups:rw

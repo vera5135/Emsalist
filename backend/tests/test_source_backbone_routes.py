@@ -358,7 +358,57 @@ async def test_legislation_paragraph_provenance(client: AsyncClient):
     items = paras.json()
     assert len(items) == 2
     assert items[0]["article_number"] == "1"
+    assert items[0]["article_kind"] == "regular_article"
+    assert items[0]["article_label"] == "Madde 1"
+    assert items[0]["article_locator_key"] == "regular_article:1"
     assert items[0]["page"] is None  # no fabricated page
+
+
+@pytest.mark.asyncio
+async def test_generic_paragraph_api_has_empty_article_locator_fields(client: AsyncClient):
+    ingested = await client.post("/api/v1/legal-sources/ingest", json=_official_decision())
+    items = (await client.get(
+        f"/api/v1/legal-sources/{ingested.json()['source_record_id']}/paragraphs"
+    )).json()
+    assert items
+    assert items[0]["article_number"] == ""
+    assert items[0]["article_kind"] == ""
+    assert items[0]["article_label"] == ""
+    assert items[0]["article_locator_key"] == ""
+
+
+@pytest.mark.asyncio
+async def test_legacy_or_unknown_article_kind_is_not_exposed_or_trusted(client: AsyncClient):
+    from app.services.source_ingestion_service import get_version_official_evidence
+
+    ingested = (await client.post(
+        "/api/v1/legal-sources/ingest",
+        json=_legislation(text="Madde 1\nDeğişmez madde gövdesi."),
+    )).json()
+    sm = get_sessionmaker()
+    async with sm() as db:
+        paragraph = (await db.execute(select(SourceParagraph).where(
+            SourceParagraph.source_version_id == ingested["source_version_id"]
+        ))).scalars().one()
+        paragraph.locator_json = {
+            **paragraph.locator_json,
+            "article_kind": "provider_supplied_kind",
+        }
+        await db.commit()
+        evidence = await get_version_official_evidence(
+            db,
+            ingested["source_record_id"],
+            ingested["source_version_id"],
+        )
+
+    item = (await client.get(
+        f"/api/v1/legal-sources/{ingested['source_record_id']}/paragraphs"
+    )).json()[0]
+    assert item["article_number"] == "1"
+    assert item["article_kind"] == ""
+    assert item["article_label"] == ""
+    assert item["article_locator_key"] == ""
+    assert evidence.valid is False
 
 
 @pytest.mark.asyncio
@@ -920,6 +970,15 @@ async def test_editor_candidate_then_exact_official_fetch_verifies_existing_vers
     rec_id = result.source_record_id
     v1_id = result.source_version_id
 
+    # Simulate an immutable legacy paragraph that predates subtype provenance.
+    async with sm() as db:
+        legacy_paragraph = (await db.execute(select(SourceParagraph).where(
+            SourceParagraph.source_version_id == v1_id
+        ))).scalars().one()
+        legacy_paragraph.locator_json = {}
+        legacy_paragraph_id = legacy_paragraph.id
+        await db.commit()
+
     # 2. Official fetch returns exact same text.
     async with sm() as db:
         result2 = await ingest_official_fetch(
@@ -943,6 +1002,17 @@ async def test_editor_candidate_then_exact_official_fetch_verifies_existing_vers
     # Version count must stay 1.
     versions = await client.get(f"/api/v1/legal-sources/{rec_id}/versions")
     assert len(versions.json()) == 1
+
+    # Duplicate verification must not rewrite legacy locator provenance or
+    # create a replacement paragraph set for the immutable version.
+    async with sm() as db:
+        paragraphs = (await db.execute(select(SourceParagraph).where(
+            SourceParagraph.source_version_id == v1_id
+        ))).scalars().all()
+    assert len(paragraphs) == 1
+    assert paragraphs[0].id == legacy_paragraph_id
+    assert paragraphs[0].article_number == "219"
+    assert paragraphs[0].locator_json == {}
 
     # The existing version now has official evidence.
     from app.services.source_ingestion_service import get_version_official_evidence
@@ -973,7 +1043,8 @@ async def test_repeated_exact_official_fetch_is_idempotent(client: AsyncClient):
                           "effective_date": "2012-07-01"},
                 fetch_result=FetchResult(
                     final_url="https://mevzuat.gov.tr/6099",
-                    status_code=200, content=b"Idempotent test content.",
+                    status_code=200,
+                    content="Madde 1\nIdempotent test content.".encode("utf-8"),
                     content_type="text/html",
                 ),
             )
@@ -982,6 +1053,11 @@ async def test_repeated_exact_official_fetch_is_idempotent(client: AsyncClient):
     assert final_result.outcome == "duplicate_verified"  # second call, already has evidence
     versions = await client.get(f"/api/v1/legal-sources/{final_result.source_record_id}/versions")
     assert len(versions.json()) == 1
+    paragraphs = await client.get(
+        f"/api/v1/legal-sources/{final_result.source_record_id}/paragraphs"
+    )
+    assert len(paragraphs.json()) == 1
+    assert paragraphs.json()[0]["article_locator_key"] == "regular_article:1"
 
 
 @pytest.mark.asyncio

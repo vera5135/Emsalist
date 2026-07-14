@@ -84,8 +84,8 @@ class CaseIsolationTests(unittest.TestCase):
             "/case/state",
             json={
                 "case_id": case_a,
-                "event_text": "AyÄ±plÄ± araÃ§ satÄ±ÅŸÄ± nedeniyle bedel iadesi talep ediliyor.",
-                "question_answers": {"SatÄ±cÄ± galeri/tacir/ÅŸirket mi?": "Galeri/ÅŸirket"},
+                "event_text": "Ayıplı araç satışı nedeniyle bedel iadesi talep ediliyor.",
+                "question_answers": {"Satıcı galeri/tacir/şirket mi?": "Galeri/şirket"},
             },
         )
         self.assertEqual(response_a.status_code, 200, response_a.text)
@@ -101,7 +101,7 @@ class CaseIsolationTests(unittest.TestCase):
             case_a,
             final_precedents=[
                 {
-                    "court": "YargÄ±tay 19. Hukuk Dairesi",
+                    "court": "Yargıtay 19. Hukuk Dairesi",
                     "esas_no": "2013/17670",
                     "karar_no": "2014/508",
                     "date": "15.01.2014",
@@ -119,7 +119,7 @@ class CaseIsolationTests(unittest.TestCase):
             "/petition/final-draft",
             json={
                 "case_id": case_b,
-                "case_text": "KiracÄ±nÄ±n tahliyesi talep edilmektedir.",
+                "case_text": "Kiracının tahliyesi talep edilmektedir.",
                 "request_type": "Tahliye",
                 "writer_mode": "local",
             },
@@ -140,8 +140,8 @@ class CaseIsolationTests(unittest.TestCase):
             "/petition/final-draft",
             json={
                 "case_id": case_a,
-                "case_text": "AyÄ±plÄ± araÃ§ satÄ±ÅŸÄ± nedeniyle bedel iadesi isteniyor.",
-                "request_type": "SatÄ±ÅŸ bedelinin iadesi",
+                "case_text": "Ayıplı araç satışı nedeniyle bedel iadesi isteniyor.",
+                "request_type": "Satış bedelinin iadesi",
                 "document_ids": [document_id],
                 "writer_mode": "local",
             },
@@ -154,7 +154,7 @@ class CaseIsolationTests(unittest.TestCase):
             "/petition/final-draft",
             json={
                 "case_id": case_b,
-                "case_text": "Kiraya verenin ihtiyaÃ§ nedeniyle tahliye talebi bulunuyor.",
+                "case_text": "Kiraya verenin ihtiyaç nedeniyle tahliye talebi bulunuyor.",
                 "request_type": "Tahliye",
                 "writer_mode": "local",
             },
@@ -171,7 +171,7 @@ class CaseIsolationTests(unittest.TestCase):
 
         upload = self.client.post(
             "/documents/upload",
-            files={"file": ("notes.txt", "SatÄ±ÅŸ bedeli: 100.000 TL".encode("utf-8"), "text/plain")},
+            files={"file": ("notes.txt", "Satış bedeli: 100.000 TL".encode("utf-8"), "text/plain")},
         )
         self.assertEqual(upload.status_code, 200, upload.text)
         self.assertEqual(upload.json()["case_id"], case_id)

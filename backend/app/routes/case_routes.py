@@ -1,4 +1,8 @@
-"""Case analysis endpoints."""
+"""Deprecated P1 case-session and rule-based analysis endpoints.
+
+Persistent case management and chat use the P2 ``/api/v1/cases`` routes.
+These singular ``/case`` routes remain for legacy web-client compatibility.
+"""
 
 from typing import Annotated
 
@@ -16,7 +20,11 @@ from app.services.case_state_service import case_state_service
 from app.services.dynamic_legal_reasoner_service import dynamic_legal_reasoner_service
 from app.services.petition_profile_service import get_petition_profile
 
-router = APIRouter(prefix="/case", tags=["Case Analysis"])
+router = APIRouter(
+    prefix="/case",
+    tags=["Legacy / Case Analysis"],
+    deprecated=True,
+)
 
 
 def _rebuild_canonical_state(case_id: str) -> dict:
@@ -44,7 +52,7 @@ def create_new_case() -> dict[str, str]:
     payload = case_session_service.new_case()
     return {
         "case_id": payload["case_id"],
-        "message": "Yeni dosya baÅŸlatÄ±ldÄ±.",
+        "message": "Yeni dosya başlatıldı.",
     }
 
 
@@ -52,10 +60,10 @@ def create_new_case() -> dict[str, str]:
 def get_current_case() -> dict[str, str]:
     payload = case_session_service.get_current_case(create_if_missing=True)
     if not payload:
-        raise HTTPException(status_code=404, detail="Aktif dosya bulunamadÄ±.")
+        raise HTTPException(status_code=404, detail="Aktif dosya bulunamadı.")
     return {
         "case_id": payload["case_id"],
-        "message": "Aktif dosya hazÄ±r.",
+        "message": "Aktif dosya hazır.",
     }
 
 
