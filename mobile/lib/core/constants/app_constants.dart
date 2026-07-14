@@ -23,6 +23,8 @@ class AppConstants {
 
   static const String prefThemeMode = 'pref_theme_mode';
 
+  static const int maxUploadSizeBytes = 15 * 1024 * 1024;
+
   static const double spacingXs = 4;
   static const double spacingSm = 8;
   static const double spacingMd = 16;

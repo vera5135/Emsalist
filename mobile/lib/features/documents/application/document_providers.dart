@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/auth_providers.dart';
 import '../data/document_api.dart';
+import '../data/document_picker.dart';
 import '../data/document_repository.dart';
 import '../domain/document_item.dart';
 
@@ -13,6 +14,9 @@ final Provider<DocumentRepository> documentRepositoryProvider =
     Provider<DocumentRepository>((ref) {
       return DocumentRepository(ref.watch(documentApiProvider));
     });
+
+final Provider<DocumentPicker> documentPickerProvider =
+    Provider<DocumentPicker>((ref) => const NativeDocumentPicker());
 
 /// Documents for a case; refetched per case id.
 final FutureProviderFamily<List<DocumentItem>, String> documentsProvider =

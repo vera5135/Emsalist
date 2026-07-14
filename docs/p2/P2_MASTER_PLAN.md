@@ -358,11 +358,11 @@ makinesi, gerçek parser tabanlı metin/sayfa çıkarımı, deterministic extrac
 provenance ve P2.4 memory entegrasyonu (confirm → document_verified CaseFact +
 çelişki motoru) ile tamamlandı.
 
-Bilinen kapsam sınırları (kabul bloğu değil):
+Mobil upload akışı native `file_picker` entegrasyonuyla PDF/TXT/DOCX/UDF ve
+JPG/JPEG/PNG seçimini destekler. Seçici platform kanallarından ayrıştırılmış bir
+arayüz üzerinden çağrılır ve widget testlerinde sahte uygulamayla doğrulanır.
 
-- **Native mobile file picker yok**: mobil upload akışı şimdilik in-app metin
-  belgesi ile uçtan uca çalışır; gerçek PDF/DOCX/UDF/görsel seçimi bir seam
-  üzerinden sonraki dilime bırakılmıştır (deferred mobil entegrasyon borcu).
+Bilinen kapsam sınırları (kabul bloğu değil):
 - **OCR yok**: JPG/JPEG/PNG `upload_only`; görsel belgeler OCR yapılmış gibi
   gösterilmez.
 - **Senkron analiz**: metin çıkarımı upload isteği içinde yürütülür; arka plan
@@ -452,7 +452,6 @@ Bilinen sınırlar / ertelenen kapsam (kabul bloğu değil):
 - hukuki mesele grafiği P2.8'dir
 - kaynaklı dilekçe üretimi P2.9'dur
 - `affected_draft_count`, dilekçe üretimi var olana kadar unsupported kalır
-- native mobil dosya seçici borcu P2.5/mobil entegrasyona aittir, P2.6'ya değil
 
 Kapanış kanıtı:
 
