@@ -253,13 +253,14 @@ class SearchResultCard extends ConsumerWidget {
         : const AsyncValue.data(<CaseSourceUsage>[]);
 
     final bool isUsed = caseSources.maybeWhen(
-      data: (List<CaseSourceUsage> usages) =>
-          usages.any((CaseSourceUsage u) =>
-              u.sourceRecordId == item.sourceId &&
-              u.sourceVersionId == item.sourceVersionId &&
-              (u.sourceParagraphId == null ||
-                  u.sourceParagraphId!.isEmpty ||
-                  u.sourceParagraphId == item.sourceParagraphId)),
+      data: (List<CaseSourceUsage> usages) => usages.any(
+        (CaseSourceUsage u) =>
+            u.sourceRecordId == item.sourceId &&
+            u.sourceVersionId == item.sourceVersionId &&
+            (u.sourceParagraphId == null ||
+                u.sourceParagraphId!.isEmpty ||
+                u.sourceParagraphId == item.sourceParagraphId),
+      ),
       orElse: () => false,
     );
 

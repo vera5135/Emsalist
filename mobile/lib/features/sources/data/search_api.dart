@@ -87,7 +87,10 @@ class SearchApi {
   }) async {
     await _client.postJson<Map<String, dynamic>>(
       _feedbackPath(resultId),
-      body: <String, dynamic>{'feedback_type': feedbackType, 'query_id': queryId},
+      body: <String, dynamic>{
+        'feedback_type': feedbackType,
+        'query_id': queryId,
+      },
       cancelToken: cancelToken,
     );
   }
