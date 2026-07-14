@@ -63,7 +63,7 @@ POSTGRES_HOST = os.environ.get("PGHOST", "127.0.0.1")
 POSTGRES_PORT = os.environ.get("PGPORT", "5432")
 POSTGRES_USER = os.environ.get("PGUSER", "emsalist")
 POSTGRES_PASSWORD = os.environ.get("PGPASSWORD", "emsalist_test_pwd")
-POSTGRES_DB = os.environ.get("PGDATABASE", "emsalist_p27_acceptance")
+POSTGRES_DB = "emsalist_p27_acceptance"
 
 TEST_DB_URL = (
     f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
