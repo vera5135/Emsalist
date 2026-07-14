@@ -92,7 +92,9 @@ if not _PG_AVAILABLE:
 
 
 def _mock_id(prefix: str) -> str:
-    return prefix + "-" + uuid.uuid4().hex[:12]
+    suffix = uuid.uuid4().hex[:8]
+    max_prefix = 32 - 1 - len(suffix)
+    return f"{prefix[:max_prefix]}-{suffix}"
 
 
 def _utcnow() -> datetime:
