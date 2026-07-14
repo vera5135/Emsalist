@@ -68,16 +68,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             decoration: InputDecoration(
               hintText: 'Karar, kanun, madde ara...',
               prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon:
-                  _searchController.text.isNotEmpty
-                      ? IconButton(
-                        icon: const Icon(Icons.clear, size: 20),
-                        onPressed: () {
-                          _searchController.clear();
-                          ref.read(searchQueryProvider.notifier).state = '';
-                        },
-                      )
-                      : null,
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: () {
+                        _searchController.clear();
+                        ref.read(searchQueryProvider.notifier).state = '';
+                      },
+                    )
+                  : null,
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(vertical: 8),
             ),
@@ -86,19 +85,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
         ),
         titleSpacing: 0,
-        leading:
-            searchMode != SearchMode.legal
-                ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () {
-                    ref.read(searchModeProvider.notifier).state =
-                        SearchMode.legal;
-                    ref.read(searchSourceIdProvider.notifier).state = '';
-                    ref.read(searchQueryProvider.notifier).state = '';
-                    _searchController.clear();
-                  },
-                )
-                : null,
+        leading: searchMode != SearchMode.legal
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  ref.read(searchModeProvider.notifier).state =
+                      SearchMode.legal;
+                  ref.read(searchSourceIdProvider.notifier).state = '';
+                  ref.read(searchQueryProvider.notifier).state = '';
+                  _searchController.clear();
+                },
+              )
+            : null,
       ),
       body: _buildBody(context, ref, searchMode, query, sourceId),
     );
@@ -134,11 +132,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
   }
 
-  Widget _buildLegalResults(
-    BuildContext context,
-    WidgetRef ref,
-    String query,
-  ) {
+  Widget _buildLegalResults(BuildContext context, WidgetRef ref, String query) {
     if (query.isEmpty) {
       return const EmptyWidget(
         title: 'Arama',
@@ -153,12 +147,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     return results.when(
       loading: () => const LoadingWidget(message: 'Aranıyor'),
-      error:
-          (Object error, _) => AppErrorWidget(
-            message:
-                error is ApiException ? error.message : 'Arama yapılamadı.',
-            onRetry: () => ref.invalidate(searchResultsProvider(query)),
-          ),
+      error: (Object error, _) => AppErrorWidget(
+        message: error is ApiException ? error.message : 'Arama yapılamadı.',
+        onRetry: () => ref.invalidate(searchResultsProvider(query)),
+      ),
       data: (List<SearchResultItem> items) {
         if (items.isEmpty) {
           return const EmptyWidget(
@@ -168,13 +160,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           );
         }
         return ListView.builder(
-          padding: const EdgeInsets.only(
-            bottom: AppConstants.spacingLg + 80,
-          ),
+          padding: const EdgeInsets.only(bottom: AppConstants.spacingLg + 80),
           itemCount: items.length,
-          itemBuilder:
-              (BuildContext context, int index) =>
-                  SearchResultCard(item: items[index]),
+          itemBuilder: (BuildContext context, int index) =>
+              SearchResultCard(item: items[index]),
         );
       },
     );
@@ -198,12 +187,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     return results.when(
       loading: () => LoadingWidget(message: loadingMessage),
-      error:
-          (Object error, _) => AppErrorWidget(
-            message:
-                error is ApiException ? error.message : 'Sonuçlar yüklenemedi.',
-            onRetry: () => ref.invalidate(provider(sourceId)),
-          ),
+      error: (Object error, _) => AppErrorWidget(
+        message: error is ApiException
+            ? error.message
+            : 'Sonuçlar yüklenemedi.',
+        onRetry: () => ref.invalidate(provider(sourceId)),
+      ),
       data: (List<SearchResultItem> items) {
         if (items.isEmpty) {
           return EmptyWidget(
@@ -215,9 +204,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         return ListView.builder(
           padding: const EdgeInsets.only(bottom: AppConstants.spacingLg + 80),
           itemCount: items.length,
-          itemBuilder:
-              (BuildContext context, int index) =>
-                  SearchResultCard(item: items[index]),
+          itemBuilder: (BuildContext context, int index) =>
+              SearchResultCard(item: items[index]),
         );
       },
     );
@@ -239,14 +227,16 @@ class SearchResultCard extends ConsumerWidget {
     final String? caseId = ref.read(activeCaseIdProvider);
     if (caseId == null) return;
     try {
-      await ref.read(sourceRepositoryProvider).addCaseSource(
-        caseId,
-        sourceRecordId: item.sourceId,
-        sourceVersionId: item.sourceVersionId,
-        sourceParagraphId: item.sourceParagraphId.isNotEmpty
-            ? item.sourceParagraphId
-            : null,
-      );
+      await ref
+          .read(sourceRepositoryProvider)
+          .addCaseSource(
+            caseId,
+            sourceRecordId: item.sourceId,
+            sourceVersionId: item.sourceVersionId,
+            sourceParagraphId: item.sourceParagraphId.isNotEmpty
+                ? item.sourceParagraphId
+                : null,
+          );
       ref.invalidate(caseSourcesProvider(caseId));
     } on ApiException {
       // handled silently
@@ -258,15 +248,13 @@ class SearchResultCard extends ConsumerWidget {
     final ThemeData theme = Theme.of(context);
     final String? caseId = ref.watch(activeCaseIdProvider);
 
-    final AsyncValue<List<CaseSourceUsage>> caseSources =
-        caseId != null
-            ? ref.watch(caseSourcesProvider(caseId))
-            : const AsyncValue.data(<CaseSourceUsage>[]);
+    final AsyncValue<List<CaseSourceUsage>> caseSources = caseId != null
+        ? ref.watch(caseSourcesProvider(caseId))
+        : const AsyncValue.data(<CaseSourceUsage>[]);
 
     final bool isUsed = caseSources.maybeWhen(
-      data:
-          (List<CaseSourceUsage> usages) =>
-              usages.any((CaseSourceUsage u) => u.sourceTitle == item.title),
+      data: (List<CaseSourceUsage> usages) =>
+          usages.any((CaseSourceUsage u) => u.sourceTitle == item.title),
       orElse: () => false,
     );
 
@@ -279,10 +267,10 @@ class SearchResultCard extends ConsumerWidget {
 
     final String? locator =
         item.caseNumber != null && item.caseNumber!.isNotEmpty
-            ? 'E:${item.caseNumber} K:${item.decisionNumber ?? ''}'
-            : (item.articleNumber != null && item.articleNumber!.isNotEmpty
-                ? '${item.articleKind != null && item.articleKind!.isNotEmpty ? '${item.articleKind} ' : ''}Madde ${item.articleNumber}${item.articleLabel != null && item.articleLabel!.isNotEmpty ? ' (${item.articleLabel})' : ''}'
-                : null);
+        ? 'E:${item.caseNumber} K:${item.decisionNumber ?? ''}'
+        : (item.articleNumber != null && item.articleNumber!.isNotEmpty
+              ? '${item.articleKind != null && item.articleKind!.isNotEmpty ? '${item.articleKind} ' : ''}Madde ${item.articleNumber}${item.articleLabel != null && item.articleLabel!.isNotEmpty ? ' (${item.articleLabel})' : ''}'
+              : null);
 
     return Card(
       margin: const EdgeInsets.symmetric(
@@ -325,10 +313,7 @@ class SearchResultCard extends ConsumerWidget {
             ),
             if (subtitleParts.isNotEmpty) ...[
               const SizedBox(height: AppConstants.spacingXs),
-              Text(
-                subtitleParts.join(' · '),
-                style: theme.textTheme.bodySmall,
-              ),
+              Text(subtitleParts.join(' · '), style: theme.textTheme.bodySmall),
             ],
             if (locator != null) ...[
               const SizedBox(height: AppConstants.spacingXs),
@@ -346,10 +331,7 @@ class SearchResultCard extends ConsumerWidget {
                 ),
                 const SizedBox(width: AppConstants.spacingXs),
                 Flexible(
-                  child: Text(
-                    item.badge,
-                    style: theme.textTheme.labelSmall,
-                  ),
+                  child: Text(item.badge, style: theme.textTheme.labelSmall),
                 ),
                 const Spacer(),
                 Icon(
@@ -396,20 +378,16 @@ class SearchResultCard extends ConsumerWidget {
               Wrap(
                 spacing: AppConstants.spacingXs,
                 runSpacing: AppConstants.spacingXs,
-                children:
-                    item.matchReasons.map((String reason) {
-                      return Chip(
-                        label: Text(
-                          reason,
-                          style: theme.textTheme.labelSmall,
-                        ),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: theme.colorScheme.surfaceContainerHigh,
-                        side: BorderSide.none,
-                        padding: EdgeInsets.zero,
-                      );
-                    }).toList(),
+                children: item.matchReasons.map((String reason) {
+                  return Chip(
+                    label: Text(reason, style: theme.textTheme.labelSmall),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                    side: BorderSide.none,
+                    padding: EdgeInsets.zero,
+                  );
+                }).toList(),
               ),
             ],
             if (item.degradedMode) ...[
@@ -445,8 +423,7 @@ class SearchResultCard extends ConsumerWidget {
                       visualDensity: VisualDensity.compact,
                       textStyle: theme.textTheme.labelSmall,
                     ),
-                    onPressed:
-                        caseId != null ? () => _addToCase(ref) : null,
+                    onPressed: caseId != null ? () => _addToCase(ref) : null,
                   )
                 else
                   OutlinedButton(

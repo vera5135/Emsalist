@@ -17,41 +17,45 @@ final StateProvider<String> searchQueryProvider = StateProvider<String>(
   (ref) => '',
 );
 
-final FutureProviderFamily<List<SearchResultItem>, String> searchResultsProvider =
-    FutureProvider.family<List<SearchResultItem>, String>((ref, query) async {
-      if (query.isEmpty) return <SearchResultItem>[];
-      final SearchResultPage page = await ref
-          .watch(searchRepositoryProvider)
-          .searchLegal(query: query);
-      return page.results;
-    });
+final FutureProviderFamily<List<SearchResultItem>, String>
+searchResultsProvider = FutureProvider.family<List<SearchResultItem>, String>((
+  ref,
+  query,
+) async {
+  if (query.isEmpty) return <SearchResultItem>[];
+  final SearchResultPage page = await ref
+      .watch(searchRepositoryProvider)
+      .searchLegal(query: query);
+  return page.results;
+});
 
 final FutureProviderFamily<List<SearchResultItem>, String>
-    similarResultsProvider = FutureProvider.family<List<SearchResultItem>, String>((
-      ref,
-      String sourceId,
-    ) async {
-      final SearchResultPage page = await ref
-          .watch(searchRepositoryProvider)
-          .searchSimilar(sourceId: sourceId);
-      return page.results;
-    });
+similarResultsProvider = FutureProvider.family<List<SearchResultItem>, String>((
+  ref,
+  String sourceId,
+) async {
+  final SearchResultPage page = await ref
+      .watch(searchRepositoryProvider)
+      .searchSimilar(sourceId: sourceId);
+  return page.results;
+});
 
 final FutureProviderFamily<List<SearchResultItem>, String>
-    opposingResultsProvider = FutureProvider.family<List<SearchResultItem>, String>((
-      ref,
-      String sourceId,
-    ) async {
-      final SearchResultPage page = await ref
-          .watch(searchRepositoryProvider)
-          .searchOpposing(sourceId: sourceId);
-      return page.results;
-    });
+opposingResultsProvider = FutureProvider.family<List<SearchResultItem>, String>(
+  (ref, String sourceId) async {
+    final SearchResultPage page = await ref
+        .watch(searchRepositoryProvider)
+        .searchOpposing(sourceId: sourceId);
+    return page.results;
+  },
+);
 
 enum SearchMode { legal, similar, opposing }
 
-final StateProvider<SearchMode> searchModeProvider =
-    StateProvider<SearchMode>((ref) => SearchMode.legal);
+final StateProvider<SearchMode> searchModeProvider = StateProvider<SearchMode>(
+  (ref) => SearchMode.legal,
+);
 
-final StateProvider<String> searchSourceIdProvider =
-    StateProvider<String>((ref) => '');
+final StateProvider<String> searchSourceIdProvider = StateProvider<String>(
+  (ref) => '',
+);

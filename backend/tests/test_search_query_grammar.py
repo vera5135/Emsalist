@@ -171,8 +171,8 @@ def test_raw_query_transient_not_in_safe_summary():
     assert plan.raw_query_transient == '+"arsa payı" -"bozma sebebi"'
     summary = plan.safe_summary()
     assert "raw_query_transient" not in summary
-    assert summary["required_phrases"] == ["arsa payı"]
-    assert summary["excluded_phrases"] == ["bozma sebebi"]
+    assert summary["required_phrase_count"] == 1
+    assert summary["excluded_phrase_count"] == 1
 
 
 def test_semantic_query_derivation_strips_operators():

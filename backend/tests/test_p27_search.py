@@ -372,30 +372,39 @@ class TestQuerySentinelAndPersistence:
     """Tests 27-28: query sentinel absence and SearchQuery persistence hygiene."""
 
     def test_query_sentinel_absent_from_db_log_error_metric(self):
-        """The raw query text (including any + / - / " operators) must not
-        appear in DB records, log messages, error messages, or metrics
-        (concept: raw_query_transient is excluded from safe_summary)."""
-        plan = parse_query('+"arsa payı" -"bozma sebebi" kira')
+        """safe_summary must contain ONLY structural counts/flags — no operands,
+        no phrases, no citation numbers, no normalized query."""
+        plan = parse_query('+"arsa payı" -"bozma sebebi" kira E.2020/123')
         summary = plan.safe_summary()
         assert "raw_query_transient" not in summary
-        assert "bozma sebebi" not in summary.get("optional_terms", [])
-        assert "kira" in summary["optional_terms"]
-        # The operators themselves are stripped from persistence.
-        for key in summary:
-            if isinstance(summary[key], list):
-                for item in summary[key]:
-                    assert '"' not in item
-                    assert "+" not in item
-                    assert "-" not in item
+        assert "normalized_query" not in summary
+        assert "optional_terms" not in summary
+        assert "required_terms" not in summary
+        assert "excluded_terms" not in summary
+        assert "optional_phrases" not in summary
+        assert "required_phrases" not in summary
+        assert "excluded_phrases" not in summary
+        assert "exact_citation_candidates" not in summary
+        assert "legislation_number_candidates" not in summary
+        assert "article_candidates" not in summary
+        assert summary["optional_term_count"] >= 1  # kira and potentially citation terms
+        assert summary["required_phrase_count"] == 1  # +"arsa payı"
+        assert summary["excluded_phrase_count"] == 1  # -"bozma sebebi"
+        assert summary["has_exact_citation"] is True
+        assert summary["has_article_candidate"] is False
+        assert isinstance(summary["case_context_used"], bool)
+        assert isinstance(summary["semantic_requested"], bool)
 
     def test_search_query_persists_no_operands_full_normalized_query(self):
-        """SearchQuery record's safe_query_summary contains parsed lists
-        but never the raw query string (concept)."""
+        """Structural counts only — terms/operands not persisted."""
         plan = parse_query("+nafaka -boşanma tazminat")
         summary = plan.safe_summary()
-        assert summary["required_terms"] == ["nafaka"]
-        assert summary["excluded_terms"] == ["boşanma"]
-        assert "tazminat" in summary["optional_terms"]
+        assert "nafaka" not in str(summary.values())
+        assert "boşanma" not in str(summary.values())
+        assert "tazminat" not in str(summary.values())
+        assert summary["required_term_count"] == 1
+        assert summary["excluded_term_count"] == 1
+        assert summary["optional_term_count"] == 1
         # No raw operators in any persisted field.
         flat = json.dumps(summary, ensure_ascii=False)
         assert "+nafaka" not in flat

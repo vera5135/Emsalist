@@ -189,7 +189,7 @@ def is_sensitive_query(text: str) -> bool:
     """Detect whether a search query text likely contains sensitive PII."""
     if not text or not text.strip():
         return False
-    candidates = text[:200]
+    candidates = text
     if _TC_ID_RE.search(candidates):
         return True
     if _IBAN_RE.search(candidates):

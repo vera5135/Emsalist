@@ -29,7 +29,7 @@ def upgrade() -> None:
     sa.Column('query_hash', sa.String(length=64), nullable=False),
     sa.Column('safe_query_summary', sa.JSON(), nullable=False),
     sa.Column('filters_json', sa.JSON(), nullable=False),
-    sa.Column('index_version', sa.Integer(), nullable=False),
+    sa.Column('index_version', sa.String(length=32), nullable=False, server_default='0'),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['case_id'], ['cases.id'], ),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),

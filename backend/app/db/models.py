@@ -1129,7 +1129,7 @@ class SearchQuery(Base):
     query_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     safe_query_summary: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     filters_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    index_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    index_version: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     tenant = relationship("Tenant", backref="search_queries")

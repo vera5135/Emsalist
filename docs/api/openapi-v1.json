@@ -4796,7 +4796,6 @@
         "type": "object"
       },
       "LegalSearchRequest": {
-        "description": "Legal search query with optional filters and pagination.",
         "properties": {
           "case_id": {
             "anyOf": [
@@ -4853,7 +4852,7 @@
                 "type": "null"
               }
             ],
-            "description": "Tarih araligi (baslangic, bitis) YYYY-AA-GG formatinda",
+            "description": "Tarih araligi (baslangic, bitis)",
             "title": "Date Range"
           },
           "limit": {
@@ -4878,7 +4877,7 @@
             "type": "string"
           },
           "source_types": {
-            "description": "Kaynak turleri filtresi (yargitay, danistay, aym, mevzuat, resmi_gazete)",
+            "description": "Kaynak turleri filtresi",
             "items": {
               "type": "string"
             },
@@ -4893,17 +4892,14 @@
         "type": "object"
       },
       "LegalSearchResponse": {
-        "description": "Paginated legal search response.",
         "properties": {
           "degraded_mode": {
             "default": false,
-            "description": "Dusurulmus modda mi calisiyor",
             "title": "Degraded Mode",
             "type": "boolean"
           },
           "has_more": {
             "default": false,
-            "description": "Daha fazla sonuc var mi",
             "title": "Has More",
             "type": "boolean"
           },
@@ -4916,7 +4912,6 @@
                 "type": "null"
               }
             ],
-            "description": "Sonraki sayfa imleci",
             "title": "Next Cursor"
           },
           "query_id": {
@@ -4928,11 +4923,9 @@
                 "type": "null"
               }
             ],
-            "description": "Sorgu ID'si (geri bildirim icin)",
             "title": "Query Id"
           },
           "results": {
-            "description": "Arama sonuclari listesi",
             "items": {
               "$ref": "#/components/schemas/LegalSearchResult"
             },
@@ -4941,13 +4934,11 @@
           },
           "semantic_available": {
             "default": false,
-            "description": "Semantik arama kullanilabilir mi",
             "title": "Semantic Available",
             "type": "boolean"
           },
           "total": {
             "default": 0,
-            "description": "Toplam eslesen sonuc sayisi",
             "title": "Total",
             "type": "integer"
           }
@@ -4956,121 +4947,121 @@
         "type": "object"
       },
       "LegalSearchResult": {
-        "description": "A single legal search result with full provenance.",
         "properties": {
-          "canonical_key": {
-            "description": "Kaynak kanonik anahtari",
-            "title": "Canonical Key",
+          "article_kind": {
+            "default": "",
+            "description": "Article kind (regular/additional/provisional/repeated)",
+            "title": "Article Kind",
             "type": "string"
+          },
+          "article_label": {
+            "default": "",
+            "description": "Article display label",
+            "title": "Article Label",
+            "type": "string"
+          },
+          "article_locator_key": {
+            "default": "",
+            "description": "Article locator key",
+            "title": "Article Locator Key",
+            "type": "string"
+          },
+          "article_number": {
+            "default": "",
+            "description": "Article number",
+            "title": "Article Number",
+            "type": "string"
+          },
+          "authority_score": {
+            "default": 0.0,
+            "description": "Trust/verification authority score 0-1",
+            "title": "Authority Score",
+            "type": "number"
+          },
+          "case_context_score": {
+            "default": 0.0,
+            "description": "Case context rerank score 0-1",
+            "title": "Case Context Score",
+            "type": "number"
           },
           "case_number": {
             "default": "",
-            "description": "Dosya/Esas numarasi",
+            "description": "Case/esas number",
             "title": "Case Number",
             "type": "string"
           },
           "chamber": {
             "default": "",
-            "description": "Daire/bolum",
+            "description": "Chamber",
             "title": "Chamber",
             "type": "string"
           },
           "court": {
             "default": "",
-            "description": "Mahkeme adi",
+            "description": "Court",
             "title": "Court",
             "type": "string"
           },
           "decision_date": {
             "default": "",
-            "description": "Karar tarihi",
+            "description": "Decision date",
             "title": "Decision Date",
             "type": "string"
           },
           "decision_number": {
             "default": "",
-            "description": "Karar numarasi",
+            "description": "Decision number",
             "title": "Decision Number",
             "type": "string"
           },
-          "effective_date": {
-            "default": "",
-            "description": "Yururluk tarihi",
-            "title": "Effective Date",
-            "type": "string"
+          "degraded_mode": {
+            "default": false,
+            "description": "Did semantic search degrade to lexical",
+            "title": "Degraded Mode",
+            "type": "boolean"
           },
-          "issuing_authority": {
-            "default": "",
-            "description": "Yayinlayan kurum",
-            "title": "Issuing Authority",
-            "type": "string"
-          },
-          "jurisdiction": {
-            "default": "",
-            "description": "Yargi alani (TR)",
-            "title": "Jurisdiction",
-            "type": "string"
+          "final_score": {
+            "default": 0.0,
+            "description": "Final weighted relevance score 0-1",
+            "title": "Final Score",
+            "type": "number"
           },
           "lexical_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Sozluksel eslesme puani (0-1)",
-            "title": "Lexical Score"
+            "default": 0.0,
+            "description": "Lexical match score 0-1",
+            "title": "Lexical Score",
+            "type": "number"
           },
           "match_reasons": {
-            "description": "Eslesme nedenleri (Turkce)",
+            "description": "Turkish deterministic match reasons",
             "items": {
               "type": "string"
             },
             "title": "Match Reasons",
             "type": "array"
           },
-          "paragraph_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Eslesen paragraf ID'si",
-            "title": "Paragraph Id"
-          },
-          "paragraph_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Eslesen paragraf metni",
-            "title": "Paragraph Text"
-          },
-          "publication_date": {
+          "official_url": {
             "default": "",
-            "description": "Yayin tarihi",
-            "title": "Publication Date",
+            "description": "Official URL",
+            "title": "Official Url",
             "type": "string"
           },
-          "relevance_score": {
-            "default": 0.0,
-            "description": "Alaka puani (0-1)",
-            "title": "Relevance Score",
-            "type": "number"
+          "paragraph_snippet": {
+            "default": "",
+            "description": "First ~300 chars of matched paragraph",
+            "title": "Paragraph Snippet",
+            "type": "string"
           },
           "result_id": {
-            "description": "Sonuc benzersiz kimligi",
+            "description": "Signed opaque result identifier",
             "title": "Result Id",
             "type": "string"
+          },
+          "semantic_available": {
+            "default": false,
+            "description": "Was semantic search configured/available",
+            "title": "Semantic Available",
+            "type": "boolean"
           },
           "semantic_score": {
             "anyOf": [
@@ -5081,40 +5072,51 @@
                 "type": "null"
               }
             ],
-            "description": "Semantik benzerlik puani (0-1)",
+            "description": "Cosine similarity score or None",
             "title": "Semantic Score"
           },
-          "snippet": {
-            "default": "",
-            "description": "Eslesen metin parcasi (highlight icin)",
-            "title": "Snippet",
-            "type": "string"
-          },
           "source_id": {
-            "description": "Kaynak kaydinin ID'si",
+            "description": "SourceRecord.id",
             "title": "Source Id",
             "type": "string"
           },
+          "source_paragraph_id": {
+            "description": "SourceParagraph.id for the matched paragraph",
+            "title": "Source Paragraph Id",
+            "type": "string"
+          },
           "source_type": {
-            "description": "Kaynak turu (yargitay, danistay, aym, mevzuat, resmi_gazete)",
+            "default": "",
+            "description": "Source type",
             "title": "Source Type",
             "type": "string"
           },
+          "source_version_id": {
+            "description": "Exact SourceVersion.id for this result",
+            "title": "Source Version Id",
+            "type": "string"
+          },
+          "temporal_score": {
+            "default": 0.0,
+            "description": "Temporal relevance score 0-1",
+            "title": "Temporal Score",
+            "type": "number"
+          },
           "temporal_status": {
             "default": "",
-            "description": "Zamansal durum (guncel/mulga)",
+            "description": "Temporal validity status",
             "title": "Temporal Status",
             "type": "string"
           },
           "title": {
             "default": "",
-            "description": "Kaynak basligi",
+            "description": "Source title",
             "title": "Title",
             "type": "string"
           },
           "verification_status": {
             "default": "",
-            "description": "Dogrulama durumu",
+            "description": "Resolved effective verification status",
             "title": "Verification Status",
             "type": "string"
           }
@@ -5122,8 +5124,8 @@
         "required": [
           "result_id",
           "source_id",
-          "source_type",
-          "canonical_key"
+          "source_version_id",
+          "source_paragraph_id"
         ],
         "title": "LegalSearchResult",
         "type": "object"
@@ -5692,16 +5694,13 @@
         "type": "object"
       },
       "OpposingSearchRequest": {
-        "description": "Aleyhe kaynak aramasi istegi.",
         "properties": {
           "filters": {
             "additionalProperties": true,
-            "description": "Ek filtreler",
             "title": "Filters",
             "type": "object"
           },
           "source_id": {
-            "description": "Referans kaynak ID'si",
             "title": "Source Id",
             "type": "string"
           }
@@ -5713,16 +5712,13 @@
         "type": "object"
       },
       "OpposingSearchResponse": {
-        "description": "Aleyhe kaynak aramasi yaniti.",
         "properties": {
           "opposition_basis": {
             "default": "",
-            "description": "Aleyhe olma temeli",
             "title": "Opposition Basis",
             "type": "string"
           },
           "results": {
-            "description": "Aleyhe sonuclar",
             "items": {
               "$ref": "#/components/schemas/LegalSearchResult"
             },
@@ -7229,10 +7225,17 @@
         "type": "object"
       },
       "SearchFeedbackRequest": {
-        "description": "Arama sonucu icin geri bildirim.",
         "properties": {
           "feedback_type": {
-            "description": "Geri bildirim turu (relevant, not_relevant, authoritative, outdated, incorrect)",
+            "description": "Controlled feedback type",
+            "enum": [
+              "relevant",
+              "irrelevant",
+              "valuable_opposing",
+              "wrong_metadata",
+              "duplicate",
+              "used_in_draft"
+            ],
             "title": "Feedback Type",
             "type": "string"
           },
@@ -7245,7 +7248,6 @@
                 "type": "null"
               }
             ],
-            "description": "Ilgili sorgu ID'si",
             "title": "Query Id"
           }
         },
@@ -7256,11 +7258,9 @@
         "type": "object"
       },
       "SearchFeedbackResponse": {
-        "description": "Geri bildirim onay yaniti.",
         "properties": {
           "acknowledged": {
             "default": true,
-            "description": "Geri bildirim alindi mi",
             "title": "Acknowledged",
             "type": "boolean"
           },
@@ -7273,7 +7273,6 @@
                 "type": "null"
               }
             ],
-            "description": "Olusan geri bildirim ID'si",
             "title": "Feedback Id"
           }
         },
@@ -7369,10 +7368,8 @@
         "type": "object"
       },
       "SearchSuggestionResponse": {
-        "description": "Arama sorgusu onerileri yaniti.",
         "properties": {
           "suggestions": {
-            "description": "Onerilen sorgu metinleri",
             "items": {
               "type": "string"
             },
@@ -7422,24 +7419,21 @@
         "type": "object"
       },
       "SimilarSearchRequest": {
-        "description": "Benzer kaynak aramasi istegi.",
         "properties": {
           "filters": {
             "additionalProperties": true,
-            "description": "Ek filtreler",
             "title": "Filters",
             "type": "object"
           },
           "limit": {
             "default": 10,
-            "description": "Maksimum benzer sonuc sayisi",
             "maximum": 50.0,
             "minimum": 1.0,
             "title": "Limit",
             "type": "integer"
           },
           "source_id": {
-            "description": "Referans kaynak ID'si",
+            "description": "Reference source ID",
             "title": "Source Id",
             "type": "string"
           },
@@ -7452,7 +7446,7 @@
                 "type": "null"
               }
             ],
-            "description": "Referans paragraf ID'si (opsiyonel)",
+            "description": "Optional reference paragraph ID",
             "title": "Source Paragraph Id"
           }
         },
@@ -7463,10 +7457,8 @@
         "type": "object"
       },
       "SimilarSearchResponse": {
-        "description": "Benzer kaynak aramasi yaniti.",
         "properties": {
           "results": {
-            "description": "Benzer sonuclar",
             "items": {
               "$ref": "#/components/schemas/LegalSearchResult"
             },
@@ -7475,7 +7467,6 @@
           },
           "similarity_basis": {
             "default": "",
-            "description": "Benzerlik temeli (semantic/title/citation)",
             "title": "Similarity Basis",
             "type": "string"
           }

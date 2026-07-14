@@ -23,7 +23,7 @@ class SearchApi {
     String? cursor,
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> body = <String, dynamic>{'q': query};
+    final Map<String, dynamic> body = <String, dynamic>{'query': query};
     if (caseId != null) body['case_id'] = caseId;
     if (officialOnly != null) body['official_only'] = officialOnly;
     if (sourceTypes != null) body['source_types'] = sourceTypes;
@@ -44,9 +44,7 @@ class SearchApi {
     int? limit,
     Object? cancelToken,
   }) async {
-    final Map<String, dynamic> body = <String, dynamic>{
-      'source_id': sourceId,
-    };
+    final Map<String, dynamic> body = <String, dynamic>{'source_id': sourceId};
     if (sourceParagraphId != null) {
       body['source_paragraph_id'] = sourceParagraphId;
     }
@@ -76,7 +74,7 @@ class SearchApi {
   }) async {
     return _client.getJson<List<dynamic>>(
       _suggestionsPath,
-      queryParameters: <String, dynamic>{'prefix': prefix},
+      queryParameters: <String, dynamic>{'q': prefix},
       cancelToken: cancelToken,
     );
   }

@@ -20,19 +20,60 @@ _DOMAIN_CURSOR = b"emsalist-cursor|v1"
 
 
 def compute_query_hash(query_plan, tenant_id: str, secret: str) -> str:
-    clauses = sorted(query_plan.positive_clauses())
-    payload = tenant_id + ":" + " ".join(clauses)
+    parts = [
+        "opt_terms:" + ",".join(sorted(query_plan.optional_terms)),
+        "opt_phrases:" + ",".join(sorted(query_plan.optional_phrases)),
+        "req_terms:" + ",".join(sorted(query_plan.required_terms)),
+        "req_phrases:" + ",".join(sorted(query_plan.required_phrases)),
+        "exc_terms:" + ",".join(sorted(query_plan.excluded_terms)),
+        "exc_phrases:" + ",".join(sorted(query_plan.excluded_phrases)),
+        "citations:" + ",".join(sorted(query_plan.exact_citation_candidates)),
+        "legislation:" + ",".join(sorted(query_plan.legislation_number_candidates)),
+        "articles:" + ",".join(sorted(query_plan.article_candidates)),
+        "tenant:" + tenant_id,
+    ]
+    payload = "|".join(parts)
     return _hmac_hex(_DOMAIN_QUERY_HASH, payload, secret)
 
 
-async def compute_index_version(session: AsyncSession) -> int:
+async def compute_index_version(session: AsyncSession) -> str:
+    from app.db.models import SourceRecord, SourceVersion
+    from app.config import get_settings
+
     result = await session.execute(
         select(func.max(SourceParagraph.created_at))
     )
-    max_ts = result.scalar_one_or_none()
-    if max_ts is None:
-        return 0
-    return int(max_ts.timestamp())
+    max_para = result.scalar_one_or_none()
+
+    result = await session.execute(
+        select(func.max(SourceRecord.updated_at))
+    )
+    max_rec = result.scalar_one_or_none()
+
+    result = await session.execute(
+        select(func.count(SourceVersion.id)).where(SourceVersion.status == "active")
+    )
+    active_versions = result.scalar_one()
+
+    result = await session.execute(
+        select(func.count(SourceParagraph.id)).where(
+            SourceParagraph.embedding_status == "indexed"
+        )
+    )
+    indexed_paragraphs = result.scalar_one()
+
+    settings = get_settings()
+    components = [
+        str(int(max_para.timestamp()) if max_para else 0),
+        str(int(max_rec.timestamp()) if max_rec else 0),
+        str(active_versions),
+        str(indexed_paragraphs),
+        settings.search_embedding_model,
+        settings.search_embedding_version,
+        "p2.7-v2",
+    ]
+    fingerprint = hashlib.sha256("|".join(components).encode()).hexdigest()[:16]
+    return fingerprint
 
 
 def sign_result_id(
@@ -40,7 +81,7 @@ def sign_result_id(
     source_id: str,
     source_version_id: str,
     paragraph_id: str,
-    index_version: int,
+    index_version: str,
     secret: str,
 ) -> str:
     payload = json.dumps({

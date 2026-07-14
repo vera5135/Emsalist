@@ -140,7 +140,7 @@ class SearchResultItem {
           (json['match_reasons'] as List<dynamic>?)
               ?.map((dynamic e) => e.toString())
               .toList() ??
-              const <String>[],
+          const <String>[],
     );
   }
 }
@@ -151,6 +151,9 @@ class SearchResultPage {
     required this.total,
     required this.hasMore,
     this.nextCursor,
+    this.queryId,
+    this.indexVersion,
+    required this.semanticAvailable,
     required this.degradedMode,
   });
 
@@ -158,20 +161,26 @@ class SearchResultPage {
   final int total;
   final bool hasMore;
   final String? nextCursor;
+  final String? queryId;
+  final String? indexVersion;
+  final bool semanticAvailable;
   final bool degradedMode;
 
   factory SearchResultPage.fromJson(Map<String, dynamic> json) {
-    final List<dynamic> rawResults = json['results'] as List<dynamic>? ?? const <dynamic>[];
+    final List<dynamic> rawResults =
+        json['results'] as List<dynamic>? ?? const <dynamic>[];
     return SearchResultPage(
       results: rawResults
           .map(
-            (dynamic e) =>
-                SearchResultItem.fromJson(e as Map<String, dynamic>),
+            (dynamic e) => SearchResultItem.fromJson(e as Map<String, dynamic>),
           )
           .toList(),
       total: json['total'] as int? ?? 0,
       hasMore: json['has_more'] as bool? ?? false,
       nextCursor: json['next_cursor'] as String?,
+      queryId: json['query_id'] as String?,
+      indexVersion: json['index_version'] as String?,
+      semanticAvailable: json['semantic_available'] as bool? ?? false,
       degradedMode: json['degraded_mode'] as bool? ?? false,
     );
   }

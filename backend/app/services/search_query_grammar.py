@@ -198,16 +198,17 @@ class SearchQueryPlan:
     def safe_summary(self) -> dict:
         """Persistable summary WITHOUT the transient raw query."""
         return {
-            "normalized_query": self.normalized_query,
-            "optional_terms": list(self.optional_terms),
-            "optional_phrases": list(self.optional_phrases),
-            "required_terms": list(self.required_terms),
-            "required_phrases": list(self.required_phrases),
-            "excluded_terms": list(self.excluded_terms),
-            "excluded_phrases": list(self.excluded_phrases),
-            "exact_citation_candidates": list(self.exact_citation_candidates),
-            "legislation_number_candidates": list(self.legislation_number_candidates),
-            "article_candidates": list(self.article_candidates),
+            "optional_term_count": len(self.optional_terms),
+            "optional_phrase_count": len(self.optional_phrases),
+            "required_term_count": len(self.required_terms),
+            "required_phrase_count": len(self.required_phrases),
+            "excluded_term_count": len(self.excluded_terms),
+            "excluded_phrase_count": len(self.excluded_phrases),
+            "has_exact_citation": len(self.exact_citation_candidates) > 0,
+            "has_legislation_candidate": len(self.legislation_number_candidates) > 0,
+            "has_article_candidate": len(self.article_candidates) > 0,
+            "case_context_used": False,
+            "semantic_requested": False,
         }
 
     # ----- Hard-constraint enforcement (steps 8-9) ------------------------
