@@ -48,7 +48,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r backend/requirements.txt
+          pip install -r backend/requirements-test.txt
 
       - name: Alembic upgrade head
         working-directory: backend
