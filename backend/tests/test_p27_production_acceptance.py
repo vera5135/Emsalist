@@ -379,13 +379,26 @@ async def _seed_test_data(session: AsyncSession) -> None:
     ]
 
     for src_id, text, s_type, topic in domain_data:
-        await create_source(
+        rec, ver, paras = await create_source(
             src_id=src_id, source_type=s_type,
             title=f"{topic.title()} Kararı - {src_id}",
             canonical_key=f"{s_type}|{topic}|{src_id}",
             paragraph_texts=[text],
-            verification_status=NEEDS_REVIEW,
+            verification_status=VERIFIED_OFFICIAL,
         )
+        # Add version-scoped verification evidence for trusted-ratio benchmark
+        verif = SourceVerification(
+            id=_mock_id(f"sv-domain-{topic}"),
+            source_record_id=src_id,
+            source_version_id=ver.id,
+            verification_method="official_match",
+            verifier_type="automated",
+            result=VERIFIED_OFFICIAL,
+            evidence_url=f"https://official.example/{topic}",
+            evidence_hash=hashlib.sha256(f"{topic}-official-evidence".encode()).hexdigest(),
+            notes="benchmark verification provenance",
+        )
+        session.add(verif)
 
     # ── Special: src-old-active (old version with kira, current without) ──
     old_rec = SourceRecord(
@@ -1438,21 +1451,46 @@ _EXPECTED_SOURCE_BY_DOMAIN = {
     "idare": "src-domain-idare",
 }
 
+# Predeclared acceptable sources: other domain sources that share legal concepts
+_ACCEPTABLE_BY_DOMAIN = {
+    "kira": set(),
+    "is": set(),
+    "tüketici": set(),
+    "icra": set(),
+    "aile": set(),
+    "ceza": set(),
+    "ticaret": set(),
+    "idare": set(),
+}
+
+# Irrelevant sources: sources that should NOT appear for this domain
+_IRRELEVANT_BY_DOMAIN = {
+    "kira": {"src-domain-ceza", "src-domain-idare"},
+    "is": {"src-domain-ceza", "src-domain-aile"},
+    "tüketici": {"src-domain-ceza", "src-domain-icra"},
+    "icra": {"src-domain-aile", "src-domain-ceza"},
+    "aile": {"src-domain-icra", "src-domain-ticaret"},
+    "ceza": {"src-domain-kira", "src-domain-tuketici"},
+    "ticaret": {"src-domain-ceza", "src-domain-aile"},
+    "idare": {"src-domain-ceza", "src-domain-kira"},
+}
+
 
 @pytest.mark.asyncio
 class TestSyntheticBenchmark:
-    """Synthetic benchmark: recall, precision, trust ratio, duplicate ratio."""
+    """synthetic offline P2.7 acceptance benchmark — not real-world legal quality."""
 
     async def test_synthetic_benchmark(self, db_session):
-        """Seeded corpus across 8 domains — evaluate recall@10, precision@5, trust, dedup."""
         total_recall = 0.0
         total_precision = 0.0
-        trusted_ratios = []
+        trusted_top5_ratios = []
         dup_ratios = []
         domain_count = 0
 
         for domain, query in DOMAIN_QUERIES.items():
             expected_id = _EXPECTED_SOURCE_BY_DOMAIN.get(domain)
+            acceptable_ids = _ACCEPTABLE_BY_DOMAIN.get(domain, set())
+            irrelevant_ids = _IRRELEVANT_BY_DOMAIN.get(domain, set())
             if not expected_id:
                 continue
             domain_count += 1
@@ -1462,53 +1500,60 @@ class TestSyntheticBenchmark:
                 request = LegalSearchRequest(query=query, limit=10)
                 response = await execute_legal_search(fresh, request, CTX)
                 results = response.results
-                total = response.total
+                top10 = results[:10]
+                top5 = results[:5]
 
-                # Recall@10: does the expected source appear in top 10?
-                top10_ids = {r.source_id for r in results[:10]}
-                if expected_id in top10_ids:
+                # Recall@10: expected source in top 10?
+                top10_ids = {r.source_id for r in top10}
+                recalled = expected_id in top10_ids
+                if recalled:
                     total_recall += 1.0
 
-                # Precision@5: ratio of domain-relevant in top 5
-                top5 = results[:5]
-                relevant = sum(
-                    1 for r in top5 if domain in (r.title or "").lower()
-                )
-                if len(top5) > 0:
-                    total_precision += relevant / len(top5)
-                else:
-                    total_precision += 1.0
+                # Precision@5: expected + acceptable in top 5
+                relevant_ids = {expected_id} | acceptable_ids
+                top5_relevant = sum(1 for r in top5 if r.source_id in relevant_ids)
+                precision = top5_relevant / 5.0 if top5 else 0.0
+                total_precision += precision
 
-                # Trust ratio: trusted / total
-                if total > 0:
-                    trusted = sum(
-                        1 for r in results
-                        if r.verification_status in (
-                            VERIFIED_OFFICIAL, VERIFIED_SECONDARY, "editor_verified",
+                # Effective-trusted ratio top 5: production trust resolver
+                trusted_top5 = sum(
+                    1 for r in top5
+                    if r.verification_status in (VERIFIED_OFFICIAL, VERIFIED_SECONDARY, "editor_verified")
+                )
+                trusted_top5_ratios.append(trusted_top5 / 5.0 if top5 else 0.0)
+
+                # Duplicate ratio top 10
+                if top10:
+                    unique_sources = len({r.source_id for r in top10})
+                    dup_ratios.append(1.0 - unique_sources / len(top10))
+
+                # Diagnostic output
+                import sys
+                print(f"\n  domain: {domain}  query: {query}", file=sys.stderr)
+                print(f"  recall_expected: {recalled}  precision@5: {precision:.2f}  trusted@5: {trusted_top5}/5", file=sys.stderr)
+                for i, r in enumerate(top10):
+                    cls = "expected" if r.source_id == expected_id else (
+                        "acceptable" if r.source_id in acceptable_ids else (
+                            "irrelevant" if r.source_id in irrelevant_ids else "other"
                         )
                     )
-                    trusted_ratios.append(trusted / min(total, len(results)))
-
-                # Duplicate ratio: unique sources / total results
-                if len(results) > 0:
-                    unique_sources = len({r.source_id for r in results})
-                    dup_ratios.append(unique_sources / len(results))
+                    print(f"    [{i+1}] {r.source_id} ({r.source_type}) trust={r.verification_status} score={r.final_score:.2f} [{cls}]", file=sys.stderr)
 
         assert domain_count == 8, f"Expected 8 domains, got {domain_count}"
 
         recall_at_10 = total_recall / domain_count
         precision_at_5 = total_precision / domain_count
-        avg_trusted = sum(trusted_ratios) / len(trusted_ratios) if trusted_ratios else 0.0
-        avg_unique = sum(dup_ratios) / len(dup_ratios) if dup_ratios else 0.0
+        avg_trusted_top5 = sum(trusted_top5_ratios) / len(trusted_top5_ratios) if trusted_top5_ratios else 0.0
+        avg_dup = sum(dup_ratios) / len(dup_ratios) if dup_ratios else 0.0
 
-        import sys
         print(f"\n  === synthetic offline P2.7 acceptance benchmark ===", file=sys.stderr)
         print(f"  Recall@10: {recall_at_10:.2f}", file=sys.stderr)
         print(f"  Precision@5: {precision_at_5:.2f}", file=sys.stderr)
-        print(f"  trusted top-5 ratio: {avg_trusted:.2f}", file=sys.stderr)
-        print(f"  duplicate ratio top-10: {1 - avg_unique:.2f}", file=sys.stderr)
-        print(f"===================================================\n", file=sys.stderr)
+        print(f"  effective-trusted ratio top 5: {avg_trusted_top5:.2f}", file=sys.stderr)
+        print(f"  duplicate ratio top 10: {avg_dup:.2f}", file=sys.stderr)
+        print(f"===================================================", file=sys.stderr)
 
-        assert recall_at_10 >= 0.50, f"Recall@10={recall_at_10:.2f} below 0.50"
-        assert precision_at_5 >= 0.30, f"Precision@5={precision_at_5:.2f} below 0.30"
-        assert avg_unique >= 0.75, f"Unique ratio={avg_unique:.2f}"
+        assert recall_at_10 >= 0.85, f"Recall@10={recall_at_10:.2f} below 0.85"
+        assert precision_at_5 >= 0.70, f"Precision@5={precision_at_5:.2f} below 0.70"
+        assert avg_trusted_top5 >= 0.80, f"Trusted top-5 ratio={avg_trusted_top5:.2f} below 0.80"
+        assert avg_dup <= 0.05, f"Duplicate ratio={avg_dup:.2f} above 0.05"
