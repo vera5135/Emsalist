@@ -52,7 +52,7 @@ jobs:
         working-directory: backend
         run: |
           set -o pipefail
-          python -m pytest tests/test_p27_production_acceptance.py -v --tb=short 2>&1 | tee pytest-output.txt
+          python -m pytest tests/test_p27_production_acceptance.py -v -s --tb=short 2>&1 | tee pytest-output.txt
           exit_code=$?
 
           skipped=$(grep -c "SKIPPED" pytest-output.txt || true)
