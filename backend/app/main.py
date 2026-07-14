@@ -12,6 +12,8 @@ if sys.platform.startswith("win"):
         pass
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -92,6 +94,22 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "Authorization", "X-Correlation-ID"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def safe_provider_validation_error(request: Request, exc: RequestValidationError):
+    """Do not echo rejected provider-run inputs in a 422 response."""
+    if request.url.path.startswith("/api/v1/official-source-providers/"):
+        safe_errors = [
+            {
+                key: value
+                for key, value in error.items()
+                if key not in {"input", "ctx", "url"}
+            }
+            for error in exc.errors()
+        ]
+        return JSONResponse(status_code=422, content={"detail": safe_errors})
+    return await request_validation_exception_handler(request, exc)
 
 
 @app.exception_handler(Exception)

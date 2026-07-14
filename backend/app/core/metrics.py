@@ -297,6 +297,68 @@ backup_size_bytes = Histogram(
              5 * 1024 * 1024 * 1024),
 )
 
+# P2.6C — official provider ingestion metrics (safe labels only).
+official_source_provider_run_total = Counter(
+    "emsalist_official_source_provider_run_total",
+    "Total official provider ingestion runs",
+    ("provider_code", "run_type", "status"),
+)
+
+official_source_provider_run_duration = Histogram(
+    "emsalist_official_source_provider_run_duration_seconds",
+    "Official provider ingestion run duration in seconds",
+    ("provider_code", "run_type"),
+    buckets=(0.1, 0.5, 1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0),
+)
+
+official_source_provider_discovered = Counter(
+    "emsalist_official_source_provider_discovered_total",
+    "Candidates discovered by official providers",
+    ("provider_code",),
+)
+
+official_source_provider_fetched = Counter(
+    "emsalist_official_source_provider_fetched_total",
+    "Candidates securely fetched by official providers",
+    ("provider_code",),
+)
+
+official_source_provider_ingested = Counter(
+    "emsalist_official_source_provider_ingested_total",
+    "Candidates ingested via canonical official path",
+    ("provider_code",),
+)
+
+official_source_provider_duplicate = Counter(
+    "emsalist_official_source_provider_duplicate_total",
+    "Duplicate/idempotent official ingestion outcomes",
+    ("provider_code",),
+)
+
+official_source_provider_new_version = Counter(
+    "emsalist_official_source_provider_new_version_total",
+    "New-version official ingestion outcomes",
+    ("provider_code",),
+)
+
+official_source_provider_conflict = Counter(
+    "emsalist_official_source_provider_conflict_total",
+    "Conflict official ingestion outcomes",
+    ("provider_code",),
+)
+
+official_source_provider_error = Counter(
+    "emsalist_official_source_provider_error_total",
+    "Official provider ingestion errors (safe error codes only)",
+    ("provider_code", "safe_error_code"),
+)
+
+official_source_provider_retry_total = Counter(
+    "emsalist_official_source_provider_retry_total",
+    "Official provider network operation retries",
+    ("provider_code", "operation", "safe_error_code"),
+)
+
 
 def record_http_request(
     method: str, path: str, status_code: int, duration_s: float,

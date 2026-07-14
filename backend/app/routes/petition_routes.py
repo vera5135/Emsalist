@@ -23,7 +23,7 @@ from app.services.petition_draft_service import petition_draft_service
 from app.services.petition_strategy_service import petition_strategy_service
 
 
-router = APIRouter(prefix="/petition", tags=["DilekÃ§e"])
+router = APIRouter(prefix="/petition", tags=["Dilekçe"])
 
 ALLOWED_PETITION_USE_CLASSES = {"direct_support", "supporting_with_caution"}
 
@@ -39,12 +39,12 @@ def _decision_plain(value: str) -> str:
     return " ".join(
         str(value or "")
         .casefold()
-        .replace("Ã§", "c")
-        .replace("ÄŸ", "g")
-        .replace("Ä±", "i")
-        .replace("Ã¶", "o")
-        .replace("ÅŸ", "s")
-        .replace("Ã¼", "u")
+        .replace("ç", "c")
+        .replace("ğ", "g")
+        .replace("ı", "i")
+        .replace("ö", "o")
+        .replace("ş", "s")
+        .replace("ü", "u")
         .split()
     )
 
@@ -57,7 +57,7 @@ def _sanitized_precedent_item(item: Any) -> DraftingPrecedentItem | None:
         return None
     if source_type and source_type != "yargitay_live" and verification != "verified_live":
         return None
-    court = _decision_value(item, "court", "YargÄ±tay")
+    court = _decision_value(item, "court", "Yargıtay")
     chamber = _decision_value(item, "chamber") or court
     paragraph = _decision_value(item, "petition_use_summary") or _decision_value(item, "petition_paragraph") or _decision_value(item, "summary")
     if not paragraph:
@@ -130,7 +130,7 @@ def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse
             except KeyError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Grounding belgesi bulunamadÄ±: {document_id}",
+                    detail=f"Grounding belgesi bulunamadı: {document_id}",
                 ) from exc
             if record.extraction_status not in {"extracted", "partial"}:
                 continue
@@ -151,7 +151,7 @@ def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse
         (
             f"{fact.fact_key}: {fact.fact_value} "
             f"(Kaynak belge: {fact.source_file_name}"
-            f"{f', s. {fact.page_number}' if fact.page_number else ''}; alÄ±ntÄ±: {fact.excerpt})"
+            f"{f', s. {fact.page_number}' if fact.page_number else ''}; alıntı: {fact.excerpt})"
         )
         for fact in grounded_document_facts
     ]
@@ -173,11 +173,11 @@ def build_petition_draft(request: PetitionDraftRequest) -> PetitionDraftResponse
     response.grounding_notes.extend(
         GroundingNote(
             status="source_confirmed",
-            title=f"Belgeyle doÄŸrulanan bilgi: {fact.fact_key}",
+            title=f"Belgeyle doğrulanan bilgi: {fact.fact_key}",
             detail=(
-                f"{fact.fact_value} â€” Kaynak: {fact.source_file_name}"
+                f"{fact.fact_value} — Kaynak: {fact.source_file_name}"
                 f"{f', sayfa {fact.page_number}' if fact.page_number else ''}; "
-                f"alÄ±ntÄ±: {fact.excerpt}; gÃ¼ven: %{round(fact.confidence_score * 100)}"
+                f"alıntı: {fact.excerpt}; güven: %{round(fact.confidence_score * 100)}"
             ),
         )
         for fact in grounded_document_facts
@@ -213,7 +213,7 @@ def build_final_petition_draft(request: FinalPetitionDraftRequest) -> FinalPetit
             except KeyError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"DilekÃ§e belgesi bulunamadÄ±: {document_id}",
+                    detail=f"Dilekçe belgesi bulunamadı: {document_id}",
                 ) from exc
             if record.extraction_status not in {"extracted", "partial"}:
                 continue

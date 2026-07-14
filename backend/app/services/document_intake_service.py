@@ -418,7 +418,8 @@ class DocumentIntakeService:
             except UnicodeDecodeError:
                 continue
             controls = sum(1 for char in text if unicodedata.category(char) == "Cc" and char not in "\n\r\t")
-            mojibake = sum(text.count(token) for token in ("Ã", "Ä", "Å", "�"))
+            mojibake_markers = ("\u00c3", "\u00c4", "\u00c5", "\ufffd")
+            mojibake = sum(text.count(token) for token in mojibake_markers)
             turkish = sum(text.count(char) for char in "çğıöşüÇĞİÖŞÜ")
             score = turkish * 2 - controls * 20 - mojibake * 8
             if encoding.startswith("utf-8"):
