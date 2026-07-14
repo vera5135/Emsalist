@@ -751,6 +751,7 @@ class CaseFact(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_case_facts_tenant_case_id"),
         Index("ix_case_facts_tenant_case", "tenant_id", "case_id"),
         Index("ix_case_facts_case_type", "case_id", "fact_type"),
     )
