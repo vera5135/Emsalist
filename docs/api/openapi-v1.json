@@ -4903,6 +4903,11 @@
             "title": "Has More",
             "type": "boolean"
           },
+          "index_version": {
+            "default": "",
+            "title": "Index Version",
+            "type": "string"
+          },
           "next_cursor": {
             "anyOf": [
               {
@@ -5695,11 +5700,6 @@
       },
       "OpposingSearchRequest": {
         "properties": {
-          "filters": {
-            "additionalProperties": true,
-            "title": "Filters",
-            "type": "object"
-          },
           "source_id": {
             "title": "Source Id",
             "type": "string"
@@ -7240,19 +7240,14 @@
             "type": "string"
           },
           "query_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Query Id"
+            "description": "Required search query ID",
+            "title": "Query Id",
+            "type": "string"
           }
         },
         "required": [
-          "feedback_type"
+          "feedback_type",
+          "query_id"
         ],
         "title": "SearchFeedbackRequest",
         "type": "object"
@@ -7420,11 +7415,6 @@
       },
       "SimilarSearchRequest": {
         "properties": {
-          "filters": {
-            "additionalProperties": true,
-            "title": "Filters",
-            "type": "object"
-          },
           "limit": {
             "default": 10,
             "maximum": 50.0,

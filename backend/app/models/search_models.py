@@ -60,6 +60,7 @@ class LegalSearchResponse(BaseModel):
     semantic_available: bool = Field(False)
     degraded_mode: bool = Field(False)
     query_id: str | None = Field(None)
+    index_version: str = Field("")
 
 
 # ── Similar search ────────────────────────────────────────────────────────────
@@ -68,7 +69,6 @@ class SimilarSearchRequest(BaseModel):
     source_id: str = Field(..., description="Reference source ID")
     source_paragraph_id: str | None = Field(None, description="Optional reference paragraph ID")
     limit: int = Field(10, ge=1, le=50)
-    filters: dict[str, Any] = Field(default_factory=dict)
 
 
 class SimilarSearchResponse(BaseModel):
@@ -80,7 +80,6 @@ class SimilarSearchResponse(BaseModel):
 
 class OpposingSearchRequest(BaseModel):
     source_id: str = Field(...)
-    filters: dict[str, Any] = Field(default_factory=dict)
 
 
 class OpposingSearchResponse(BaseModel):
@@ -104,7 +103,7 @@ FeedbackType = Literal[
 
 class SearchFeedbackRequest(BaseModel):
     feedback_type: FeedbackType = Field(..., description="Controlled feedback type")
-    query_id: str | None = Field(None)
+    query_id: str = Field(..., description="Required search query ID")
 
 
 class SearchFeedbackResponse(BaseModel):

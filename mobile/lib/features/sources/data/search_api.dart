@@ -68,11 +68,11 @@ class SearchApi {
     );
   }
 
-  Future<List<dynamic>> getSuggestions(
+  Future<Map<String, dynamic>> getSuggestions(
     String prefix, {
     Object? cancelToken,
   }) async {
-    return _client.getJson<List<dynamic>>(
+    return _client.getJson<Map<String, dynamic>>(
       _suggestionsPath,
       queryParameters: <String, dynamic>{'q': prefix},
       cancelToken: cancelToken,
@@ -81,12 +81,13 @@ class SearchApi {
 
   Future<void> submitFeedback(
     String resultId,
-    String feedbackType, {
+    String feedbackType,
+    String queryId, {
     Object? cancelToken,
   }) async {
     await _client.postJson<Map<String, dynamic>>(
       _feedbackPath(resultId),
-      body: <String, dynamic>{'feedback_type': feedbackType},
+      body: <String, dynamic>{'feedback_type': feedbackType, 'query_id': queryId},
       cancelToken: cancelToken,
     );
   }

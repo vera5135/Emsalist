@@ -82,6 +82,7 @@ class GeminiSearchEmbeddingProvider(SearchEmbeddingProvider):
         self._model = model
         self._embedding_version = embedding_version
         self._client: object | None = None
+        self._effective_dimension: int = 0
 
     @property
     def model_name(self) -> str:
@@ -93,7 +94,9 @@ class GeminiSearchEmbeddingProvider(SearchEmbeddingProvider):
 
     @property
     def embedding_dimension(self) -> int:
-        return 768
+        if self._effective_dimension > 0:
+            return self._effective_dimension
+        return 0
 
     @property
     def is_available(self) -> bool:
@@ -115,7 +118,10 @@ class GeminiSearchEmbeddingProvider(SearchEmbeddingProvider):
                 contents=texts,
                 config={"task_type": "RETRIEVAL_DOCUMENT"},
             )
-            return _extract_embeddings(result, len(texts))
+            vectors = _extract_embeddings(result, len(texts))
+            if vectors and vectors[0] and self._effective_dimension == 0:
+                self._effective_dimension = len(vectors[0])
+            return vectors
         except Exception:
             return [[] for _ in texts]
 
@@ -130,7 +136,10 @@ class GeminiSearchEmbeddingProvider(SearchEmbeddingProvider):
                 config={"task_type": "RETRIEVAL_QUERY"},
             )
             vectors = _extract_embeddings(result, 1)
-            return vectors[0] if vectors else []
+            v = vectors[0] if vectors else []
+            if v and self._effective_dimension == 0:
+                self._effective_dimension = len(v)
+            return v
         except Exception:
             return []
 

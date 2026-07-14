@@ -244,21 +244,25 @@ class SearchRepository {
     String prefix, {
     Object? cancelToken,
   }) async {
-    final List<dynamic> raw = await _api.getSuggestions(
+    final Map<String, dynamic> envelope = await _api.getSuggestions(
       prefix,
       cancelToken: cancelToken,
     );
+    final List<dynamic> raw =
+        envelope['suggestions'] as List<dynamic>? ?? <dynamic>[];
     return raw.map((dynamic e) => e.toString()).toList();
   }
 
   Future<void> submitFeedback(
     String resultId,
-    String feedbackType, {
+    String feedbackType,
+    String queryId, {
     Object? cancelToken,
   }) {
     return _api.submitFeedback(
       resultId,
       feedbackType,
+      queryId,
       cancelToken: cancelToken,
     );
   }

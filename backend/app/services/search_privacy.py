@@ -62,15 +62,31 @@ async def compute_index_version(session: AsyncSession) -> str:
     )
     indexed_paragraphs = result.scalar_one()
 
+    result = await session.execute(
+        select(func.count(SourceRecord.id)).where(
+            SourceRecord.verification_status.in_(("verified_official", "editor_verified"))
+        )
+    )
+    trusted_count = result.scalar_one()
+
+    result = await session.execute(
+        select(func.count(SourceParagraph.id)).where(
+            SourceParagraph.embedding_updated_at.isnot(None)
+        )
+    )
+    embedding_touched = result.scalar_one()
+
     settings = get_settings()
     components = [
         str(int(max_para.timestamp()) if max_para else 0),
         str(int(max_rec.timestamp()) if max_rec else 0),
         str(active_versions),
         str(indexed_paragraphs),
+        str(trusted_count),
+        str(embedding_touched),
         settings.search_embedding_model,
         settings.search_embedding_version,
-        "p2.7-v2",
+        "p2.7-v3",
     ]
     fingerprint = hashlib.sha256("|".join(components).encode()).hexdigest()[:16]
     return fingerprint
