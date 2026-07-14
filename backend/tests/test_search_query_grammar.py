@@ -161,7 +161,7 @@ def test_citation_coexists_with_phrase_grammar():
 def test_article_and_legislation_candidates():
     plan = parse_query("TBK 227 6098 sayılı kanun madde 12")
     assert "TBK 227" in plan.article_candidates
-    assert "madde 12" in plan.article_candidates
+    assert "regular:12" in plan.article_candidates
     assert "6098 sayılı" in plan.legislation_number_candidates
 
 

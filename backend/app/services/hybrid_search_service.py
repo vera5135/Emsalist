@@ -190,6 +190,65 @@ async def _retrieve_citation_candidates(
     return candidates
 
 
+# ── Article locator candidate acquisition ─────────────────────────────────────
+
+def _extract_article_number(article_candidate: str) -> int | None:
+    if ":" in article_candidate:
+        _, num = article_candidate.split(":", 1)
+    else:
+        m = __import__("re").search(r"\d+", article_candidate)
+        if m:
+            num = m.group()
+        else:
+            return None
+    try:
+        return int(num)
+    except (ValueError, TypeError):
+        return None
+
+
+async def _retrieve_article_locator_candidates(
+    session: AsyncSession,
+    plan: SearchQueryPlan,
+    max_candidates: int,
+) -> list[dict]:
+    if not plan.article_candidates:
+        return []
+
+    numbers = []
+    for art in plan.article_candidates:
+        n = _extract_article_number(art)
+        if n is not None:
+            numbers.append(str(n))
+
+    if not numbers:
+        return []
+
+    q = (
+        select(SourceRecord, SourceVersion, SourceParagraph)
+        .join(SourceVersion, SourceVersion.id == SourceRecord.current_version_id)
+        .join(SourceParagraph, SourceParagraph.source_version_id == SourceVersion.id)
+        .where(
+            SourceParagraph.article_number.in_(numbers),
+            SourceRecord.deleted_at.is_(None),
+            SourceRecord.current_version_id == SourceVersion.id,
+        )
+        .order_by(SourceRecord.case_number, SourceParagraph.paragraph_index)
+        .limit(max_candidates)
+    )
+    result = await session.execute(q)
+    candidates = []
+    for rec, ver, par in result.all():
+        candidates.append({
+            "source_record": rec,
+            "source_version": ver,
+            "source_paragraph": par,
+            "origin": "article_locator",
+            "semantic_similarity": None,
+        })
+    return candidates
+
+
 # ── Lexical retrieval ─────────────────────────────────────────────────────────
 
 async def _retrieve_lexical_candidates(
@@ -359,7 +418,12 @@ def _citation_score(plan: SearchQueryPlan, rec) -> tuple[float, list[str]]:
             score = max(score, 0.4)
             reasons.append(f"Başlıkta geçiyor: {cit}")
     for art in plan.article_candidates:
-        a = normalize_phrase(art)
+        if ":" in art:
+            _, num = art.split(":", 1)
+            search = f"madde {num}"
+        else:
+            search = art
+        a = normalize_phrase(search)
         if a in normalize_phrase(rec.title or "") or a in normalize_phrase(rec.canonical_key or ""):
             score = max(score, 0.5)
             reasons.append(f"Mevzuat maddesi eşleşti: {art}")
@@ -521,6 +585,7 @@ async def execute_legal_search(
         # Candidate acquisition (with order_by before limits)
         lexical_candidates = await _retrieve_lexical_candidates(db, plan, max_candidates)
         citation_candidates = await _retrieve_citation_candidates(db, plan, max_candidates)
+        article_locator_candidates = await _retrieve_article_locator_candidates(db, plan, max_candidates)
         semantic_candidates, sem_stats = await _retrieve_semantic_candidates(
             db, plan, provider, max_candidates, query_sensitive,
         )
@@ -540,6 +605,12 @@ async def execute_legal_search(
                 seen[k] = c
             else:
                 seen[k]["origin"] = seen[k].get("origin", "") + "+citation"
+        for c in article_locator_candidates:
+            k = (c["source_record"].id, c["source_version"].id, c["source_paragraph"].id)
+            if k not in seen:
+                seen[k] = c
+            else:
+                seen[k]["origin"] = seen[k].get("origin", "") + "+article_locator"
         for c in semantic_candidates:
             k = (c["source_record"].id, c["source_version"].id, c["source_paragraph"].id)
             if k not in seen:
@@ -550,9 +621,6 @@ async def execute_legal_search(
                 seen[k]["origin"] = seen[k].get("origin", "") + "+semantic"
 
         candidates = list(seen.values())
-        if not candidates:
-            return _build_response([], 0, False, None, query_id, index_version,
-                                  semantic_available_cfg, degraded_mode)
 
         # Trust + eligibility
         for c in candidates:
@@ -587,120 +655,121 @@ async def execute_legal_search(
                         break
             candidates = filtered
 
+        # Build response — all paths fall through to commit below
         if not candidates:
-            return _build_response([], 0, False, None, query_id, index_version,
-                                  semantic_available_cfg, degraded_mode)
+            response = _build_response([], 0, False, None, query_id, index_version,
+                                       semantic_available_cfg, degraded_mode)
+        else:
+            # Weighted scoring
+            weighted = []
+            for c in candidates:
+                rec, para = c["source_record"], c["source_paragraph"]
+                lex = _lexical_score(plan, para.text or "")
+                cit_score, cit_reasons = _citation_score(plan, rec)
+                lex = max(lex, cit_score)
+                auth = _authority_score(c["eligibility"])
+                temporal = _temporal_score(rec)
+                cctx, cctx_reason = _case_context_score(case, rec)
+                sem = c.get("semantic_similarity") or 0.0
 
-        # Weighted scoring
-        weighted = []
-        for c in candidates:
-            rec, para = c["source_record"], c["source_paragraph"]
-            lex = _lexical_score(plan, para.text or "")
-            cit_score, cit_reasons = _citation_score(plan, rec)
-            lex = max(lex, cit_score)
-            auth = _authority_score(c["eligibility"])
-            temporal = _temporal_score(rec)
-            cctx, cctx_reason = _case_context_score(case, rec)
-            sem = c.get("semantic_similarity") or 0.0
+                w_lex, w_sem, w_auth, w_temp, w_case = 0.35, 0.30, 0.15, 0.10, 0.10
+                if not semantic_executed:
+                    w_lex, w_sem, w_auth, w_temp, w_case = 0.50, 0.0, 0.22, 0.15, 0.13
 
-            w_lex, w_sem, w_auth, w_temp, w_case = 0.35, 0.30, 0.15, 0.10, 0.10
-            if not semantic_executed:
-                w_lex, w_sem, w_auth, w_temp, w_case = 0.50, 0.0, 0.22, 0.15, 0.13
+                relevance = w_lex * lex + w_sem * sem + w_auth * auth + w_temp * temporal + w_case * cctx
 
-            relevance = w_lex * lex + w_sem * sem + w_auth * auth + w_temp * temporal + w_case * cctx
+                reasons = plan.explain_match((para.text or "") + " " + (para.heading_path or ""))
+                reasons.extend(cit_reasons)
+                if cctx_reason:
+                    reasons.append(cctx_reason)
 
-            reasons = plan.explain_match((para.text or "") + " " + (para.heading_path or ""))
-            reasons.extend(cit_reasons)
-            if cctx_reason:
-                reasons.append(cctx_reason)
+                weighted.append({
+                    **c,
+                    "lexical_score": round(lex, 4),
+                    "semantic_score": round(sem, 4) if sem > 0 else None,
+                    "authority_score": round(auth, 4),
+                    "temporal_score": round(temporal, 4),
+                    "case_context_score": round(cctx, 4),
+                    "relevance_score": round(relevance, 4),
+                    "match_reasons": reasons,
+                })
 
-            weighted.append({
-                **c,
-                "lexical_score": round(lex, 4),
-                "semantic_score": round(sem, 4) if sem > 0 else None,
-                "authority_score": round(auth, 4),
-                "temporal_score": round(temporal, 4),
-                "case_context_score": round(cctx, 4),
-                "relevance_score": round(relevance, 4),
-                "match_reasons": reasons,
-            })
+            # Shared sort using _sort_key_tuple
+            weighted.sort(key=_sort_key_tuple)
 
-        # Shared sort using _sort_key_tuple
-        weighted.sort(key=_sort_key_tuple)
+            # Dedup by canonical SourceRecord
+            dedup_seen = {}
+            for c in weighted:
+                rid = c["source_record"].id
+                if rid not in dedup_seen:
+                    dedup_seen[rid] = c
+            deduped = list(dedup_seen.values())
+            deduped.sort(key=_sort_key_tuple)
 
-        # Dedup by canonical SourceRecord
-        dedup_seen = {}
-        for c in weighted:
-            rid = c["source_record"].id
-            if rid not in dedup_seen:
-                dedup_seen[rid] = c
-        deduped = list(dedup_seen.values())
-        deduped.sort(key=_sort_key_tuple)
+            total = len(deduped)
+            limit = request.limit
+            start_idx = 0
+            if cursor_data and "last_sort_key" in cursor_data:
+                target = cursor_data["last_sort_key"]
+                for i, c in enumerate(deduped):
+                    if _sort_key_str(c) > target:
+                        start_idx = i
+                        break
 
-        total = len(deduped)
-        limit = request.limit
-        start_idx = 0
-        if cursor_data and "last_sort_key" in cursor_data:
-            target = cursor_data["last_sort_key"]
-            for i, c in enumerate(deduped):
-                if _sort_key_str(c) > target:
-                    start_idx = i
-                    break
+            page = deduped[start_idx: start_idx + limit]
+            has_more = start_idx + limit < total
 
-        page = deduped[start_idx: start_idx + limit]
-        has_more = start_idx + limit < total
+            next_cursor = None
+            if has_more and page:
+                last_sk = _sort_key_str(page[-1])
+                next_cursor = sign_cursor({
+                    "query_id": query_id,
+                    "query_hash_binding": query_hash,
+                    "filter_hash": compute_filter_hash(filters),
+                    "index_version": index_version,
+                    "case_id_bound": request.case_id or "none",
+                    "last_sort_key": last_sk,
+                }, secret)
 
-        next_cursor = None
-        if has_more and page:
-            last_sk = _sort_key_str(page[-1])
-            next_cursor = sign_cursor({
-                "query_id": query_id,
-                "query_hash_binding": query_hash,
-                "filter_hash": compute_filter_hash(filters),
-                "index_version": index_version,
-                "case_id_bound": request.case_id or "none",
-                "last_sort_key": last_sk,
-            }, secret)
+            results = []
+            for c in page:
+                rec, ver, para = c["source_record"], c["source_version"], c["source_paragraph"]
+                result_id = sign_result_id(query_id, rec.id, ver.id, para.id, index_version, secret)
+                snip = (para.text or "")[:300]
+                if len(para.text or "") > 300:
+                    snip = snip[:297] + "..."
+                art = _article_locator_from_paragraph(para)
+                results.append(LegalSearchResult(
+                    result_id=result_id, source_id=rec.id,
+                    source_version_id=ver.id, source_paragraph_id=para.id,
+                    source_type=rec.source_type or "", title=rec.title or "",
+                    court=rec.court or "", chamber=rec.chamber or "",
+                    case_number=rec.case_number or "", decision_number=rec.decision_number or "",
+                    decision_date=rec.decision_date or "", official_url=rec.official_url or "",
+                    paragraph_snippet=snip,
+                    article_number=art.get("article_number", ""),
+                    article_kind=art.get("article_kind", ""),
+                    article_label=art.get("article_label", ""),
+                    article_locator_key=art.get("article_locator_key", ""),
+                    verification_status=c["resolved_status"],
+                    temporal_status=rec.temporal_status or "unknown",
+                    final_score=c["relevance_score"],
+                    lexical_score=c.get("lexical_score", 0.0),
+                    semantic_score=c.get("semantic_score"),
+                    authority_score=c.get("authority_score", 0.0),
+                    temporal_score=c.get("temporal_score", 0.0),
+                    case_context_score=c.get("case_context_score", 0.0),
+                    match_reasons=c.get("match_reasons", []),
+                    semantic_available=semantic_available_cfg,
+                    degraded_mode=degraded_mode,
+                ))
 
-        results = []
-        for c in page:
-            rec, ver, para = c["source_record"], c["source_version"], c["source_paragraph"]
-            result_id = sign_result_id(query_id, rec.id, ver.id, para.id, index_version, secret)
-            snip = (para.text or "")[:300]
-            if len(para.text or "") > 300:
-                snip = snip[:297] + "..."
-            art = _article_locator_from_paragraph(para)
-            results.append(LegalSearchResult(
-                result_id=result_id, source_id=rec.id,
-                source_version_id=ver.id, source_paragraph_id=para.id,
-                source_type=rec.source_type or "", title=rec.title or "",
-                court=rec.court or "", chamber=rec.chamber or "",
-                case_number=rec.case_number or "", decision_number=rec.decision_number or "",
-                decision_date=rec.decision_date or "", official_url=rec.official_url or "",
-                paragraph_snippet=snip,
-                article_number=art.get("article_number", ""),
-                article_kind=art.get("article_kind", ""),
-                article_label=art.get("article_label", ""),
-                article_locator_key=art.get("article_locator_key", ""),
-                verification_status=c["resolved_status"],
-                temporal_status=rec.temporal_status or "unknown",
-                final_score=c["relevance_score"],
-                lexical_score=c.get("lexical_score", 0.0),
-                semantic_score=c.get("semantic_score"),
-                authority_score=c.get("authority_score", 0.0),
-                temporal_score=c.get("temporal_score", 0.0),
-                case_context_score=c.get("case_context_score", 0.0),
-                match_reasons=c.get("match_reasons", []),
-                semantic_available=semantic_available_cfg,
-                degraded_mode=degraded_mode,
-            ))
+            response = _build_response(results, total, has_more, next_cursor, query_id,
+                                       index_version, semantic_available_cfg, degraded_mode)
 
-        # Commit ONLY on full success
         if not existing_query:
             await db.commit()
-
-        return _build_response(results, total, has_more, next_cursor, query_id,
-                              index_version, semantic_available_cfg, degraded_mode)
+        return response
     except Exception:
         if not existing_query:
             await db.rollback()

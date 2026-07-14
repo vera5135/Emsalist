@@ -91,7 +91,10 @@ _ARTICLE_RE = re.compile(
     r"(?:m\.?|madde)?\s*(\d{1,4})(?:\s*/\s*\d+)?",
     flags=re.IGNORECASE,
 )
-_MADDE_RE = re.compile(r"\b(?:m\.?|madde)\s*(\d{1,4})(?:\s*/\s*\d+)?", flags=re.IGNORECASE)
+_MADDE_RE = re.compile(r"\b(?<!ek )(?<!geçici )(?<!mükerrer )(?:m\.?|madde)\s*(\d{1,4})(?:\s*/\s*\d+)?", flags=re.IGNORECASE)
+_EK_MADDE_RE = re.compile(r"\bek\s+(?:m\.?|madde)\s*(\d{1,4})", re.IGNORECASE)
+_GECICI_MADDE_RE = re.compile(r"\bgeçici\s+(?:m\.?|madde)\s*(\d{1,4})", re.IGNORECASE)
+_MUKERRER_MADDE_RE = re.compile(r"\bmükerrer\s+(?:m\.?|madde)\s*(\d{1,4})", re.IGNORECASE)
 _SAYILI_RE = re.compile(r"\b(\d{3,5})\s*sayılı\b", flags=re.IGNORECASE)
 
 
@@ -111,8 +114,14 @@ def _extract_citation_candidates(operands: list[str]) -> tuple[list[str], list[s
         _add(exact, f"{y}/{int(n)}")
     for code, num in _ARTICLE_RE.findall(haystack):
         _add(article, f"{code.upper().replace('IIK', 'İİK').replace('IYUK', 'İYUK')} {int(num)}")
+    for num in _EK_MADDE_RE.findall(haystack):
+        _add(article, f"additional:{int(num)}")
+    for num in _GECICI_MADDE_RE.findall(haystack):
+        _add(article, f"provisional:{int(num)}")
+    for num in _MUKERRER_MADDE_RE.findall(haystack):
+        _add(article, f"repeated:{int(num)}")
     for num in _MADDE_RE.findall(haystack):
-        _add(article, f"madde {int(num)}")
+        _add(article, f"regular:{int(num)}")
     for num in _SAYILI_RE.findall(haystack):
         _add(legislation, f"{int(num)} sayılı")
     return exact, legislation, article

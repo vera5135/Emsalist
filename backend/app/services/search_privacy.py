@@ -41,19 +41,14 @@ async def compute_index_version(session: AsyncSession) -> str:
     from app.config import get_settings
 
     result = await session.execute(
-        select(func.max(SourceParagraph.created_at))
-    )
-    max_para = result.scalar_one_or_none()
-
-    result = await session.execute(
         select(func.max(SourceRecord.updated_at))
     )
     max_rec = result.scalar_one_or_none()
 
     result = await session.execute(
-        select(func.count(SourceVersion.id)).where(SourceVersion.status == "active")
+        select(func.max(SourceParagraph.embedding_updated_at))
     )
-    active_versions = result.scalar_one()
+    max_emb = result.scalar_one_or_none()
 
     result = await session.execute(
         select(func.count(SourceParagraph.id)).where(
@@ -61,6 +56,11 @@ async def compute_index_version(session: AsyncSession) -> str:
         )
     )
     indexed_paragraphs = result.scalar_one()
+
+    result = await session.execute(
+        select(func.count(SourceVersion.id)).where(SourceVersion.status == "active")
+    )
+    active_versions = result.scalar_one()
 
     result = await session.execute(
         select(func.count(SourceRecord.id)).where(
@@ -78,15 +78,15 @@ async def compute_index_version(session: AsyncSession) -> str:
 
     settings = get_settings()
     components = [
-        str(int(max_para.timestamp()) if max_para else 0),
         str(int(max_rec.timestamp()) if max_rec else 0),
-        str(active_versions),
+        str(int(max_emb.timestamp()) if max_emb else 0),
         str(indexed_paragraphs),
+        str(active_versions),
         str(trusted_count),
         str(embedding_touched),
         settings.search_embedding_model,
         settings.search_embedding_version,
-        "p2.7-v3",
+        "p2.7-v5",
     ]
     fingerprint = hashlib.sha256("|".join(components).encode()).hexdigest()[:16]
     return fingerprint

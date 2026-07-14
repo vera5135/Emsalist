@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -38,10 +38,26 @@ async def run_indexer(batch_size: int = 100, once: bool = True) -> None:
 
     while True:
         async with sessionmaker() as session:
+            # Mark stale indexed paragraphs so they get picked up for re-indexing
+            stale_detected = await session.execute(
+                update(SourceParagraph)
+                .where(
+                    SourceParagraph.embedding_status == "indexed",
+                    or_(
+                        SourceParagraph.embedding_model != provider.model_name,
+                        SourceParagraph.embedding_version != provider.embedding_version,
+                    ),
+                )
+                .values(embedding_status="stale")
+            )
+            if stale_detected.rowcount > 0:
+                print(f"  {stale_detected.rowcount} paragraf eski model/sürüm nedeniyle 'stale' olarak işaretlendi.")
+            await session.commit()
+
             async with session.begin():
                 result = await session.execute(
                     select(SourceParagraph)
-                    .where(SourceParagraph.embedding_status == "pending")
+                    .where(SourceParagraph.embedding_status.in_(["pending", "retryable_failed", "stale"]))
                     .limit(batch_size)
                 )
                 paragraphs = list(result.scalars().all())
@@ -61,7 +77,7 @@ async def run_indexer(batch_size: int = 100, once: bool = True) -> None:
                 )
                 version = version_result.scalar_one_or_none()
                 if version is None:
-                    par.embedding_status = "failed"
+                    par.embedding_status = "skipped_noncurrent"
                     continue
 
                 record_result = await session.execute(
@@ -69,11 +85,11 @@ async def run_indexer(batch_size: int = 100, once: bool = True) -> None:
                 )
                 record = record_result.scalar_one_or_none()
                 if record is None:
-                    par.embedding_status = "failed"
+                    par.embedding_status = "skipped_noncurrent"
                     continue
 
                 if record.current_version_id != par.source_version_id:
-                    par.embedding_status = "failed"
+                    par.embedding_status = "skipped_noncurrent"
                     continue
 
                 resolved_status = await resolve_version_verification_status(
@@ -81,7 +97,7 @@ async def run_indexer(batch_size: int = 100, once: bool = True) -> None:
                 )
                 eligibility = index_eligibility(resolved_status)
                 if not eligibility.eligible:
-                    par.embedding_status = "failed"
+                    par.embedding_status = "skipped_ineligible"
                     continue
 
                 title = record.title or ""
@@ -103,7 +119,7 @@ async def run_indexer(batch_size: int = 100, once: bool = True) -> None:
             except Exception as e:
                 print(f"  Embedding hatası: {e}")
                 for par in valid_paragraphs:
-                    par.embedding_status = "failed"
+                    par.embedding_status = "retryable_failed"
                 await session.commit()
                 if once:
                     return
@@ -119,7 +135,7 @@ async def run_indexer(batch_size: int = 100, once: bool = True) -> None:
                     par.embedding_status = "indexed"
                     par.embedding_updated_at = datetime.utcnow()
                 else:
-                    par.embedding_status = "failed"
+                    par.embedding_status = "retryable_failed"
 
             await session.commit()
             print(f"  {len(valid_paragraphs)} paragraf indekslendi.")

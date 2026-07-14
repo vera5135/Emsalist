@@ -133,6 +133,9 @@ class CaseSourceUsage {
     required this.selectedParagraph,
     required this.usedInFinalDraft,
     required this.officialUrl,
+    required this.sourceRecordId,
+    required this.sourceVersionId,
+    this.sourceParagraphId,
   });
 
   final String id;
@@ -146,6 +149,9 @@ class CaseSourceUsage {
   final String selectedParagraph;
   final bool usedInFinalDraft;
   final String officialUrl;
+  final String sourceRecordId;
+  final String sourceVersionId;
+  final String? sourceParagraphId;
 
   String get badge => verificationBadgeLabel(verificationStatus);
   String get displayTitle =>
@@ -163,6 +169,9 @@ class CaseSourceUsage {
     selectedParagraph: dto.selectedParagraph,
     usedInFinalDraft: dto.usedInFinalDraft,
     officialUrl: dto.officialUrl,
+    sourceRecordId: dto.sourceRecordId,
+    sourceVersionId: dto.sourceVersionId,
+    sourceParagraphId: dto.sourceParagraphId,
   );
 }
 

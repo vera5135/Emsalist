@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/auth_providers.dart';
+import '../../cases/application/case_providers.dart';
 import '../data/search_api.dart';
 import '../data/search_repository.dart';
 
@@ -23,9 +24,10 @@ searchResultsProvider = FutureProvider.family<List<SearchResultItem>, String>((
   query,
 ) async {
   if (query.isEmpty) return <SearchResultItem>[];
+  final String? caseId = ref.watch(activeCaseIdProvider);
   final SearchResultPage page = await ref
       .watch(searchRepositoryProvider)
-      .searchLegal(query: query);
+      .searchLegal(query: query, caseId: caseId);
   return page.results;
 });
 
