@@ -26,6 +26,7 @@ from app.db.models import (
 )
 from app.db.session import get_sessionmaker
 from app.services.source_providers import registry
+from app.services.browser_provider_discovery import BrowserDiscoveryResult
 from app.services.source_fetcher import FetchResult, SourceFetchError
 from app.services.source_providers.base import (
     ERR_ACCESS_DENIED,
@@ -192,6 +193,37 @@ async def _run(**kw):
     async def _no_sleep(_s):
         return None
 
+    browser_candidate_ids = kw.pop("browser_candidate_ids", None)
+
+    class FixtureBrowserBackend:
+        async def discover(self, strategy, *, query, cursor, limit):
+            ids = {
+                "yargitay": ("Y-1", "Y-2"),
+                "danistay": ("D-1",),
+                "aym_norm": ("A-1", "A-2"),
+                "aym_individual": ("A-3",),
+                "uyusmazlik": ("U-1",),
+            }
+            key = strategy.surface_code
+            values = (
+                tuple(browser_candidate_ids)
+                if browser_candidate_ids is not None and strategy.provider_code == kw.get("provider_code")
+                else ids.get(key, ids.get(strategy.provider_code, ()))
+            )
+            return BrowserDiscoveryResult(
+                surface_code=strategy.surface_code,
+                candidate_ids=tuple(values[:limit]),
+            )
+
+        async def close(self):
+            return None
+
+    if (
+        "browser_backend" not in kw
+        and kw.get("provider_code") in {"yargitay", "danistay", "aym", "uyusmazlik"}
+        and kw.get("run_type") != "exact_source"
+    ):
+        kw["browser_backend"] = FixtureBrowserBackend()
     maker = get_sessionmaker()
     async with maker() as db:
         return await run_ingestion(db, sleeper=_no_sleep, resolver=public_resolver, **kw)
@@ -312,6 +344,11 @@ async def test_ssrf_private_ip_blocked(enabled_all):
             db, provider_code="yargitay", run_type="fetch_and_ingest",
             transport=_prov_transport(YARGITAY_DETAIL, YARGITAY_SEARCH),
             resolver=private_resolver, sleeper=_no_sleep, max_items=1,
+            browser_backend=type("Backend", (), {
+                "discover": AsyncMock(return_value=BrowserDiscoveryResult(
+                    surface_code="yargitay_search", candidate_ids=("Y-1",),
+                )),
+            })(),
         )
     # discovery itself fetches through the seam → blocked before any ingest.
     assert summary.ingested == 0
@@ -380,6 +417,11 @@ async def test_politeness_sleep_invoked_between_calls(enabled_all):
             db, provider_code="yargitay", run_type="fetch_and_ingest",
             transport=_prov_transport(YARGITAY_DETAIL, YARGITAY_SEARCH),
             resolver=public_resolver, sleeper=_record_sleep, max_items=2,
+            browser_backend=type("Backend", (), {
+                "discover": AsyncMock(return_value=BrowserDiscoveryResult(
+                    surface_code="yargitay_search", candidate_ids=("Y-1", "Y-2"),
+                )),
+            })(),
         )
     assert calls and all(s >= 2.0 for s in calls)
 
@@ -625,7 +667,8 @@ async def test_run_completed_with_errors(enabled_all):
             return StubResp(content=YARGITAY_DETAIL)
         return StubResp(content=UI_ONLY_DETAIL)
     summary = await _run(provider_code="yargitay", run_type="fetch_and_ingest",
-                         transport=_t, max_items=2)
+                         transport=_t, max_items=2,
+                         browser_candidate_ids=("OK", "BAD"))
     assert summary.ingested == 1
     assert summary.failed == 1
     assert summary.status == "completed_with_errors"
@@ -1266,6 +1309,7 @@ async def test_cli_enable_live_semantics_and_transport_closure():
     args = SimpleNamespace(
         enable_live=False, run_id="", provider="yargitay", mode="discover_only",
         query=None, from_date=None, to_date=None, max_items=1,
+        enable_browser_discovery=False,
     )
     transport = FakeTransport()
     with patch("app.official_source_ingestion.get_sessionmaker", return_value=FakeMaker()), \
@@ -1280,3 +1324,95 @@ async def test_cli_enable_live_semantics_and_transport_closure():
         assert await cli._run(args) == 0
         assert factory.call_count == 1
         assert transport.closed is True
+
+
+@pytest.mark.asyncio
+async def test_cli_browser_factory_zero_one_and_async_closure():
+    from app import official_source_ingestion as cli
+
+    class FakeMaker:
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class FakeBackend:
+        def __init__(self):
+            self.closed = False
+
+        async def close(self):
+            self.closed = True
+
+    summary = SimpleNamespace(
+        run_id="run-1", provider_code="aym", run_type="discover_only",
+        status="completed", discovered=0, fetched=0, ingested=0,
+        duplicate=0, new_version=0, conflict=0, failed=0,
+        last_safe_error_code="",
+    )
+    args = SimpleNamespace(
+        enable_live=False, enable_browser_discovery=False, run_id="",
+        provider="aym", mode="discover_only", query=None, from_date=None,
+        to_date=None, max_items=1,
+    )
+    backend = FakeBackend()
+    with patch("app.official_source_ingestion.get_sessionmaker", return_value=FakeMaker()), \
+         patch("app.official_source_ingestion.run_ingestion", new=AsyncMock(return_value=summary)), \
+         patch("app.services.browser_provider_discovery.create_browser_discovery_backend",
+               return_value=backend) as factory:
+        assert await cli._run(args) == 0
+        assert factory.call_count == 0
+        assert backend.closed is False
+        args.enable_browser_discovery = True
+        assert await cli._run(args) == 0
+        assert factory.call_count == 1
+        assert backend.closed is True
+
+
+@pytest.mark.asyncio
+async def test_cli_browser_closes_even_when_transport_close_raises():
+    from app import official_source_ingestion as cli
+
+    class FakeMaker:
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class BadTransport:
+        def close(self):
+            raise RuntimeError("close failed")
+
+    class BrowserBackend:
+        closed = False
+
+        async def close(self):
+            self.closed = True
+
+    summary = SimpleNamespace(
+        run_id="run-1", provider_code="aym", run_type="discover_only",
+        status="completed", discovered=0, fetched=0, ingested=0,
+        duplicate=0, new_version=0, conflict=0, failed=0,
+        last_safe_error_code="",
+    )
+    args = SimpleNamespace(
+        enable_live=True, enable_browser_discovery=True, run_id="",
+        provider="aym", mode="discover_only", query=None, from_date=None,
+        to_date=None, max_items=1,
+    )
+    browser = BrowserBackend()
+    with patch("app.official_source_ingestion.get_sessionmaker", return_value=FakeMaker()), \
+         patch("app.official_source_ingestion.run_ingestion", new=AsyncMock(return_value=summary)), \
+         patch("app.official_source_ingestion._live_transport", return_value=BadTransport()), \
+         patch("app.services.browser_provider_discovery.create_browser_discovery_backend",
+               return_value=browser):
+        with pytest.raises(RuntimeError, match="close failed"):
+            await cli._run(args)
+    assert browser.closed is True
