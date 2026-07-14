@@ -118,8 +118,10 @@ async def session(test_db):
 async def _seed(session: AsyncSession):
     t = Tenant(id="t1", name="T1", slug="t1", status="active")
     session.add(t)
+    await session.flush()
     u = User(id="u1", tenant_id="t1", email_normalized="u@t.com", display_name="U", status="active", role="editor")
     session.add(u)
+    await session.flush()
     c = Case(id="c1", tenant_id="t1", owner_user_id="u1", title="Case 1", status="active")
     session.add(c)
     c2 = Case(id="c2", tenant_id="t1", owner_user_id="u1", title="Case 2", status="active")
@@ -257,8 +259,9 @@ class TestLegalIssueCatalog:
             "SELECT confdeltype FROM pg_constraint "
             "WHERE conname = 'fk_legal_issues_parent_hierarchy'"
         ))
-        deltype = result.scalar_one()
-        assert deltype == "r", f"Expected RESTRICT (r), got {deltype}"
+        raw = result.scalar_one()
+        deltype = raw.decode() if isinstance(raw, bytes) else raw
+        assert deltype == "r", f"Expected RESTRICT (r), got {raw!r}"
 
 
 # ── PostgreSQL constraint enforcement tests ───────────────────────────────────
@@ -345,8 +348,6 @@ class TestLegalIssuePersistence:
         await _seed(session)
         t2 = Tenant(id="t2", name="T2", slug="t2", status="active")
         session.add(t2)
-        u2 = User(id="u2", tenant_id="t2", email_normalized="u2@t.com", display_name="U2", status="active", role="editor")
-        session.add(u2)
         await session.flush()
         p = LegalIssue(id="p-ct", tenant_id="t1", case_id="c1", title="P", status="proposed")
         session.add(p)
@@ -364,13 +365,21 @@ class TestLegalIssuePersistence:
 
     async def test_parent_delete_rejected_children_survive(self, session):
         """RESTRICT: durable insert, separate-session delete rejected, fresh session proves survival."""
-        await _seed(session)
-        p = LegalIssue(id="p-del", tenant_id="t1", case_id="c1", title="P", status="proposed")
+        t = Tenant(id="t-del", name="TD", slug="t-del", status="active")
+        session.add(t)
+        await session.flush()
+        u = User(id="u-del", tenant_id="t-del", email_normalized="ud@t.com", display_name="UD", status="active", role="editor")
+        session.add(u)
+        await session.flush()
+        c = Case(id="case-del", tenant_id="t-del", owner_user_id="u-del", title="CD", status="active")
+        session.add(c)
+        await session.flush()
+        p = LegalIssue(id="p-del", tenant_id="t-del", case_id="case-del", title="P", status="proposed")
         session.add(p)
         await session.flush()
-        c = LegalIssue(id="c-del", tenant_id="t1", case_id="c1", title="C",
-                       status="proposed", parent_issue_id="p-del")
-        session.add(c)
+        ch = LegalIssue(id="c-del", tenant_id="t-del", case_id="case-del", title="C",
+                        status="proposed", parent_issue_id="p-del")
+        session.add(ch)
         await session.commit()
 
         maker = async_sessionmaker(session.bind, class_=AsyncSession, expire_on_commit=False)
@@ -388,6 +397,14 @@ class TestLegalIssuePersistence:
             assert child is not None, "Child must survive rejected parent delete"
             parent = await fresh.get(LegalIssue, "p-del")
             assert parent is not None, "Parent must survive rejected delete"
+
+        async with maker() as cleanup:
+            await cleanup.execute(text("DELETE FROM legal_issues WHERE id = 'c-del'"))
+            await cleanup.execute(text("DELETE FROM legal_issues WHERE id = 'p-del'"))
+            await cleanup.execute(text("DELETE FROM cases WHERE id = 'case-del'"))
+            await cleanup.execute(text("DELETE FROM users WHERE id = 'u-del'"))
+            await cleanup.execute(text("DELETE FROM tenants WHERE id = 't-del'"))
+            await cleanup.commit()
 
     async def test_soft_delete_preserves_row(self, session):
         await _seed(session)
