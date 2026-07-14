@@ -129,11 +129,21 @@ async def _seed(session: AsyncSession):
     await session.flush()
 
 
-async def _violated_constraint_is(exc_context, expected_name: str) -> bool:
-    err = exc_context.value
-    if hasattr(err, "orig") and hasattr(err.orig, "constraint_name"):
-        return err.orig.constraint_name == expected_name
-    return False
+def _violated_constraint(exc_context) -> str | None:
+    """Extract the exact violated constraint name from asyncpg diagnostics.
+
+    Synchronous structured extraction: walks the asyncpg exception cause chain
+    (bounded against cycles) and returns the first ``constraint_name`` found.
+    """
+    err = getattr(exc_context.value, "orig", None)
+    seen: set[int] = set()
+    while err is not None and id(err) not in seen:
+        seen.add(id(err))
+        name = getattr(err, "constraint_name", None)
+        if name:
+            return name
+        err = getattr(err, "__cause__", None)
+    return None
 
 
 # ── Model tests ───────────────────────────────────────────────────────────────
@@ -338,7 +348,7 @@ class TestLegalIssuePersistence:
         from sqlalchemy.exc import IntegrityError
         with pytest.raises(IntegrityError) as exc_info:
             await session.flush()
-        assert _violated_constraint_is(exc_info, "fk_legal_issues_parent_hierarchy"), (
+        assert _violated_constraint(exc_info) == "fk_legal_issues_parent_hierarchy", (
             f"Expected hierarchy FK violation, got: {exc_info.value.orig}"
         )
         await session.rollback()
@@ -358,7 +368,7 @@ class TestLegalIssuePersistence:
         from sqlalchemy.exc import IntegrityError
         with pytest.raises(IntegrityError) as exc_info:
             await session.flush()
-        assert _violated_constraint_is(exc_info, "fk_legal_issues_parent_hierarchy"), (
+        assert _violated_constraint(exc_info) == "fk_legal_issues_parent_hierarchy", (
             f"Expected hierarchy FK violation, got: {exc_info.value.orig}"
         )
         await session.rollback()
@@ -387,7 +397,7 @@ class TestLegalIssuePersistence:
             from sqlalchemy.exc import IntegrityError
             with pytest.raises(IntegrityError) as exc_info:
                 await s2.execute(text("DELETE FROM legal_issues WHERE id = 'p-del'"))
-            assert _violated_constraint_is(exc_info, "fk_legal_issues_parent_hierarchy"), (
+            assert _violated_constraint(exc_info) == "fk_legal_issues_parent_hierarchy", (
                 f"Expected hierarchy FK violation, got: {exc_info.value.orig}"
             )
             await s2.rollback()

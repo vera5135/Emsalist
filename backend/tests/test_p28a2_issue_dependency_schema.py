@@ -117,6 +117,20 @@ async def session(test_db):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _normalize_pg_char(value) -> str:
+    """Normalize a PostgreSQL internal ``"char"`` transport value to str.
+
+    asyncpg may return single-byte ``"char"`` columns (pg_constraint.contype,
+    pg_constraint.confdeltype) as bytes/bytearray/memoryview depending on the
+    execution path. Normalize deterministically to the ASCII character.
+    """
+    if isinstance(value, memoryview):
+        value = value.tobytes()
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value).decode("ascii")
+    return str(value)
+
+
 def _violated_constraint(exc_context) -> str | None:
     """Extract the exact violated constraint name from asyncpg diagnostics."""
     err = getattr(exc_context.value, "orig", None)
@@ -232,7 +246,9 @@ class TestDependencyCatalog:
             "SELECT contype FROM pg_constraint "
             "WHERE conname = 'fk_legal_issue_dependencies_issue'"
         ))
-        assert result.scalar() == "f"
+        raw = result.scalar()
+        assert raw is not None, "fk_legal_issue_dependencies_issue not found"
+        assert _normalize_pg_char(raw) == "f", f"Expected FOREIGN KEY (f), got {raw!r}"
 
     async def test_issue_fk_local_ordered_columns(self, session):
         result = await session.execute(
@@ -261,7 +277,9 @@ class TestDependencyCatalog:
             "SELECT contype FROM pg_constraint "
             "WHERE conname = 'fk_legal_issue_dependencies_required_issue'"
         ))
-        assert result.scalar() == "f"
+        raw = result.scalar()
+        assert raw is not None, "fk_legal_issue_dependencies_required_issue not found"
+        assert _normalize_pg_char(raw) == "f", f"Expected FOREIGN KEY (f), got {raw!r}"
 
     async def test_required_issue_fk_local_ordered_columns(self, session):
         result = await session.execute(
@@ -295,8 +313,7 @@ class TestDependencyCatalog:
                 {"n": fk},
             )
             raw = result.scalar_one()
-            deltype = raw.decode() if isinstance(raw, bytes) else raw
-            assert deltype == "r", f"{fk}: expected RESTRICT (r), got {raw!r}"
+            assert _normalize_pg_char(raw) == "r", f"{fk}: expected RESTRICT (r), got {raw!r}"
 
     async def test_no_self_check_exists(self, session):
         result = await session.execute(text(
@@ -305,7 +322,7 @@ class TestDependencyCatalog:
         ))
         row = result.fetchone()
         assert row is not None, "ck_legal_issue_dependencies_no_self not found"
-        assert row[0] == "c"
+        assert _normalize_pg_char(row[0]) == "c", f"Expected CHECK (c), got {row[0]!r}"
         assert "issue_id" in row[1] and "required_issue_id" in row[1]
 
     async def test_ix_tenant_case_ordered(self, session):
