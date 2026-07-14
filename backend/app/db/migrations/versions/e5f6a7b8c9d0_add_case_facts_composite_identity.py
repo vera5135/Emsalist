@@ -18,12 +18,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_unique_constraint(
-        'uq_case_facts_tenant_case_id',
-        'case_facts',
-        ['tenant_id', 'case_id', 'id'],
-    )
+    with op.batch_alter_table('case_facts') as batch_op:
+        batch_op.create_unique_constraint(
+            'uq_case_facts_tenant_case_id',
+            ['tenant_id', 'case_id', 'id'],
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint('uq_case_facts_tenant_case_id', 'case_facts', type_='unique')
+    with op.batch_alter_table('case_facts') as batch_op:
+        batch_op.drop_constraint(
+            'uq_case_facts_tenant_case_id',
+            type_='unique',
+        )
