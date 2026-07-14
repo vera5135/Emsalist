@@ -101,6 +101,12 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _domain_url_for(source_type: str, src_id: str) -> str:
+    if source_type == "council_of_state_decision":
+        return f"https://karararama.danistay.gov.tr/benchmark/{src_id}"
+    return f"https://karararama.yargitay.gov.tr/benchmark/{src_id}"
+
+
 # ── Security context mock ──────────────────────────────────────────────────────
 
 
@@ -391,11 +397,11 @@ async def _seed_test_data(session: AsyncSession) -> None:
             id=_mock_id(f"sv-domain-{topic}"),
             source_record_id=src_id,
             source_version_id=ver.id,
-            verification_method="official_match",
-            verifier_type="automated",
+            verification_method="official_fetch_match",
+            verifier_type="official_match",
             result=VERIFIED_OFFICIAL,
-            evidence_url=f"https://official.example/{topic}",
-            evidence_hash=hashlib.sha256(f"{topic}-official-evidence".encode()).hexdigest(),
+            evidence_url=f"https://karararama.yargitay.gov.tr/benchmark/{src_id}",
+            evidence_hash=ver.content_hash,
             notes="benchmark verification provenance",
         )
         session.add(verif)
@@ -455,11 +461,11 @@ async def _seed_test_data(session: AsyncSession) -> None:
             id=_mock_id(f"sv-{src_id}"),
             source_record_id=src_id,
             source_version_id=ver.id,
-            verification_method="official_match",
-            verifier_type="automated",
+            verification_method="official_fetch_match",
+            verifier_type="official_match",
             result=VERIFIED_OFFICIAL,
-            evidence_url=f"https://official.example/{src_id}",
-            evidence_hash=hashlib.sha256(f"{src_id}-official-evidence".encode()).hexdigest(),
+            evidence_url=_domain_url_for(s_type, src_id),
+            evidence_hash=ver.content_hash,
             notes="benchmark acceptance verification",
         )
         session.add(verif)
@@ -529,8 +535,8 @@ async def _seed_test_data(session: AsyncSession) -> None:
         id=_mock_id("sv-e-citation"),
         source_record_id="src-e-citation",
         source_version_id=e_ver.id,
-        verification_method="official_match",
-        verifier_type="automated",
+        verification_method="official_fetch_match",
+        verifier_type="official_match",
         result=VERIFIED_OFFICIAL,
         evidence_url="https://example.com/e-2020-123",
         evidence_hash=hashlib.sha256("e-2020-123-evidence".encode()).hexdigest(),
