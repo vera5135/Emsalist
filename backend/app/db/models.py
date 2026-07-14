@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint, Index
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint, Index, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -903,6 +903,57 @@ class LegalIssue(Base):
             ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
             name="fk_legal_issues_parent_hierarchy",
             ondelete="RESTRICT",
+        ),
+    )
+
+
+class LegalIssueDependency(Base):
+    __tablename__ = "legal_issue_dependencies"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    required_issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_dependencies_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "required_issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_dependencies_required_issue",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "issue_id <> required_issue_id",
+            name="ck_legal_issue_dependencies_no_self",
+        ),
+        Index(
+            "ix_legal_issue_dependencies_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_legal_issue_dependencies_issue",
+            "case_id", "issue_id",
+        ),
+        Index(
+            "ix_legal_issue_dependencies_required_issue",
+            "case_id", "required_issue_id",
+        ),
+        Index(
+            "uq_legal_issue_dependencies_active_pair",
+            "tenant_id", "case_id", "issue_id", "required_issue_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
         ),
     )
 
