@@ -479,6 +479,20 @@ Kapanış kapısı:
 - JWT modda global source mutation'ları editor/admin ile sınırlıdır
 - PostgreSQL-backed final acceptance yeşildir
 
+### P2.6C — Çoklu sağlayıcı resmî hukuk kaynağı ingestion
+
+Durum: ⏳ Draft PR — bağımsız sağlayıcı adaptörleri, ingestion run modeli, editor/admin
+API ve CLI tamamlandı. P2.7'den önce merge edilmesi gerekir.
+
+Altı resmî Türk hukuk kaynağı sağlayıcısını (Yargıtay, Danıştay, AYM, Uyuşmazlık
+Mahkemesi, Mevzuat, Resmî Gazete) P2.6 kanonik ingestion hattına bağlar.
+Sağlayıcı adaptörleri asla doğrudan canonical yazma veya trust üretimi yapmaz;
+tüm kanonik ingestion `ingest_official_fetch` üzerinden ve SSRF-doğrulanmış
+taşıyıcı ile gerçekleşir.
+
+Ayrıntılı sağlayıcı destek matrisi ve tasarım:
+`docs/p2/P2_OFFICIAL_PROVIDER_INGESTION.md`.
+
 ### P2.7 — Hibrit hukuk araması
 
 Arama sinyalleri:
@@ -619,6 +633,7 @@ Pilot başarı kriteri:
 - `feat/p2.4-case-memory`
 - `feat/p2.5-document-pipeline`
 - `feat/p2.6-source-backbone`
+- `feat/p2.6c-official-provider-ingestion`
 - `feat/p2.7-hybrid-search`
 - `feat/p2.8-legal-issue-graph`
 - `feat/p2.9-grounded-drafting`

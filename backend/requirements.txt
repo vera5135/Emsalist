@@ -18,4 +18,5 @@ python-multipart>=0.0.9,<1.0
 google-genai>=2.0,<3.0
 cryptography>=49.0,<50.0
 httpx>=0.28,<1.0
+httpcore>=1.0,<2.0
 python-docx>=1.0

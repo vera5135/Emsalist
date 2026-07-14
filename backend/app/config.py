@@ -76,6 +76,15 @@ class Settings(BaseModel):
     apple_http_timeout_seconds: int = 5
     apple_jwks_cache_seconds: int = 3600
     apple_link_ticket_seconds: int = 300
+    # P2.6C — official legal source provider enablement (default disabled).
+    official_provider_yargitay_enabled: bool = False
+    official_provider_danistay_enabled: bool = False
+    official_provider_aym_enabled: bool = False
+    official_provider_uyusmazlik_enabled: bool = False
+    official_provider_mevzuat_enabled: bool = False
+    official_provider_resmi_gazete_enabled: bool = False
+    official_provider_live_smoke: bool = False
+    official_provider_browser_discovery_enabled: bool = False
 
 
 def validate_production_config(settings: Settings) -> list[str]:
@@ -242,6 +251,14 @@ def get_settings() -> Settings:
         apple_http_timeout_seconds=int(getenv("APPLE_HTTP_TIMEOUT_SECONDS", "5")),
         apple_jwks_cache_seconds=int(getenv("APPLE_JWKS_CACHE_SECONDS", "3600")),
         apple_link_ticket_seconds=int(getenv("APPLE_LINK_TICKET_SECONDS", "300")),
+        official_provider_yargitay_enabled=getenv("OFFICIAL_PROVIDER_YARGITAY_ENABLED", "false").lower() in {"1", "true", "yes"},
+        official_provider_danistay_enabled=getenv("OFFICIAL_PROVIDER_DANISTAY_ENABLED", "false").lower() in {"1", "true", "yes"},
+        official_provider_aym_enabled=getenv("OFFICIAL_PROVIDER_AYM_ENABLED", "false").lower() in {"1", "true", "yes"},
+        official_provider_uyusmazlik_enabled=getenv("OFFICIAL_PROVIDER_UYUSMAZLIK_ENABLED", "false").lower() in {"1", "true", "yes"},
+        official_provider_mevzuat_enabled=getenv("OFFICIAL_PROVIDER_MEVZUAT_ENABLED", "false").lower() in {"1", "true", "yes"},
+        official_provider_resmi_gazete_enabled=getenv("OFFICIAL_PROVIDER_RESMI_GAZETE_ENABLED", "false").lower() in {"1", "true", "yes"},
+        official_provider_live_smoke=getenv("OFFICIAL_PROVIDER_LIVE_SMOKE", "false").lower() in {"1", "true", "yes"},
+        official_provider_browser_discovery_enabled=getenv("OFFICIAL_PROVIDER_BROWSER_DISCOVERY_ENABLED", "false").lower() in {"1", "true", "yes"},
     )
 
     if _os.environ.get("EMSALIST_SKIP_PRODUCTION_VALIDATION", "").lower() not in ("1", "true", "yes"):

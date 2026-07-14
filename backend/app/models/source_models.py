@@ -58,6 +58,9 @@ class SourceParagraphResponse(BaseModel):
     text: str
     page: int | None = None
     article_number: str
+    article_kind: str = ""
+    article_label: str = ""
+    article_locator_key: str = ""
     embedding_status: str
 
 

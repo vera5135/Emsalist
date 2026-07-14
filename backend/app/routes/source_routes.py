@@ -47,7 +47,12 @@ from app.models.source_models import (
     SourceVersionResponse,
 )
 from app.services.auth_service import SecurityContext, get_auth_mode, resolve_current_user
-from app.services.source_ingestion_service import ingest_editor_candidate, get_version_official_evidence, resolve_version_verification_status
+from app.services.source_ingestion_service import (
+    get_version_official_evidence,
+    ingest_editor_candidate,
+    resolve_version_verification_status,
+)
+from app.services.source_paragraphs import controlled_article_locator
 from app.services.source_verification import (
     BLOCKED_FOR_USAGE,
     EDITOR_VERIFIED,
@@ -127,10 +132,18 @@ def _version_resp(v) -> SourceVersionResponse:
 
 
 def _paragraph_resp(p) -> SourceParagraphResponse:
+    locator = controlled_article_locator(
+        p.locator_json,
+        stored_article_number=p.article_number,
+    )
     return SourceParagraphResponse(
         id=p.id, source_version_id=p.source_version_id, paragraph_index=p.paragraph_index,
         heading_path=p.heading_path, text=p.text, page=p.page,
-        article_number=p.article_number, embedding_status=p.embedding_status,
+        article_number=p.article_number,
+        article_kind=locator.article_kind if locator else "",
+        article_label=locator.article_label if locator else "",
+        article_locator_key=locator.article_locator_key if locator else "",
+        embedding_status=p.embedding_status,
     )
 
 
