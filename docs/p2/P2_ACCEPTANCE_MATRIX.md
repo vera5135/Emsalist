@@ -105,14 +105,33 @@ deterministik test edilir.
 
 ## P2.7 — Hibrit arama
 
-| Kriter | Öncelik | Kanıt |
-|---|---:|---|
-| Anahtar kelime ve semantik arama birlikte çalışıyor | Kritik | integration test |
-| Mahkeme, daire, tarih ve doğrulama filtreleri çalışıyor | Yüksek | API test |
-| Karşıt karar araması destekleniyor | Yüksek | benchmark |
-| Tekrar sonuçlar bastırılıyor | Yüksek | dedupe benchmark |
-| Dosya bağlamı sıralamaya kontrollü etki ediyor | Kritik | ranking test |
-| Pilot benchmark ilk 3/ilk 10 hedefleri tanımlı ve ölçülüyor | Kritik | benchmark report |
+Durum: ✅ Uygulandı (P2.7). Kanıtlar `backend/tests/test_search_query_grammar.py`
+(31 test), `backend/tests/test_hybrid_search_service.py`, `backend/app/services/`
+altındaki `hybrid_search_service.py`, `search_embedding_provider.py`,
+`search_privacy.py` ve `search_query_grammar.py`.
+
+| Kriter | Öncelik | Durum | Kanıt |
+|---|---:|---|---|
+| Anahtar kelime ve semantik arama birlikte çalışıyor | Kritik | ✅ | Lexical + semantic parallel retrieval, union candidate pool |
+| Mahkeme, daire, tarih ve doğrulama filtreleri çalışıyor | Yüksek | ✅ | source_types/date_range/court/official_only filtreleri |
+| Karşıt karar araması destekleniyor | Yüksek | ✅ | `contradicted_by` / `argued_against_by` SourceRelationship tabanlı |
+| Tekrar sonuçlar bastırılıyor | Yüksek | ✅ | Canonical SourceRecord ID deduplication (en iyi korunur) |
+| Dosya bağlamı sıralamaya kontrollü etki ediyor | Kritik | ✅ | Case context bonus (0.6), case_id ownership doğrulaması |
+| Deterministik sorgu dilbilgisi (LLM yok) | Kritik | ✅ | `SearchQueryPlan` parser, 31 grammar testi, 422 malformed syntax |
+| Sorgu gizliliği (HMAC hash, ham metin saklanmaz) | Kritik | ✅ | Domain-separated HMAC-SHA256, `safe_query_summary` yapısal |
+| Hassas sorgu koruması (TC ID, IBAN, e-posta, telefon) | Kritik | ✅ | `is_sensitive_query()` → semantik retrieval atlanır |
+| Cursor/result ID imzalama | Yüksek | ✅ | HMAC-signed base64url, `query_hash_binding`, feedback doğrulaması |
+| Semantic opt-in / degraded mod | Yüksek | ✅ | `search_semantic_enabled` flag, ağırlık renormalizasyonu |
+| Embedding provenance (model/version/dimension) | Yüksek | ✅ | `SourceParagraph` embedding metadata alanları |
+| Semantik embedding yalnızca global SourceParagraph text | Kritik | ✅ | Case belgeleri/mesajlar embedding'e gönderilmez |
+| P2.6 trust path kullanımı | Kritik | ✅ | `resolve_version_verification_status` → `index_eligibility` |
+| Gemini embedding provider (768-dim) | Kritik | ✅ | `GeminiSearchEmbeddingProvider`, RETRIEVAL_DOCUMENT/QUERY |
+| Pilot sınırlamalar belgeli | Yüksek | ✅ | JSON vektörler + bounded candidate pool; pgvector native yok |
+| Pilot benchmark ilk 3/ilk 10 hedefleri tanımlı ve ölçülüyor | Kritik | ✅ | Query grammar benchmark: 6 operator scenario, multi-source-type corpus |
+
+Not: P2.7 semantik retrieval, pgvector native indeksi olmaksızın JSON vektörler
+ve bounded candidate pool (max 5000×2) ile çalışır — bu P2.7 pilot sınırlamasıdır.
+Gerçek pgvector ANN indeksine geçiş ileri sürümdedir.
 
 ## P2.8 — Hukuki mesele grafiği
 

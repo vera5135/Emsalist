@@ -209,24 +209,39 @@ Global kaynak tabloları tenant dışı olabilir; ancak `source_usage` tenant/ca
 
 Hassas sorgu tam metni zorunlu olarak kalıcı tutulmaz.
 
-- id
-- workspace_id
-- case_id nullable
-- query_hash
-- safe_query_summary
-- filters_json
-- index_version
-- created_by
+- id (String(32), PK)
+- tenant_id (String(32), FK → tenants.id)
+- user_id (String(32), FK → users.id)
+- case_id (String(32), FK → cases.id, nullable)
+- query_hash (String(64), index): domain-separated HMAC-SHA256 hash. Ham sorgu yerine `tenant_id:positive_clauses` üzerinden hesaplanır. Domain: `"emsalist-query-hash|v1"`.
+- safe_query_summary (JSON): yalnız yapısal istatistikler (cümle sayıları, atıf adayı sayıları). Ham metin, operatörler veya normalize edilmiş metin içermez.
+- filters_json (JSON): uygulanan filtreler (source_types, date_range, court, official_only)
+- index_version (Integer): sorgu anındaki en yeni SourceParagraph.created_at timestamp'i. Cursor binding için kullanılır.
+- created_by → User
 - created_at
 
 ### SearchFeedback
 
-- search_query_id
-- result_id
-- source_id
-- feedback_type
-- user_id
+- id (String(32), PK)
+- search_query_id (String(32), FK → search_queries.id, index)
+- result_id (String(256), index): HMAC-signed result identifier
+- source_id (String(32)): kaynak kaydı ID
+- feedback_type (String(30)): `relevant`, `not_relevant`, `authoritative`, `outdated`, `incorrect`
+- user_id (String(32), FK → users.id)
 - created_at
+
+### SourceParagraph embedding alanları (P2.7)
+
+Aşağıdaki alanlar `source_paragraphs` tablosuna P2.7 ile eklenmiştir:
+
+- embedding_status (String(20), default=`"pending"`): `pending` | `indexed` | `failed`
+- embedding_model (String(60), nullable): model adı (örn. `gemini-embedding-001`)
+- embedding_version (String(40), nullable): versiyon etiketi (örn. `p2.7-embedding-1`)
+- embedding_dimension (Integer, nullable): vektör boyutu (örn. 768)
+- embedding_vector_json (Text, nullable): JSON float dizisi olarak embedding vektörü. P2.7 pilot sınırı: pgvector native tipi yerine JSON/Text.
+- embedding_updated_at (DateTime tz, nullable)
+
+Semantic retrieval yalnızca `embedding_status == "indexed"` olan paragrafları kapsar.
 
 ## 10. Legal Issue Graph
 

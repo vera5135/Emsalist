@@ -259,7 +259,54 @@ Runbook beta öncesi hazırlanır.
 - rate limit
 - deletion/legal hold bypass
 
-## 20. Kapanış kriterleri
+## 20. P2.7 Arama gizliliği
+
+### 20.1 Sorgu hash
+
+- `query_hash` = HMAC-SHA256(domain_separator=`"emsalist-query-hash|v1"`, message=`"tenant_id:space_separated_positive_clauses"`)
+- Domain separation, farklı HMAC kullanım alanları arasında çakışmayı önler
+- Düz SHA-256 kullanılmaz; hmac modülü ve sabit zamanlı `compare_digest` kullanılır
+- `query_hash` yalnız `SearchQuery` tablosunda saklanır; çıkarıma dayanıklıdır (ham metin geri elde edilemez)
+
+### 20.2 Ham sorgu saklanmaz
+
+- `SearchQuery.raw_query_transient` yalnız geçici `SearchQueryPlan` nesnesinde bulunur; DB'ye yazılmaz
+- `SearchQuery` tablosunda: `query_hash` + `safe_query_summary` + `filters_json` + `index_version` dışında sorguya dair hiçbir alan yoktur
+- `safe_query_summary` = `SearchQueryPlan.safe_summary()` → yalnız yapısal sayılar (optional_clause_count, required_clause_count, excluded_clause_count, exact_citation_candidates count, article_candidates count). Operatör metni veya normalize edilmiş sorgu metni içermez.
+
+### 20.3 Hassas sorgu koruması
+
+`is_sensitive_query()` aşağıdaki desenleri ilk 200 karakterde tarar:
+- TC kimlik numarası (11 haneli)
+- IBAN (TR ile başlayan)
+- E-posta adresi
+- Türkiye telefon numarası
+- 32+ karakter alfanumerik token
+
+Hassas sorgu tespit edilirse:
+- Semantik retrieval (embedding API çağrısı) atlanır
+- `degraded_mode=true` dönülür
+- Lexical-only sonuçlar döner
+- Sorgu metni hiçbir harici servise gönderilmez
+
+### 20.4 Cursor ve result ID güvenliği
+
+- Cursor payload'ı: `query_id`, `query_hash_binding`, `filter_hash`, `index_version`, `last_sort_key`. Ham sorgu metni içermez.
+- Cursor imzası: HMAC-SHA256(domain=`"emsalist-cursor|v1"`, payload), base64url
+- Result ID payload'ı: `qid`, `sid`, `svid`, `pid`, `iv`. Ham sorgu metni içermez.
+- Result ID imzası: HMAC-SHA256(domain=`"emsalist-result-id|v1"`, payload), base64url
+- Her iki imza da istek anında `verify_cursor` / `verify_result_id` ile doğrulanır
+- `query_hash_binding`: cursor yalnızca aynı sorgu hash'i ile kullanılabilir
+- Feedback endpoint'i result ID imzasını doğrular; imzasız veya yanlış imzalı ID reddedilir (422)
+
+### 20.5 Embedding çağrı gizliliği
+
+- Embedding yalnızca global `SourceParagraph.text` üzerinden üretilir (case belgeleri, mesajlar, dilekçeler üzerinde değil)
+- Gemini embedding API çağrılarında ham kaynak metni veya sorgu metni günlüğe yazılmaz
+- Embedding hataları `try/except` ile yakalanır; hata mesajında ham metin istemciye veya log'a dönmez
+- Kaynak embedding batch'i `RETRIEVAL_DOCUMENT`, sorgu embedding'i `RETRIEVAL_QUERY` task_type'ı ile gönderilir
+
+## 21. Kapanış kriterleri
 
 - Threat model her P2 aşamasında güncellenir.
 - Hassas içerik loglanmaz.

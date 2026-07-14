@@ -10,6 +10,7 @@ import '../features/cases/presentation/case_chat_screen.dart';
 import '../features/cases/presentation/cases_screen.dart';
 import '../features/case_memory/presentation/case_memory_screen.dart';
 import '../features/documents/presentation/documents_screen.dart';
+import '../features/sources/presentation/search_screen.dart';
 import '../features/sources/presentation/sources_screen.dart';
 
 class AppRoutes {
@@ -25,6 +26,7 @@ class AppRoutes {
   static const String caseDocuments = 'caseDocuments';
   static const String caseSources = 'caseSources';
   static const String sources = 'sources';
+  static const String search = 'search';
   static const String drafts = 'drafts';
 
   static const String splashPath = '/splash';
@@ -37,6 +39,7 @@ class AppRoutes {
   static const String caseDocumentsPath = '/cases/:caseId/documents';
   static const String caseSourcesPath = '/cases/:caseId/sources';
   static const String sourcesPath = '/sources';
+  static const String searchPath = '/search';
   static const String draftsPath = '/drafts';
 }
 
@@ -150,6 +153,12 @@ GoRouter createAppRouter({
         name: AppRoutes.caseSources,
         builder: (BuildContext context, GoRouterState state) =>
             CaseSourcesScreen(caseId: state.pathParameters['caseId'] ?? ''),
+      ),
+      GoRoute(
+        path: AppRoutes.searchPath,
+        name: AppRoutes.search,
+        builder: (BuildContext context, GoRouterState state) =>
+            const SearchScreen(),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) {

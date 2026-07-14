@@ -1039,6 +1039,11 @@ class SourceParagraph(Base):
     article_number: Mapped[str] = mapped_column(String(40), default="")
     locator_json: Mapped[dict] = mapped_column(JSON, default=dict)
     embedding_status: Mapped[str] = mapped_column(String(20), default="pending")
+    embedding_model: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    embedding_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    embedding_dimension: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    embedding_vector_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (
         Index("ix_source_paragraphs_version", "source_version_id", "paragraph_index"),
@@ -1111,6 +1116,40 @@ class SourceUsage(Base):
         Index("ix_source_usages_tenant_case", "tenant_id", "case_id"),
         Index("ix_source_usages_record", "source_record_id"),
     )
+
+
+# -- P2.7 Hybrid Legal Search --
+class SearchQuery(Base):
+    __tablename__ = "search_queries"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    case_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("cases.id"), nullable=True)
+    query_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    safe_query_summary: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    filters_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    index_version: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    tenant = relationship("Tenant", backref="search_queries")
+    user = relationship("User", backref="search_queries")
+    case = relationship("Case", backref="search_queries")
+
+
+class SearchFeedback(Base):
+    __tablename__ = "search_feedbacks"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    search_query_id: Mapped[str] = mapped_column(String(32), ForeignKey("search_queries.id"), nullable=False, index=True)
+    result_id: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    feedback_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    search_query = relationship("SearchQuery", backref="feedbacks")
+    user = relationship("User", backref="search_feedbacks")
 
 
 # -- P2.6C Official provider ingestion runs --

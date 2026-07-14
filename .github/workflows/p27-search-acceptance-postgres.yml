@@ -1,0 +1,78 @@
+name: P2.7 Hybrid Search PostgreSQL Acceptance
+
+on:
+  push:
+    branches: [feat/p2.7-hybrid-search]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  p27-acceptance-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: emsalist_test_pwd
+          POSTGRES_DB: emsalist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      CI: "true"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: emsalist
+      PGPASSWORD: emsalist_test_pwd
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements-test.txt
+
+      - name: Run P2.7 PostgreSQL production acceptance tests
+        working-directory: backend
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_p27_production_acceptance.py -v -s --tb=short 2>&1 | tee pytest-output.txt
+          exit_code=$?
+
+          skipped=$(grep -c "SKIPPED" pytest-output.txt || true)
+          passed=$(grep -c "PASSED" pytest-output.txt || true)
+          failed=$(grep -c "FAILED" pytest-output.txt || true)
+
+          if [ "$exit_code" -ne 0 ]; then
+            echo "FAIL: pytest exited with code $exit_code"
+            exit $exit_code
+          fi
+          if [ "$skipped" -gt 0 ]; then
+            echo "FAIL: $skipped test(s) SKIPPED — harness misconfigured"
+            exit 1
+          fi
+          if [ "$failed" -gt 0 ]; then
+            echo "FAIL: $failed test(s) FAILED"
+            exit 1
+          fi
+          if [ "$passed" -ne 31 ]; then
+            echo "FAIL: expected 31 passed, got $passed"
+            exit 1
+          fi
+          echo "All 31 P2.7 production acceptance tests PASSED — zero skipped, zero failed"

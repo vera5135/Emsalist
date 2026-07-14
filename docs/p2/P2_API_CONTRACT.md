@@ -191,6 +191,138 @@ kaynak `404` döner:
 - DELETE `/cases/{case_id}/sources/{usage_id}`
 - POST `/search/results/{result_id}/feedback`
 
+### 12.1 P2.7 Search endpoints (uygulandı)
+
+Tüm arama endpoint'leri `/api/v1/search` prefix'i altındadır.
+
+#### POST `/api/v1/search/legal`
+
+Request:
+```json
+{
+  "query": "arsa payı",
+  "case_id": null,
+  "official_only": false,
+  "source_types": ["yargitay", "danıştay"],
+  "date_range": ["2020-01-01", "2024-12-31"],
+  "court": null,
+  "limit": 20,
+  "cursor": null
+}
+```
+
+Response:
+```json
+{
+  "results": [
+    {
+      "result_id": "<signed-base64>",
+      "source_id": "abc123",
+      "source_type": "yargitay",
+      "canonical_key": "...",
+      "title": "...",
+      "court": "Yargıtay",
+      "chamber": "3. Hukuk Dairesi",
+      "case_number": "2020/123",
+      "decision_number": "2021/456",
+      "decision_date": "2021-06-15",
+      "verification_status": "verified_official",
+      "temporal_status": "current",
+      "paragraph_id": "par123",
+      "paragraph_text": "...",
+      "snippet": "ilk 300 karakter...",
+      "relevance_score": 0.85,
+      "semantic_score": 0.72,
+      "lexical_score": 0.91,
+      "match_reasons": ["Zorunlu 'arsa payı' ifadesi eşleşti."]
+    }
+  ],
+  "total": 45,
+  "has_more": true,
+  "next_cursor": "<signed-base64>",
+  "semantic_available": true,
+  "degraded_mode": false,
+  "query_id": "a1b2c3d4"
+}
+```
+
+#### POST `/api/v1/search/similar`
+
+Request:
+```json
+{
+  "source_id": "src123",
+  "source_paragraph_id": null,
+  "limit": 10,
+  "filters": {}
+}
+```
+
+Response:
+```json
+{
+  "results": ["...LegalSearchResult..."],
+  "similarity_basis": "semantic_text_embedding"
+}
+```
+
+#### POST `/api/v1/search/opposing`
+
+Request:
+```json
+{
+  "source_id": "src123",
+  "filters": {}
+}
+```
+
+Response:
+```json
+{
+  "results": ["...LegalSearchResult..."],
+  "opposition_basis": "controlled_opposition_evidence"
+}
+```
+
+`opposition_basis`: `"controlled_opposition_evidence"` | `"no_controlled_opposition"`
+
+#### GET `/api/v1/search/suggestions`
+
+Query params:
+- `q` (required, min 1, max 200): sorgu ön eki
+- `limit` (optional, default 10, max 20): maksimum öneri
+
+Response:
+```json
+{
+  "suggestions": ["Yargıtay", "E.", "K.", "TBK"]
+}
+```
+
+Mahkeme isimleri ve atıf kalıpları (`E.`, `K.`, `TBK`, `TMK`, vs.) ön ek ile eşleşir.
+
+#### POST `/api/v1/search/results/{result_id}/feedback`
+
+Request:
+```json
+{
+  "feedback_type": "relevant",
+  "query_id": "a1b2c3d4"
+}
+```
+
+Response:
+```json
+{
+  "acknowledged": true,
+  "feedback_id": "fb123"
+}
+```
+
+Kabul edilen `feedback_type` değerleri: `relevant`, `not_relevant`, `authoritative`, `outdated`, `incorrect`.
+
+`result_id` HMAC ile doğrulanır; geçersiz imza → 422. `query_id` başka tenant'a aitse → 404.
+
 ## 13. Legal issues
 
 - GET `/cases/{case_id}/legal-issues`

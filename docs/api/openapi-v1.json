@@ -4795,6 +4795,346 @@
         "title": "LegalQuestionResponse",
         "type": "object"
       },
+      "LegalSearchRequest": {
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opsiyonel case baglami",
+            "title": "Case Id"
+          },
+          "court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mahkeme adi filtresi",
+            "title": "Court"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sayfalama imleci",
+            "title": "Cursor"
+          },
+          "date_range": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tarih araligi (baslangic, bitis)",
+            "title": "Date Range"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Sayfa basina sonuc sayisi",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "official_only": {
+            "default": false,
+            "description": "Sadece resmi kaynaklarda ara",
+            "title": "Official Only",
+            "type": "boolean"
+          },
+          "query": {
+            "description": "Arama sorgusu metni",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "source_types": {
+            "description": "Kaynak turleri filtresi",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "LegalSearchRequest",
+        "type": "object"
+      },
+      "LegalSearchResponse": {
+        "properties": {
+          "degraded_mode": {
+            "default": false,
+            "title": "Degraded Mode",
+            "type": "boolean"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "index_version": {
+            "default": "",
+            "title": "Index Version",
+            "type": "string"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "query_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Id"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LegalSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "semantic_available": {
+            "default": false,
+            "title": "Semantic Available",
+            "type": "boolean"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "LegalSearchResponse",
+        "type": "object"
+      },
+      "LegalSearchResult": {
+        "properties": {
+          "article_kind": {
+            "default": "",
+            "description": "Article kind (regular/additional/provisional/repeated)",
+            "title": "Article Kind",
+            "type": "string"
+          },
+          "article_label": {
+            "default": "",
+            "description": "Article display label",
+            "title": "Article Label",
+            "type": "string"
+          },
+          "article_locator_key": {
+            "default": "",
+            "description": "Article locator key",
+            "title": "Article Locator Key",
+            "type": "string"
+          },
+          "article_number": {
+            "default": "",
+            "description": "Article number",
+            "title": "Article Number",
+            "type": "string"
+          },
+          "authority_score": {
+            "default": 0.0,
+            "description": "Trust/verification authority score 0-1",
+            "title": "Authority Score",
+            "type": "number"
+          },
+          "case_context_score": {
+            "default": 0.0,
+            "description": "Case context rerank score 0-1",
+            "title": "Case Context Score",
+            "type": "number"
+          },
+          "case_number": {
+            "default": "",
+            "description": "Case/esas number",
+            "title": "Case Number",
+            "type": "string"
+          },
+          "chamber": {
+            "default": "",
+            "description": "Chamber",
+            "title": "Chamber",
+            "type": "string"
+          },
+          "court": {
+            "default": "",
+            "description": "Court",
+            "title": "Court",
+            "type": "string"
+          },
+          "decision_date": {
+            "default": "",
+            "description": "Decision date",
+            "title": "Decision Date",
+            "type": "string"
+          },
+          "decision_number": {
+            "default": "",
+            "description": "Decision number",
+            "title": "Decision Number",
+            "type": "string"
+          },
+          "degraded_mode": {
+            "default": false,
+            "description": "Did semantic search degrade to lexical",
+            "title": "Degraded Mode",
+            "type": "boolean"
+          },
+          "final_score": {
+            "default": 0.0,
+            "description": "Final weighted relevance score 0-1",
+            "title": "Final Score",
+            "type": "number"
+          },
+          "lexical_score": {
+            "default": 0.0,
+            "description": "Lexical match score 0-1",
+            "title": "Lexical Score",
+            "type": "number"
+          },
+          "match_reasons": {
+            "description": "Turkish deterministic match reasons",
+            "items": {
+              "type": "string"
+            },
+            "title": "Match Reasons",
+            "type": "array"
+          },
+          "official_url": {
+            "default": "",
+            "description": "Official URL",
+            "title": "Official Url",
+            "type": "string"
+          },
+          "paragraph_snippet": {
+            "default": "",
+            "description": "First ~300 chars of matched paragraph",
+            "title": "Paragraph Snippet",
+            "type": "string"
+          },
+          "result_id": {
+            "description": "Signed opaque result identifier",
+            "title": "Result Id",
+            "type": "string"
+          },
+          "semantic_available": {
+            "default": false,
+            "description": "Was semantic search configured/available",
+            "title": "Semantic Available",
+            "type": "boolean"
+          },
+          "semantic_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cosine similarity score or None",
+            "title": "Semantic Score"
+          },
+          "source_id": {
+            "description": "SourceRecord.id",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_paragraph_id": {
+            "description": "SourceParagraph.id for the matched paragraph",
+            "title": "Source Paragraph Id",
+            "type": "string"
+          },
+          "source_type": {
+            "default": "",
+            "description": "Source type",
+            "title": "Source Type",
+            "type": "string"
+          },
+          "source_version_id": {
+            "description": "Exact SourceVersion.id for this result",
+            "title": "Source Version Id",
+            "type": "string"
+          },
+          "temporal_score": {
+            "default": 0.0,
+            "description": "Temporal relevance score 0-1",
+            "title": "Temporal Score",
+            "type": "number"
+          },
+          "temporal_status": {
+            "default": "",
+            "description": "Temporal validity status",
+            "title": "Temporal Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "Source title",
+            "title": "Title",
+            "type": "string"
+          },
+          "verification_status": {
+            "default": "",
+            "description": "Resolved effective verification status",
+            "title": "Verification Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result_id",
+          "source_id",
+          "source_version_id",
+          "source_paragraph_id"
+        ],
+        "title": "LegalSearchResult",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -5356,6 +5696,37 @@
           }
         },
         "title": "OfficialTrackingResponse",
+        "type": "object"
+      },
+      "OpposingSearchRequest": {
+        "properties": {
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "OpposingSearchRequest",
+        "type": "object"
+      },
+      "OpposingSearchResponse": {
+        "properties": {
+          "opposition_basis": {
+            "default": "",
+            "title": "Opposition Basis",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LegalSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "title": "OpposingSearchResponse",
         "type": "object"
       },
       "PetitionDraftRequest": {
@@ -6853,6 +7224,56 @@
         "title": "SearchBuildResponse",
         "type": "object"
       },
+      "SearchFeedbackRequest": {
+        "properties": {
+          "feedback_type": {
+            "description": "Controlled feedback type",
+            "enum": [
+              "relevant",
+              "irrelevant",
+              "valuable_opposing",
+              "wrong_metadata",
+              "duplicate",
+              "used_in_draft"
+            ],
+            "title": "Feedback Type",
+            "type": "string"
+          },
+          "query_id": {
+            "description": "Required search query ID",
+            "title": "Query Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feedback_type",
+          "query_id"
+        ],
+        "title": "SearchFeedbackRequest",
+        "type": "object"
+      },
+      "SearchFeedbackResponse": {
+        "properties": {
+          "acknowledged": {
+            "default": true,
+            "title": "Acknowledged",
+            "type": "boolean"
+          },
+          "feedback_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Id"
+          }
+        },
+        "title": "SearchFeedbackResponse",
+        "type": "object"
+      },
       "SearchQualityRequest": {
         "properties": {
           "case_enrichment": {
@@ -6941,6 +7362,19 @@
         "title": "SearchQualityResponse",
         "type": "object"
       },
+      "SearchSuggestionResponse": {
+        "properties": {
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "title": "SearchSuggestionResponse",
+        "type": "object"
+      },
       "SelectedDecisionForDraft": {
         "properties": {
           "court": {
@@ -6977,6 +7411,57 @@
           "petition_paragraph"
         ],
         "title": "SelectedDecisionForDraft",
+        "type": "object"
+      },
+      "SimilarSearchRequest": {
+        "properties": {
+          "limit": {
+            "default": 10,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "source_id": {
+            "description": "Reference source ID",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional reference paragraph ID",
+            "title": "Source Paragraph Id"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "SimilarSearchRequest",
+        "type": "object"
+      },
+      "SimilarSearchResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LegalSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "similarity_basis": {
+            "default": "",
+            "title": "Similarity Basis",
+            "type": "string"
+          }
+        },
+        "title": "SimilarSearchResponse",
         "type": "object"
       },
       "SourceAuditRequest": {
@@ -16234,6 +16719,261 @@
           }
         },
         "summary": "Build Search Queries",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/legal": {
+      "post": {
+        "operationId": "search_legal_api_v1_search_legal_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegalSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Legal",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/opposing": {
+      "post": {
+        "operationId": "search_opposing_api_v1_search_opposing_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpposingSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpposingSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Opposing",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/results/{result_id}/feedback": {
+      "post": {
+        "operationId": "search_feedback_api_v1_search_results__result_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "result_id",
+            "required": true,
+            "schema": {
+              "title": "Result Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFeedbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Feedback",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/similar": {
+      "post": {
+        "operationId": "search_similar_api_v1_search_similar_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimilarSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimilarSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Similar",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/suggestions": {
+      "get": {
+        "operationId": "search_suggestions_api_v1_search_suggestions_get",
+        "parameters": [
+          {
+            "description": "Sorgu on eki",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Sorgu on eki",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maksimum oneri sayisi",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Maksimum oneri sayisi",
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchSuggestionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Suggestions",
         "tags": [
           "Search"
         ]

@@ -38,6 +38,11 @@ class Settings(BaseModel):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     gemini_timeout_seconds: int = 30
+    # ── P2.7 Hybrid Search ───────────────────────────────────────
+    search_semantic_enabled: bool = False
+    search_embedding_model: str = "gemini-embedding-001"
+    search_embedding_version: str = "p2.7-embedding-1"
+    search_max_candidate_pool: int = 5000
     database_url: str = ""
     storage_backend: str = "json"  # json | database | dual
     auth_mode: str = "local"  # local | jwt
@@ -229,6 +234,10 @@ def get_settings() -> Settings:
         gemini_api_key=gemini_api_key,
         gemini_model=getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         gemini_timeout_seconds=int(getenv("GEMINI_TIMEOUT_SECONDS", "30")),
+        search_semantic_enabled=getenv("EMSALIST_SEARCH_SEMANTIC_ENABLED", "false").lower() in {"1", "true", "yes"},
+        search_embedding_model=getenv("EMSALIST_SEARCH_EMBEDDING_MODEL", "gemini-embedding-001"),
+        search_embedding_version=getenv("EMSALIST_SEARCH_EMBEDDING_VERSION", "p2.7-embedding-1"),
+        search_max_candidate_pool=int(getenv("EMSALIST_SEARCH_MAX_CANDIDATE_POOL", "5000")),
         database_url=_env("DATABASE_URL", ""),
         storage_backend=_env("STORAGE_BACKEND", "json"),
         jwt_secret_key=getenv("JWT_SECRET_KEY", ""),
