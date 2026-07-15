@@ -330,13 +330,13 @@ class TestReasoningFoundationBehavior:
             change_summary_json={}, created_by="u-iv",
         ))
         await session.commit()
-        for status_value, source_fp, out_hash, constraint in (
-            ("processing_error", "c" * 64, "d" * 64, "ck_legal_reasoning_runs_status"),
-            ("succeeded", "short", "d" * 64, "ck_legal_reasoning_runs_source_fingerprint_len"),
-            ("succeeded", "c" * 64, "short", "ck_legal_reasoning_runs_output_hash_len"),
+        for run_id, status_value, source_fp, out_hash, constraint in (
+            ("rr-bad-status", "processing_error", "c" * 64, "d" * 64, "ck_legal_reasoning_runs_status"),
+            ("rr-bad-srcfp", "succeeded", "short", "d" * 64, "ck_legal_reasoning_runs_source_fingerprint_len"),
+            ("rr-bad-out", "succeeded", "c" * 64, "short", "ck_legal_reasoning_runs_output_hash_len"),
         ):
             session.add(LegalReasoningRun(
-                id=f"rr-{constraint}", tenant_id="t-iv", case_id="c-iv",
+                id=run_id, tenant_id="t-iv", case_id="c-iv",
                 memory_revision_id="mr-good", source_fingerprint=source_fp,
                 provider="deterministic", model_version="rule-evaluator-v1",
                 prompt_version="p2.8b-legal-reasoning-1", output_hash=out_hash,
