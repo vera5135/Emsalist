@@ -3027,6 +3027,34 @@
         "title": "EdgeUpdate",
         "type": "object"
       },
+      "EvidenceLinkRequest": {
+        "properties": {
+          "claim_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "evidence_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "relation_type": {
+            "pattern": "^(evidence_supports_claim|evidence_contradicts_claim)$",
+            "title": "Relation Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_id",
+          "evidence_id",
+          "relation_type"
+        ],
+        "title": "EvidenceLinkRequest",
+        "type": "object"
+      },
       "ExtractedFact": {
         "properties": {
           "confidence_score": {
@@ -3613,6 +3641,104 @@
           "drafting_package"
         ],
         "title": "FinalPetitionDraftResponse",
+        "type": "object"
+      },
+      "GraphResponse": {
+        "properties": {
+          "burdens": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Burdens",
+            "type": "array"
+          },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "counterarguments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Counterarguments",
+            "type": "array"
+          },
+          "dependencies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "evidence_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Evidence Links",
+            "type": "array"
+          },
+          "fact_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Fact Links",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "missing_information": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Missing Information",
+            "type": "array"
+          },
+          "risk_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Risk Links",
+            "type": "array"
+          },
+          "source_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Source Links",
+            "type": "array"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "unsupported_claims": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Unsupported Claims",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "stale"
+        ],
+        "title": "GraphResponse",
         "type": "object"
       },
       "GroundingAnalyzeRequest": {
@@ -4705,6 +4831,131 @@
           }
         },
         "title": "LegalGroundValidationResponse",
+        "type": "object"
+      },
+      "LegalIssueResponse": {
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "issue_code": {
+            "title": "Issue Code",
+            "type": "string"
+          },
+          "parent_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Issue Id"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "support_state": {
+            "title": "Support State",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "issue_code",
+          "title",
+          "description",
+          "status",
+          "support_state",
+          "version"
+        ],
+        "title": "LegalIssueResponse",
+        "type": "object"
+      },
+      "LegalIssueUpdateRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "LegalIssueUpdateRequest",
         "type": "object"
       },
       "LegalQuestionItem": {
@@ -6577,6 +6828,86 @@
         "title": "RankedDecision",
         "type": "object"
       },
+      "ReasoningRunResponse": {
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "memory_revision_id": {
+            "title": "Memory Revision Id",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "output_hash": {
+            "title": "Output Hash",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "safe_summary": {
+            "additionalProperties": true,
+            "title": "Safe Summary",
+            "type": "object"
+          },
+          "source_fingerprint": {
+            "title": "Source Fingerprint",
+            "type": "string"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "memory_revision_id",
+          "source_fingerprint",
+          "provider",
+          "model_version",
+          "prompt_version",
+          "output_hash",
+          "status",
+          "stale",
+          "created_at"
+        ],
+        "title": "ReasoningRunResponse",
+        "type": "object"
+      },
+      "RebuildRequest": {
+        "properties": {
+          "prompt_version": {
+            "default": "p2.8b-legal-reasoning-1",
+            "maxLength": 40,
+            "title": "Prompt Version",
+            "type": "string"
+          }
+        },
+        "title": "RebuildRequest",
+        "type": "object"
+      },
       "RefreshRequest": {
         "properties": {
           "refresh_token": {
@@ -7643,6 +7974,41 @@
           "outcome"
         ],
         "title": "SourceIngestResponse",
+        "type": "object"
+      },
+      "SourceLinkRequest": {
+        "properties": {
+          "relation_type": {
+            "default": "source_governs_issue",
+            "pattern": "^source_governs_issue$",
+            "title": "Relation Type",
+            "type": "string"
+          },
+          "source_paragraph_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Paragraph Id",
+            "type": "string"
+          },
+          "source_record_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Record Id",
+            "type": "string"
+          },
+          "source_version_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_record_id",
+          "source_version_id",
+          "source_paragraph_id"
+        ],
+        "title": "SourceLinkRequest",
         "type": "object"
       },
       "SourceParagraphResponse": {
@@ -12355,6 +12721,114 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/legal-issues": {
+      "get": {
+        "operationId": "list_case_legal_issues",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LegalIssueResponse"
+                  },
+                  "title": "Response List Case Legal Issues",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Case Legal Issues",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/legal-issues/rebuild": {
+      "post": {
+        "operationId": "rebuild_case_legal_issues",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReasoningRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rebuild Case Legal Issues",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/memory": {
       "get": {
         "operationId": "case_memory_get",
@@ -13125,6 +13599,57 @@
         "summary": "Create Timeline Event",
         "tags": [
           "Case Memory"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/reasoning-runs": {
+      "get": {
+        "operationId": "list_case_reasoning_runs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReasoningRunResponse"
+                  },
+                  "title": "Response List Case Reasoning Runs",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Case Reasoning Runs",
+        "tags": [
+          "Legal Reasoning"
         ]
       }
     },
@@ -14590,6 +15115,220 @@
         "summary": "Validate Legal Grounds",
         "tags": [
           "Hukuki Dayanak"
+        ]
+      }
+    },
+    "/api/v1/legal-issues/{issue_id}": {
+      "patch": {
+        "operationId": "update_legal_issue",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegalIssueUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Legal Issue",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
+    "/api/v1/legal-issues/{issue_id}/evidence-links": {
+      "post": {
+        "operationId": "create_legal_issue_evidence_link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvidenceLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Legal Issue Evidence Link",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
+    "/api/v1/legal-issues/{issue_id}/graph": {
+      "get": {
+        "operationId": "get_legal_issue_graph",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Legal Issue Graph",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
+    "/api/v1/legal-issues/{issue_id}/source-links": {
+      "post": {
+        "operationId": "create_legal_issue_source_link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Legal Issue Source Link",
+        "tags": [
+          "Legal Reasoning"
         ]
       }
     },

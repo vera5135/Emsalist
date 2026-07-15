@@ -1300,6 +1300,56 @@ class EvidenceSufficiencyAssessment(Base):
     )
 
 
+COUNTERARGUMENT_CATEGORIES = frozenset({
+    "alternative_fact_interpretation", "missing_evidence",
+    "opposing_precedent", "procedural_time_bar", "overbroad_request",
+})
+
+COUNTERARGUMENT_STATUSES = frozenset({
+    "proposed", "accepted", "rejected", "needs_review",
+})
+
+
+class Counterargument(Base):
+    """Concise, user-facing argument against an issue; never hidden reasoning."""
+
+    __tablename__ = "counterarguments"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    basis: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_refs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="proposed")
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_counterarguments_issue", ondelete="RESTRICT",
+        ),
+        Index("ix_counterarguments_tenant_case", "tenant_id", "case_id"),
+        Index("ix_counterarguments_issue", "case_id", "issue_id"),
+        CheckConstraint(
+            f"category IN ({', '.join(repr(s) for s in sorted(COUNTERARGUMENT_CATEGORIES))})",
+            name="ck_counterarguments_category",
+        ),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(COUNTERARGUMENT_STATUSES))})",
+            name="ck_counterarguments_status",
+        ),
+    )
+
+
 LEGAL_REASONING_RUN_STATUSES = frozenset({
     "started", "succeeded", "failed", "stale",
 })
