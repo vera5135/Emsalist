@@ -68,6 +68,22 @@ async def db_setup():
         session.add(User(id=JWT_USERS["tenant_admin"], tenant_id=JWT_TENANT, email_normalized="jwt-tenant-admin@source.test", display_name="JWT Tenant Admin", status="active", role="tenant_admin"))
         session.add(User(id=JWT_USERS["editor"], tenant_id=JWT_TENANT, email_normalized="jwt-editor@source.test", display_name="JWT Editor", status="active", role="editor"))
         session.add(User(id=JWT_USERS["admin"], tenant_id=JWT_TENANT, email_normalized="jwt-admin@source.test", display_name="JWT Admin", status="active", role="admin"))
+        # Seed AuthSessions for JWT identities
+        from app.db.models import AuthSession
+        from datetime import UTC, datetime, timedelta
+        from hashlib import sha256
+        now = datetime.now(UTC)
+        for role, uid in [("lawyer", JWT_USERS["lawyer"]),
+                          ("tenant_admin", JWT_USERS["tenant_admin"]),
+                          ("editor", JWT_USERS["editor"]),
+                          ("admin", JWT_USERS["admin"])]:
+            sid = f"session-{role}"
+            existing = await session.get(AuthSession, sid)
+            if not existing:
+                session.add(AuthSession(id=sid, tenant_id=JWT_TENANT, user_id=uid,
+                    refresh_token_hash=sha256(f"rt-{sid}".encode()).hexdigest(),
+                    token_family_id=f"tf-{sid}", created_at=now, last_used_at=now,
+                    expires_at=now + timedelta(days=7)))
         await session.commit()
     yield
     async with maker() as session:

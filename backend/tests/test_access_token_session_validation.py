@@ -74,8 +74,10 @@ async def _http(method, path, token=None, json=None):
 
 async def _seed(tv=0):
     async with get_sessionmaker()() as session:
-        for tbl in (AuthSession, User, Tenant):
-            await session.execute(delete(tbl))
+        await session.execute(delete(AuthSession))
+        await session.execute(delete(User))
+        await session.execute(delete(Tenant))
+        await session.flush()
         session.add(Tenant(id=TENANT, name="T", slug=TENANT, status="active"))
         session.add(User(id=USER_ID, tenant_id=TENANT,
                          email_normalized="u@t", display_name="U",

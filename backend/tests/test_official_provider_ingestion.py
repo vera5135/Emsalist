@@ -692,9 +692,38 @@ async def test_rediscovery_no_duplicate_item_and_no_duplicate_version(enabled_al
 
 
 # ═══════════════════ AUTHORIZATION (jwt mode) ═══════════════════
+
 def _jwt_token(role: str) -> str:
     from app.services.auth_service import create_access_token
     return create_access_token(f"u-{role}", "prov-tenant", role, f"s-{role}")
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def seed_jwt_auth_prov_tenant():
+    from app.db.models import AuthSession, Tenant, User
+    from datetime import UTC, datetime, timedelta
+    from hashlib import sha256
+    maker = get_sessionmaker()
+    async with maker() as session:
+        t = await session.get(Tenant, "prov-tenant")
+        if not t:
+            session.add(Tenant(id="prov-tenant", name="Provider Tenant", slug="prov-tenant", status="active"))
+        for role in ("lawyer", "tenant_admin", "editor", "admin"):
+            uid = f"u-{role}"
+            sid = f"s-{role}"
+            u = await session.get(User, uid)
+            if not u:
+                session.add(User(id=uid, tenant_id="prov-tenant", email_normalized=f"{uid}@test",
+                                 display_name=role, status="active", role=role, token_version=0))
+            s = await session.get(AuthSession, sid)
+            if not s:
+                now = datetime.now(UTC)
+                session.add(AuthSession(id=sid, tenant_id="prov-tenant", user_id=uid,
+                    refresh_token_hash=sha256(f"rt-{sid}".encode()).hexdigest(),
+                    token_family_id=f"tf-{sid}", created_at=now, last_used_at=now,
+                    expires_at=now + timedelta(days=7)))
+        await session.commit()
+    yield
 
 
 async def _jwt_client():
