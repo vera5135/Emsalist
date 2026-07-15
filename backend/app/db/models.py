@@ -1018,6 +1018,64 @@ class LegalIssueFactLink(Base):
     )
 
 
+LEGAL_ISSUE_RISK_RELATIONS = frozenset({
+    "issue_affects_risk",
+})
+
+
+class LegalIssueRiskLink(Base):
+    __tablename__ = "legal_issue_risk_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    risk_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False, default="issue_affects_risk")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_risk_links_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "risk_id"],
+            ["risks.tenant_id", "risks.case_id", "risks.id"],
+            name="fk_legal_issue_risk_links_risk",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            f"relation_type IN ({', '.join(repr(s) for s in sorted(LEGAL_ISSUE_RISK_RELATIONS))})",
+            name="ck_legal_issue_risk_links_relation_type",
+        ),
+        Index(
+            "ix_legal_issue_risk_links_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_legal_issue_risk_links_issue",
+            "case_id", "issue_id",
+        ),
+        Index(
+            "ix_legal_issue_risk_links_risk",
+            "case_id", "risk_id",
+        ),
+        Index(
+            "uq_legal_issue_risk_links_active_relation",
+            "tenant_id", "case_id", "issue_id", "risk_id", "relation_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
 class Claim(Base):
     __tablename__ = "claims"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
