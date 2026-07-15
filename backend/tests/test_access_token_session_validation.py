@@ -54,7 +54,9 @@ async def _seed(tid, uid, sid, u_kw=None):
     session_kw = {} if u_kw is None else dict(u_kw)
     async with get_sessionmaker()() as s:
         s.add(_make_tenant(tid))
+        await s.flush()
         s.add(_make_user(uid, tid, **session_kw))
+        await s.flush()
         s.add(_make_session(sid, uid, tid))
         await s.commit()
 
@@ -120,7 +122,9 @@ async def test_logout_all_invalidates_both():
     tid, uid, s1, s2 = _unique("t-lo2", "u-lo2", "s1-lo2", "s2-lo2")
     async with get_sessionmaker()() as s:
         s.add(_make_tenant(tid))
+        await s.flush()
         s.add(_make_user(uid, tid))
+        await s.flush()
         s.add(_make_session(s1, uid, tid))
         s.add(_make_session(s2, uid, tid))
         await s.commit()
@@ -136,7 +140,9 @@ async def test_password_change_invalidates():
     tid, uid, sid = _unique("t-pw", "u-pw", "s-pw")
     async with get_sessionmaker()() as s:
         s.add(_make_tenant(tid))
+        await s.flush()
         s.add(_make_user(uid, tid, pw="oldpass"))
+        await s.flush()
         s.add(_make_session(sid, uid, tid))
         await s.commit()
     t = _tok(uid, tid, sid)
@@ -151,8 +157,10 @@ async def test_session_user_mismatch():
     tid, uid_a, uid_b, sid = _unique("t-sm", "ua-sm", "ub-sm", "s-sm")
     async with get_sessionmaker()() as s:
         s.add(_make_tenant(tid))
+        await s.flush()
         s.add(_make_user(uid_a, tid))
         s.add(_make_user(uid_b, tid))
+        await s.flush()
         s.add(_make_session(sid, uid_a, tid))
         await s.commit()
     t = _tok(uid_b, tid, sid)
@@ -165,7 +173,9 @@ async def test_session_tenant_mismatch():
     async with get_sessionmaker()() as s:
         s.add(_make_tenant(tid_a))
         s.add(_make_tenant(tid_b))
+        await s.flush()
         s.add(_make_user(uid, tid_a))
+        await s.flush()
         s.add(_make_session(sid, uid, tid_a))
         await s.commit()
     t = _tok(uid, tid_b, sid)
