@@ -1185,6 +1185,66 @@ class LegalIssueSourceLink(Base):
     )
 
 
+BURDEN_OF_PROOF_STATUSES = frozenset({
+    "candidate", "review_required", "finalized",
+})
+
+EVIDENCE_SUFFICIENCY_STATUSES = frozenset({
+    "supported", "partially_supported", "unsupported", "contradicted",
+    "inadmissibility_risk", "authenticity_risk",
+})
+
+
+class BurdenOfProof(Base):
+    __tablename__ = "burdens_of_proof"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    burden_party_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    burden_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    required_standard: Mapped[str] = mapped_column(String(80), nullable=False)
+    legal_source_refs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    evidence_status: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="candidate")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_burdens_of_proof_issue",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_burdens_of_proof_tenant_case", "tenant_id", "case_id"),
+        Index("ix_burdens_of_proof_issue", "case_id", "issue_id"),
+        Index(
+            "uq_burdens_of_proof_active_scope",
+            "tenant_id", "case_id", "issue_id", "burden_party_id", "burden_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(BURDEN_OF_PROOF_STATUSES))})",
+            name="ck_burdens_of_proof_status",
+        ),
+        CheckConstraint(
+            f"evidence_status IN ({', '.join(repr(s) for s in sorted(EVIDENCE_SUFFICIENCY_STATUSES))})",
+            name="ck_burdens_of_proof_evidence_status",
+        ),
+        CheckConstraint(
+            "status <> 'finalized' OR json_array_length(legal_source_refs) > 0",
+            name="ck_burdens_of_proof_finalized_requires_sources",
+        ),
+    )
+
+
 LEGAL_REASONING_RUN_STATUSES = frozenset({
     "started", "succeeded", "failed", "stale",
 })
