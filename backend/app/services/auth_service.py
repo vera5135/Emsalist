@@ -95,13 +95,55 @@ def reset_login_rate(key: str) -> None: _LOGIN_ATTEMPTS.pop(key, None)
 
 # -- Auth dependency --
 def get_auth_mode() -> str: return get_settings().auth_mode or "local"
+
+_UNAUTHORIZED = "Authentication session is no longer valid"
+
 async def resolve_current_user(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> SecurityContext:
     ctx = SecurityContext(); ctx.request_id = request.headers.get("X-Request-Id", uuid.uuid4().hex[:8])
     if get_auth_mode() == "local": ctx.authenticated = True; return ctx
     if not credentials: raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     payload = decode_token(credentials.credentials, "access")
-    ctx.authenticated = True; ctx.actor_id = payload["sub"]; ctx.tenant_id = payload["tenant_id"]
-    ctx.role = payload["role"]; ctx.session_id = payload.get("session_id", "")
+
+    sub = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
+    role = payload.get("role")
+    session_id = payload.get("session_id")
+    token_version = payload.get("token_version")
+    if not sub or not isinstance(sub, str) or not sub.strip():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+    if not tenant_id or not isinstance(tenant_id, str) or not tenant_id.strip():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+    if not role or not isinstance(role, str) or not role.strip():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+    if not session_id or not isinstance(session_id, str) or not session_id.strip():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+    if not isinstance(token_version, int) or isinstance(token_version, bool):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+
+    from app.db.auth_repository import UserRepository, AuthSessionRepository
+    from app.db.session import get_sessionmaker
+    sm = get_sessionmaker()
+    async with sm() as db:
+        user = await UserRepository.get_by_id(db, tenant_id, sub)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+        if user.status != "active":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+        if token_version != user.token_version:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+        if role != (user.role or "lawyer"):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+
+        auth_session = await AuthSessionRepository.get_active_session(db, session_id)
+        if auth_session is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+        if auth_session.user_id != sub:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+        if auth_session.tenant_id != tenant_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
+
+    ctx.authenticated = True; ctx.actor_id = user.id; ctx.tenant_id = user.tenant_id
+    ctx.role = user.role or "lawyer"; ctx.session_id = auth_session.id
     set_security_context(ctx); return ctx
 def require_authenticated(ctx: SecurityContext = Depends(resolve_current_user)) -> SecurityContext: return ctx
 

@@ -12,11 +12,11 @@ from unittest.mock import patch
 from sqlalchemy import delete, select
 
 from app.db.models import (
-    BurdenOfProof, Case, CaseFact, CaseMember, Claim, Counterargument,
-    Evidence, EvidenceClaimLink, EvidenceSufficiencyAssessment, LegalIssue,
-    LegalIssueFactLink, LegalIssueSourceLink, LegalReasoningRun,
-    MemoryRevision, SourceParagraph, SourceRecord, SourceVersion, Tenant,
-    User,
+    AuthSession, BurdenOfProof, Case, CaseFact, CaseMember, Claim,
+    Counterargument, Evidence, EvidenceClaimLink,
+    EvidenceSufficiencyAssessment, LegalIssue, LegalIssueFactLink,
+    LegalIssueSourceLink, LegalReasoningRun, MemoryRevision,
+    SourceParagraph, SourceRecord, SourceVersion, Tenant, User,
 )
 from app.db.session import get_sessionmaker
 from app.main import app
@@ -49,6 +49,8 @@ _evidence_id: str = ""
 _source_rec_id: str = ""
 _source_ver_id: str = ""
 _source_para_id: str = ""
+_session_ids: dict[str, str] = {}
+_user_token_versions: dict[str, int] = {}
 
 
 # ── controlled test doubles ──────────────────────────────────────────────────
@@ -69,7 +71,9 @@ class _B13SourceAcquirer:
 # ── JWT helpers ──────────────────────────────────────────────────────────────
 
 def _jwt(user_id: str, role: str, tenant_id: str = TENANT_A) -> str:
-    return create_access_token(user_id, tenant_id, role, f"s-{user_id}")
+    sid = _session_ids.get(user_id, f"s-{user_id}")
+    tv = _user_token_versions.get(user_id, 0)
+    return create_access_token(user_id, tenant_id, role, sid, tv)
 
 def _h(user_id: str, role: str, tenant_id: str = TENANT_A) -> dict:
     return {"Authorization": f"Bearer {_jwt(user_id, role, tenant_id)}"}
@@ -153,6 +157,7 @@ def _assert_snapshot_equal(a, b, label):
 async def b13c_setup():
     global _case_id, _issue_id, _claim_id, _evidence_id
     global _source_rec_id, _source_ver_id, _source_para_id
+    global _session_ids, _user_token_versions
 
     old_provider = legal_reasoning_service.provider
     old_acquirer = legal_reasoning_service.source_acquirer
@@ -162,6 +167,7 @@ async def b13c_setup():
     maker = get_sessionmaker()
     async with maker() as session:
         for uid in SEED_USER_IDS:
+            await session.execute(delete(AuthSession).where(AuthSession.user_id == uid))
             await session.execute(delete(CaseMember).where(CaseMember.user_id == uid))
         for model in (LegalReasoningRun, MemoryRevision, LegalIssueSourceLink,
                       LegalIssueFactLink, Counterargument, BurdenOfProof,
@@ -190,6 +196,31 @@ async def b13c_setup():
         _au(FOREIGN_USER_B, TENANT_B, "lawyer")
         _au(TENANT_ADMIN_B, TENANT_B, "tenant_admin")
         await session.flush()
+
+        # Create real AuthSessions for all actors
+        from hashlib import sha256
+        from datetime import UTC, datetime, timedelta
+        _session_ids.clear()
+        _user_token_versions.clear()
+        for uid, tid in [
+            (TENANT_ADMIN_A, TENANT_A), (WRITER_A, TENANT_A),
+            (VIEWER_A, TENANT_A), (NONMEMBER_A, TENANT_A),
+            (REVOKED_MEMBER_A, TENANT_A), (FOREIGN_USER_B, TENANT_B),
+            (TENANT_ADMIN_B, TENANT_B),
+        ]:
+            now = datetime.now(UTC)
+            s = AuthSession(
+                tenant_id=tid, user_id=uid,
+                refresh_token_hash=sha256(f"rt-{uid}".encode()).hexdigest(),
+                token_family_id=f"tf-{uid}", created_at=now, last_used_at=now,
+                expires_at=now + timedelta(days=7),
+            )
+            session.add(s)
+            await session.flush()
+            _session_ids[uid] = s.id
+            _user_token_versions[uid] = 0
+
+        await session.commit()
 
         case = Case(tenant_id=TENANT_A, owner_user_id=TENANT_ADMIN_A,
                      title="Auth Matrix Case A", status="active", version=1)
@@ -257,6 +288,7 @@ async def b13c_setup():
 
     async with maker() as session:
         for uid in SEED_USER_IDS:
+            await session.execute(delete(AuthSession).where(AuthSession.user_id == uid))
             await session.execute(delete(CaseMember).where(CaseMember.user_id == uid))
         for model in (LegalReasoningRun, MemoryRevision, LegalIssueSourceLink,
                       LegalIssueFactLink, Counterargument, BurdenOfProof,
