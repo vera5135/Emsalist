@@ -865,6 +865,41 @@ class Risk(Base):
 
 # ── P2.8 Legal Issue Graph ────────────────────────────────────────────────────
 
+MEMORY_REVISION_TRIGGER_TYPES = frozenset({
+    "user_message", "document_analysis", "uyap_sync", "manual_edit", "system_recompute",
+})
+
+
+class MemoryRevision(Base):
+    __tablename__ = "memory_revisions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    memory_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    trigger_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    change_summary_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_memory_revisions_tenant_case_id"),
+        UniqueConstraint("tenant_id", "case_id", "revision_number", name="uq_memory_revisions_case_number"),
+        UniqueConstraint("tenant_id", "case_id", "memory_fingerprint", name="uq_memory_revisions_case_fingerprint"),
+        Index("ix_memory_revisions_tenant_case", "tenant_id", "case_id"),
+        CheckConstraint(
+            f"trigger_type IN ({', '.join(repr(s) for s in sorted(MEMORY_REVISION_TRIGGER_TYPES))})",
+            name="ck_memory_revisions_trigger_type",
+        ),
+        CheckConstraint(
+            "length(memory_fingerprint) = 64",
+            name="ck_memory_revisions_fingerprint_len",
+        ),
+    )
+
+
 LEGAL_ISSUE_STATUSES = frozenset({
     "proposed", "accepted", "disputed", "unsupported",
     "satisfied", "failed", "needs_review",
@@ -1146,6 +1181,57 @@ class LegalIssueSourceLink(Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
             sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
+LEGAL_REASONING_RUN_STATUSES = frozenset({
+    "started", "succeeded", "failed", "stale",
+})
+
+
+class LegalReasoningRun(Base):
+    __tablename__ = "legal_reasoning_runs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    memory_revision_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    output_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    safe_summary_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "memory_revision_id"],
+            ["memory_revisions.tenant_id", "memory_revisions.case_id", "memory_revisions.id"],
+            name="fk_legal_reasoning_runs_memory_revision",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_legal_reasoning_runs_tenant_case", "tenant_id", "case_id"),
+        Index("ix_legal_reasoning_runs_case_created", "case_id", "created_at"),
+        Index(
+            "ix_legal_reasoning_runs_reproducibility",
+            "case_id", "memory_revision_id", "source_fingerprint", "prompt_version",
+            "provider", "model_version",
+        ),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(LEGAL_REASONING_RUN_STATUSES))})",
+            name="ck_legal_reasoning_runs_status",
+        ),
+        CheckConstraint(
+            "length(source_fingerprint) = 64",
+            name="ck_legal_reasoning_runs_source_fingerprint_len",
+        ),
+        CheckConstraint(
+            "length(output_hash) = 64",
+            name="ck_legal_reasoning_runs_output_hash_len",
         ),
     )
 
