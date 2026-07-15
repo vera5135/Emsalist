@@ -74,9 +74,13 @@ async def _http(method, path, token=None, json=None):
 
 async def _seed(tv=0):
     async with get_sessionmaker()() as session:
-        await session.execute(delete(AuthSession))
-        await session.execute(delete(User))
-        await session.execute(delete(Tenant))
+        from app.db.models import Case, CaseMember
+        # Delete in FK-safe order
+        await session.execute(delete(AuthSession).where(AuthSession.tenant_id == TENANT))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id == TENANT))
+        await session.execute(delete(Case).where(Case.tenant_id == TENANT))
+        await session.execute(delete(User).where(User.tenant_id == TENANT))
+        await session.execute(delete(Tenant).where(Tenant.id == TENANT))
         await session.flush()
         session.add(Tenant(id=TENANT, name="T", slug=TENANT, status="active"))
         session.add(User(id=USER_ID, tenant_id=TENANT,
@@ -176,9 +180,13 @@ async def test_logout_invalidates_token():
 @pytest.mark.asyncio
 async def test_logout_all_invalidates_both_tokens():
     async with get_sessionmaker()() as session:
-        await session.execute(delete(AuthSession))
-        await session.execute(delete(User))
-        await session.execute(delete(Tenant))
+        from app.db.models import Case, CaseMember
+        await session.execute(delete(AuthSession).where(AuthSession.tenant_id == TENANT))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id == TENANT))
+        await session.execute(delete(Case).where(Case.tenant_id == TENANT))
+        await session.execute(delete(User).where(User.tenant_id == TENANT))
+        await session.execute(delete(Tenant).where(Tenant.id == TENANT))
+        await session.flush()
         session.add(Tenant(id=TENANT, name="T", slug=TENANT, status="active"))
         session.add(User(id=USER_ID, tenant_id=TENANT,
                          email_normalized="u@t", display_name="U",
@@ -206,10 +214,14 @@ async def test_logout_all_invalidates_both_tokens():
 
 @pytest.mark.asyncio
 async def test_password_change_invalidates_token():
+    from app.db.models import Case, CaseMember
     async with get_sessionmaker()() as session:
-        await session.execute(delete(AuthSession))
-        await session.execute(delete(User))
-        await session.execute(delete(Tenant))
+        await session.execute(delete(AuthSession).where(AuthSession.tenant_id == TENANT))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id == TENANT))
+        await session.execute(delete(Case).where(Case.tenant_id == TENANT))
+        await session.execute(delete(User).where(User.tenant_id == TENANT))
+        await session.execute(delete(Tenant).where(Tenant.id == TENANT))
+        await session.flush()
         from app.services.auth_service import hash_password
         session.add(Tenant(id=TENANT, name="T", slug=TENANT, status="active"))
         session.add(User(id=USER_ID, tenant_id=TENANT,
@@ -235,10 +247,14 @@ async def test_password_change_invalidates_token():
 
 @pytest.mark.asyncio
 async def test_session_user_mismatch_rejected():
+    from app.db.models import Case, CaseMember
     async with get_sessionmaker()() as session:
-        await session.execute(delete(AuthSession))
-        await session.execute(delete(User))
-        await session.execute(delete(Tenant))
+        await session.execute(delete(AuthSession).where(AuthSession.tenant_id == TENANT))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id == TENANT))
+        await session.execute(delete(Case).where(Case.tenant_id == TENANT))
+        await session.execute(delete(User).where(User.tenant_id == TENANT))
+        await session.execute(delete(Tenant).where(Tenant.id == TENANT))
+        await session.flush()
         session.add(Tenant(id=TENANT, name="T", slug=TENANT, status="active"))
         session.add(User(id=USER_ID, tenant_id=TENANT,
                          email_normalized="u@t", display_name="U",
@@ -263,10 +279,14 @@ async def test_session_user_mismatch_rejected():
 @pytest.mark.asyncio
 async def test_session_tenant_mismatch_rejected():
     T2 = "tenant-b13d-2"
+    from app.db.models import Case, CaseMember
     async with get_sessionmaker()() as session:
-        await session.execute(delete(AuthSession))
-        await session.execute(delete(User))
-        await session.execute(delete(Tenant))
+        await session.execute(delete(AuthSession).where(AuthSession.tenant_id.in_([TENANT, T2])))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_([TENANT, T2])))
+        await session.execute(delete(Case).where(Case.tenant_id.in_([TENANT, T2])))
+        await session.execute(delete(User).where(User.tenant_id.in_([TENANT, T2])))
+        await session.execute(delete(Tenant).where(Tenant.id.in_([TENANT, T2])))
+        await session.flush()
         session.add(Tenant(id=TENANT, name="T1", slug=TENANT, status="active"))
         session.add(Tenant(id=T2, name="T2", slug=T2, status="active"))
         session.add(User(id=USER_ID, tenant_id=TENANT,
