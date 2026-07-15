@@ -25,8 +25,11 @@ stub that returns objects with status_code, headers, content, location.
 """
 from __future__ import annotations
 
+import inspect
 import ipaddress
+import json
 import math
+import re
 import socket
 import ssl
 from collections.abc import Collection
@@ -65,6 +68,11 @@ MAX_REDIRECTS = 5
 MAX_RESPONSE_BYTES = 25 * 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 10
 
+# Closed method vocabulary for the source seam. Arbitrary methods (PUT/PATCH/
+# DELETE/...) are deliberately NOT supported.
+ALLOWED_FETCH_METHODS = frozenset({"GET", "POST"})
+MAX_POST_BODY_BYTES = 64 * 1024
+
 _BLOCKED_HOSTNAMES = frozenset({
     "localhost", "metadata.google.internal", "metadata",
 })
@@ -94,7 +102,15 @@ _EC = {
     "destination_not_validated": "Hedef IP doğrulanmış kümede değil.",
     "network_error": "Ağ hatası.",
     "transport_unavailable": "Güvenli taşıyıcı kullanılabilir değil.",
+    "method_not_allowed": "Desteklenmeyen istek yöntemi.",
+    "invalid_request_body": "Geçersiz istek gövdesi.",
+    "post_redirect_not_allowed": "POST yönlendirmesi güvenli değil.",
 }
+
+
+# Strict single-line header-value shape (defense in depth against header
+# injection through the bounded accept/content_type descriptor fields).
+_HEADER_VALUE_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~/;,= -]{1,200}$")
 
 
 class SourceFetchError(Exception):
@@ -120,6 +136,71 @@ class FetchResult:
     content: bytes
     content_type: str
     redirect_chain: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SourceFetchRequest:
+    """Controlled, provider-owned request descriptor for the source seam.
+
+    Only ``GET`` and ``POST`` are permitted. For ``POST`` the body is bytes
+    derived from provider-owned JSON (never caller-controlled arbitrary
+    headers, Host, connection destination or proxy configuration). The only
+    request headers ever emitted are the fixed Host/Accept plus, for POST, a
+    fixed Content-Type; nothing here is caller-tunable.
+    """
+
+    url: str
+    method: str = "GET"
+    body: bytes | None = None
+    content_type: str | None = None
+    accept: str | None = None
+
+    def __post_init__(self) -> None:
+        method = (self.method or "GET").upper()
+        object.__setattr__(self, "method", method)
+        if method not in ALLOWED_FETCH_METHODS:
+            raise SourceFetchError("method_not_allowed", _EC["method_not_allowed"])
+        for header_value in (self.content_type, self.accept):
+            if header_value is not None and not _HEADER_VALUE_RE.fullmatch(header_value):
+                raise SourceFetchError("invalid_request_body", _EC["invalid_request_body"])
+        if method == "GET":
+            if self.body is not None or self.content_type is not None:
+                raise SourceFetchError("invalid_request_body", _EC["invalid_request_body"])
+        else:  # POST
+            if not isinstance(self.body, (bytes, bytearray)):
+                raise SourceFetchError("invalid_request_body", _EC["invalid_request_body"])
+            if len(self.body) > MAX_POST_BODY_BYTES:
+                raise SourceFetchError("invalid_request_body", _EC["invalid_request_body"])
+            object.__setattr__(self, "body", bytes(self.body))
+            if not self.content_type:
+                raise SourceFetchError("invalid_request_body", _EC["invalid_request_body"])
+
+    @classmethod
+    def get(cls, url: str, *, accept: str | None = None) -> "SourceFetchRequest":
+        return cls(url=url, method="GET", accept=accept)
+
+    @classmethod
+    def post_json(
+        cls,
+        url: str,
+        payload: object,
+        *,
+        accept: str | None = "application/json",
+        content_type: str = "application/json; charset=utf-8",
+    ) -> "SourceFetchRequest":
+        """Build a POST request whose body is deterministic UTF-8 JSON bytes.
+
+        The payload is serialized here from provider-owned data so no raw byte
+        stream from an untrusted caller is ever transmitted.
+        """
+        try:
+            body = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        except (TypeError, ValueError):
+            raise SourceFetchError("invalid_request_body", _EC["invalid_request_body"]) from None
+        return cls(
+            url=url, method="POST", body=body,
+            content_type=content_type, accept=accept,
+        )
 
 
 def host_matches_allowed_domains(
@@ -497,11 +578,16 @@ class HttpxSourceTransport:
         dest: ValidatedDestination,
         *,
         timeout_seconds: int | None = None,
+        request: SourceFetchRequest | None = None,
     ) -> _StubResponse:
         """Fetch [dest.url] through a pool pinned to dest.validated_ips.
 
         Connects only to IPs in the validated set. TLS SNI, hostname
         verification, and Host header all use dest.hostname.
+
+        [request] optionally carries the controlled method/body descriptor
+        (GET default). Only the closed GET/POST vocabulary is accepted and the
+        body is seam-validated bytes — never caller-controlled headers.
 
         Uses httpcore.ConnectionPool directly — no httpx wrapping.
         """
@@ -516,18 +602,36 @@ class HttpxSourceTransport:
             dest, request_timeout, network_backend=backend,
         )
         try:
-            return self._stream_httpcore(pool, dest, timeout_seconds=request_timeout)
+            return self._stream_httpcore(
+                pool, dest, timeout_seconds=request_timeout, request=request,
+            )
         finally:
             pool.close()
 
     def _stream_httpcore(self, pool: httpcore.ConnectionPool,
                          dest: ValidatedDestination, *,
-                         timeout_seconds: int) -> _StubResponse:
+                         timeout_seconds: int,
+                         request: SourceFetchRequest | None = None) -> _StubResponse:
+        method = "GET"
+        request_body: bytes | None = None
+        accept_value = (b"text/html, text/plain, application/xhtml+xml, "
+                        b"application/xml, text/xml, application/json")
         headers = [
             (b"host", _host_header_value(dest).encode("ascii")),
-            (b"accept", b"text/html, text/plain, application/xhtml+xml, "
-                        b"application/xml, text/xml, application/json"),
         ]
+        if request is not None:
+            method = request.method
+            if method not in ALLOWED_FETCH_METHODS:
+                raise SourceFetchError("method_not_allowed", _EC["method_not_allowed"])
+            if request.accept:
+                accept_value = request.accept.encode("ascii")
+            if method == "POST":
+                request_body = request.body
+                headers.append((
+                    b"content-type",
+                    (request.content_type or "application/json; charset=utf-8").encode("ascii"),
+                ))
+        headers.insert(1, (b"accept", accept_value))
         try:
             timeout_extensions = {
                 "timeout": {
@@ -538,7 +642,8 @@ class HttpxSourceTransport:
                 },
             }
             with pool.stream(
-                "GET", dest.url, headers=headers,
+                method, dest.url, headers=headers,
+                content=request_body,
                 extensions=timeout_extensions,
             ) as resp:
                 body = bytearray()
@@ -609,6 +714,31 @@ def create_live_transport(**kw) -> HttpxSourceTransport | None:
 
 
 # ── Secure fetch with per-hop destination binding ──────────────────────────
+def _call_stub_transport(transport, url: str, request: SourceFetchRequest):
+    """Invoke a test-stub transport callable with backward compatibility.
+
+    Legacy stubs accept ``(url)`` and are only valid for GET. POST-capable
+    stubs must accept a ``request`` keyword argument. A POST routed to a
+    GET-only stub fails closed (never silently degrades to GET).
+    """
+    accepts_request = False
+    try:
+        signature = inspect.signature(transport)
+    except (TypeError, ValueError):
+        signature = None
+    if signature is not None:
+        accepts_request = any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            or parameter.name == "request"
+            for parameter in signature.parameters.values()
+        )
+    if request.method == "GET" and not accepts_request:
+        return transport(url)
+    if not accepts_request:
+        raise SourceFetchError("transport_unavailable", _EC["transport_unavailable"])
+    return transport(url, request=request)
+
+
 def fetch_source(
     url: str,
     *,
@@ -618,19 +748,56 @@ def fetch_source(
     max_bytes: int = MAX_RESPONSE_BYTES,
     allowed_domains: Collection[str] | None = None,
 ) -> FetchResult:
-    """Securely fetch a source URL with per-hop destination validation.
+    """Securely GET a source URL with per-hop destination validation.
 
-    [transport] is an injectable callable ``(url) -> _StubResponse`` used by
-    tests to avoid real network I/O. When None, real fetching is not performed.
+    Preserved GET-only entrypoint. See :func:`fetch_source_request` for the
+    generalized controlled-request seam.
+    """
+    return fetch_source_request(
+        SourceFetchRequest.get(url, accept=None),
+        resolver=resolver,
+        transport=transport,
+        timeout=timeout,
+        max_bytes=max_bytes,
+        allowed_domains=allowed_domains,
+    )
 
-    Every redirect hop is independently destination-validated.
-    Relative redirects are normalized via ``urljoin`` before re-validation.
-    Redirect loops are detected on normalized absolute URLs.
+
+def fetch_source_request(
+    request: SourceFetchRequest,
+    *,
+    resolver=default_resolver,
+    transport=None,
+    timeout: int | None = None,
+    max_bytes: int = MAX_RESPONSE_BYTES,
+    allowed_domains: Collection[str] | None = None,
+) -> FetchResult:
+    """Securely execute a controlled :class:`SourceFetchRequest`.
+
+    [transport] is an injectable callable used by tests to avoid real network
+    I/O. When None, real fetching is not performed.
+
+    Every redirect hop is independently destination-validated. Relative
+    redirects are normalized via ``urljoin`` before re-validation. Redirect
+    loops are detected on normalized absolute URLs.
+
+    Redirect semantics for POST-originated requests are bounded and explicit:
+
+    - 303 → followed as GET without a body (See Other).
+    - 301/302 → fail closed (a POST body is never blindly replayed and the
+      seam never silently rewrites ambiguous redirect semantics).
+    - 307/308 → method and body preserved ONLY because the next hop passes the
+      exact same destination validation boundary as the first hop.
+
+    GET redirect behavior is unchanged from the original seam.
     """
     if transport is None:
         raise SourceFetchError("no_transport", _EC["no_transport"])
+    if not isinstance(request, SourceFetchRequest):
+        raise SourceFetchError("invalid_request_body", _EC["invalid_request_body"])
 
-    current = url
+    current = request.url
+    method = request.method
     chain: list[str] = []
     for _hop in range(MAX_REDIRECTS + 1):
         dest = validate_destination(
@@ -640,15 +807,35 @@ def fetch_source(
         )
         chain.append(dest.url)
 
-        if isinstance(transport, HttpxSourceTransport):
-            resp = transport.fetch_pinned(dest, timeout_seconds=timeout)
+        if method == "GET":
+            hop_request = SourceFetchRequest.get(dest.url, accept=request.accept)
         else:
-            resp = transport(dest.url)
+            hop_request = SourceFetchRequest(
+                url=dest.url, method="POST", body=request.body,
+                content_type=request.content_type, accept=request.accept,
+            )
+
+        if isinstance(transport, HttpxSourceTransport):
+            resp = transport.fetch_pinned(
+                dest, timeout_seconds=timeout, request=hop_request,
+            )
+        else:
+            resp = _call_stub_transport(transport, dest.url, hop_request)
 
         if resp.status_code in (301, 302, 303, 307, 308) and resp.location:
             nxt = urljoin(current, resp.location)
             if nxt in chain:
                 raise SourceFetchError("redirect_loop", _EC["redirect_loop"])
+            if method == "POST":
+                if resp.status_code == 303:
+                    method = "GET"
+                elif resp.status_code in (301, 302):
+                    raise SourceFetchError(
+                        "post_redirect_not_allowed",
+                        _EC["post_redirect_not_allowed"],
+                    )
+                # 307/308: method/body preserved; the next loop iteration
+                # re-validates the new destination before any transport call.
             current = nxt
             continue
         if resp.status_code >= 400:
