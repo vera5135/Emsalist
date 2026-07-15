@@ -1076,6 +1076,80 @@ class LegalIssueRiskLink(Base):
     )
 
 
+LEGAL_ISSUE_SOURCE_RELATIONS = frozenset({
+    "source_governs_issue",
+})
+
+
+class LegalIssueSourceLink(Base):
+    __tablename__ = "legal_issue_source_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_record_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_version_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_paragraph_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False, default="source_governs_issue")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_source_links_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_record_id"],
+            ["source_records.id"],
+            name="fk_legal_issue_source_links_source_record",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_record_id", "source_version_id"],
+            ["source_versions.source_record_id", "source_versions.id"],
+            name="fk_legal_issue_source_links_source_version",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_version_id", "source_paragraph_id"],
+            ["source_paragraphs.source_version_id", "source_paragraphs.id"],
+            name="fk_legal_issue_source_links_source_paragraph",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            f"relation_type IN ({', '.join(repr(s) for s in sorted(LEGAL_ISSUE_SOURCE_RELATIONS))})",
+            name="ck_legal_issue_source_links_relation_type",
+        ),
+        Index(
+            "ix_legal_issue_source_links_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_legal_issue_source_links_issue",
+            "case_id", "issue_id",
+        ),
+        Index(
+            "ix_legal_issue_source_links_source_provenance",
+            "source_record_id", "source_version_id", "source_paragraph_id",
+        ),
+        Index(
+            "uq_legal_issue_source_links_active_relation",
+            "tenant_id", "case_id", "issue_id",
+            "source_record_id", "source_version_id", "source_paragraph_id",
+            "relation_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
 class Claim(Base):
     __tablename__ = "claims"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
