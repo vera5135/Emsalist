@@ -105,10 +105,6 @@ async def compute_memory_fingerprint(
             "related_missing_information", "status", "source_type", "source_id",
             "version", "deleted_at",
         )),
-        (LegalIssue, "legal_issues", (
-            "id", "parent_issue_id", "issue_code", "title", "description",
-            "status", "confidence", "version", "deleted_at",
-        )),
     ):
         payload.append({
             "table": label,

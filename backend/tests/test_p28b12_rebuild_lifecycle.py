@@ -343,10 +343,7 @@ async def test_v1_to_v2_current_source_rebuild_lifecycle(client, lifecycle_deps)
         latest_run = succeeded[-1]
 
         from app.services.legal_reasoning_reproducibility import (
-            compute_memory_fingerprint, compute_case_source_fingerprint,
-        )
-        memory_fp = await compute_memory_fingerprint(
-            session, tenant_id="local", case_id=case_id,
+            compute_memory_fingerprint,
         )
         revision = (await session.execute(
             select(MemoryRevision).where(
@@ -356,19 +353,17 @@ async def test_v1_to_v2_current_source_rebuild_lifecycle(client, lifecycle_deps)
             )
         )).scalar_one_or_none()
         assert revision is not None
+        memory_fp = await compute_memory_fingerprint(
+            session, tenant_id="local", case_id=case_id,
+        )
+        assert revision.memory_fingerprint == memory_fp, (
+            "revision memory fingerprint must match current state"
+        )
 
-        if revision.memory_fingerprint != memory_fp:
-            # Update the revision to match current memory — this bridges
-            # the SQLite session drift so current_state can work.
-            revision.memory_fingerprint = memory_fp
-            await session.commit()
-
-    # Reopen fresh session for current_state
-    async with _maker()() as session:
         stale, _, _ = await legal_reasoning_service.current_state(
             session, tenant_id="local", case_id=case_id,
         )
-        assert stale is False, "v1 state must not be stale"
+        assert stale is False, "v1 state must not be stale after rebuild"
 
         v1_source_fingerprint = latest_run.source_fingerprint
 
@@ -445,13 +440,11 @@ async def test_v1_to_v2_current_source_rebuild_lifecycle(client, lifecycle_deps)
                 MemoryRevision.case_id == case_id,
             )
         )).scalar_one_or_none()
-        if rev is not None:
-            rev.memory_fingerprint = await compute_memory_fingerprint(
-                session, tenant_id="local", case_id=case_id,
-            )
-            await session.commit()
+        assert rev is not None
+        assert rev.memory_fingerprint == await compute_memory_fingerprint(
+            session, tenant_id="local", case_id=case_id,
+        ), "v2 revision fingerprint must match current state"
 
-    async with _maker()() as session:
         stale2, _, _ = await legal_reasoning_service.current_state(
             session, tenant_id="local", case_id=case_id,
         )
@@ -722,3 +715,108 @@ async def test_late_graph_mutation_rollback_after_source_flush(client, lifecycle
 # Baseline assessment rows, if any exist, are unchanged by the failed
 # rebuild, but no assessment mutation is attempted by rebuild.
 # ---------------------------------------------------------------------------
+
+
+# ── PROOF C: LegalIssue output does NOT stale reasoning ──────────────────────
+
+
+@pytest.mark.asyncio
+async def test_legal_issue_output_does_not_stale_reasoning(client, lifecycle_deps):
+    """Proof C: LegalIssue output must not invalidate the memory input revision."""
+    acquirer = lifecycle_deps
+    rec_id, v1_id, p1_id = await _seed_source_v1()
+    acquirer.set([{
+        "source_record_id": rec_id,
+        "source_version_id": v1_id,
+        "source_paragraph_id": p1_id,
+        "effective_trust": "needs_review",
+    }])
+
+    case_id = await _case(client)
+
+    # -- seed case-memory input --
+    async with _maker()() as session:
+        fact = CaseFact(
+            tenant_id="local", case_id=case_id,
+            fact_type="defect", value="motor arizasi mevcut",
+            verification_status="document_verified",
+        )
+        session.add(fact)
+        await session.commit()
+
+    # -- record input memory fingerprint before rebuild --
+    async with _maker()() as session:
+        from app.services.legal_reasoning_reproducibility import (
+            compute_memory_fingerprint,
+        )
+        input_memory_fp = await compute_memory_fingerprint(
+            session, tenant_id="local", case_id=case_id,
+        )
+
+    # -- successful rebuild (creates LegalIssue as reasoning output) --
+    rebuilt = await client.post(
+        f"/api/v1/cases/{case_id}/legal-issues/rebuild", json={},
+    )
+    assert rebuilt.status_code == 200
+    assert rebuilt.json()["status"] == "succeeded"
+
+    # -- verify LegalIssue was created --
+    async with _maker()() as session:
+        issues = (await session.execute(
+            select(LegalIssue).where(
+                LegalIssue.case_id == case_id,
+                LegalIssue.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        assert len(issues) >= 1, "LegalIssue must be created by rebuild"
+
+    # -- recompute memory fingerprint; must equal input fingerprint --
+    async with _maker()() as session:
+        from app.services.legal_reasoning_reproducibility import (
+            compute_memory_fingerprint,
+        )
+        post_rebuild_memory_fp = await compute_memory_fingerprint(
+            session, tenant_id="local", case_id=case_id,
+        )
+        assert post_rebuild_memory_fp == input_memory_fp, (
+            "memory fingerprint must be unchanged after LegalIssue creation"
+        )
+
+        stale, _, _ = await legal_reasoning_service.current_state(
+            session, tenant_id="local", case_id=case_id,
+        )
+        assert stale is False, (
+            "current_state must not be stale — LegalIssue output does not "
+            "invalidate the memory input revision"
+        )
+
+    # -- mutate genuine Case Memory input --
+    async with _maker()() as session:
+        from app.services.legal_reasoning_reproducibility import (
+            compute_memory_fingerprint,
+        )
+        facts = (await session.execute(
+            select(CaseFact).where(
+                CaseFact.case_id == case_id,
+                CaseFact.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        assert len(facts) >= 1
+        fact = facts[0]
+        fact.value = "motor tamamen calismiyor"
+        fact.version += 1
+        await session.commit()
+
+        changed_memory_fp = await compute_memory_fingerprint(
+            session, tenant_id="local", case_id=case_id,
+        )
+        assert changed_memory_fp != input_memory_fp, (
+            "memory fingerprint must change after genuine input mutation"
+        )
+
+        stale, _, _ = await legal_reasoning_service.current_state(
+            session, tenant_id="local", case_id=case_id,
+        )
+        assert stale is True, (
+            "current_state must be stale after genuine CaseFact input change"
+        )
