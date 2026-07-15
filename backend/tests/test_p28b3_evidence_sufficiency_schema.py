@@ -158,7 +158,7 @@ async def _seed_case_graph(session: AsyncSession, suffix: str):
     ))
     session.add(Evidence(
         id=f"ev{suffix}", tenant_id=f"t{suffix}", case_id=f"c{suffix}",
-        evidence_type="invoice", title="Repair invoice", status="available",
+        evidence_type="invoice", title="Repair invoice",
     ))
     await session.flush()
 
