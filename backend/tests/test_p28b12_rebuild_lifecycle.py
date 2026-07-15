@@ -95,6 +95,7 @@ async def lifecycle_deps():
             await session.execute(
                 delete(Case).where(Case.id == case_id)
             )
+        await session.flush()
         for entry in _created_source_ids:
             for para_id in entry.get("paragraph_ids", []):
                 await session.execute(
