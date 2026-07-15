@@ -189,8 +189,10 @@ async def test_missing_guard_makes_zero_transport_factory_calls(argv, environ):
 
 
 def test_real_registry_eligibility_is_capability_derived():
-    # Uyusmazlik currently also requires a browser and is therefore excluded.
-    assert eligible_provider_codes() == ("mevzuat", "resmi_gazete")
+    # Yargıtay now discovers over plain HTTP JSON (requires_browser=False) so it
+    # is a non-browser smoke-eligible provider. Danıştay/AYM/Uyuşmazlık still
+    # require a browser and are therefore excluded.
+    assert eligible_provider_codes() == ("yargitay", "mevzuat", "resmi_gazete")
 
 
 @pytest.mark.asyncio
