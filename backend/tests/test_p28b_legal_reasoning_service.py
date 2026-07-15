@@ -7,6 +7,7 @@ from app.services.legal_reasoning_reproducibility import (
 )
 from app.services.legal_reasoning_service import (
     DeterministicLegalReasoningProvider, LegalReasoningService,
+    ReasoningProviderUnavailable, UnavailableLegalReasoningProvider,
 )
 
 
@@ -59,6 +60,14 @@ def test_candidate_validation_rejects_unknown_status_and_parent():
         LegalReasoningService._validate_candidate({"issues": [
             {"issue_code": "x", "title": "X", "status": "unknown"},
         ]})
+
+
+@pytest.mark.asyncio
+async def test_production_default_fails_closed_instead_of_emitting_pilot_issues():
+    service = LegalReasoningService()
+    assert isinstance(service.provider, UnavailableLegalReasoningProvider)
+    with pytest.raises(ReasoningProviderUnavailable, match="reasoning_provider_unavailable"):
+        await service.provider.analyze(_payload(missing=False))
     with pytest.raises(ValueError, match="invalid_reasoning_parent"):
         LegalReasoningService._validate_candidate({"issues": [
             {"issue_code": "x", "title": "X", "status": "proposed", "parent_code": "missing"},

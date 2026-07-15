@@ -91,12 +91,46 @@ class LegalReasoningRepository:
         ))).scalar_one_or_none()
         if claim is None:
             return None
-        link = EvidenceClaimLink(tenant_id=tenant_id, case_id=case_id,
-                                 claim_id=claim_id, evidence_id=evidence_id,
-                                 relation_type=relation_type)
-        session.add(link)
+        link = (await session.execute(select(EvidenceClaimLink).where(
+            EvidenceClaimLink.tenant_id == tenant_id,
+            EvidenceClaimLink.case_id == case_id,
+            EvidenceClaimLink.claim_id == claim_id,
+            EvidenceClaimLink.evidence_id == evidence_id,
+            EvidenceClaimLink.relation_type == relation_type,
+            EvidenceClaimLink.deleted_at.is_(None),
+        ))).scalar_one_or_none()
+        if link is None:
+            link = EvidenceClaimLink(
+                tenant_id=tenant_id, case_id=case_id, claim_id=claim_id,
+                evidence_id=evidence_id, relation_type=relation_type,
+            )
+            session.add(link)
+            await session.flush()
+        assessment = (await session.execute(select(EvidenceSufficiencyAssessment).where(
+            EvidenceSufficiencyAssessment.tenant_id == tenant_id,
+            EvidenceSufficiencyAssessment.case_id == case_id,
+            EvidenceSufficiencyAssessment.issue_id == issue_id,
+            EvidenceSufficiencyAssessment.claim_id == claim_id,
+            EvidenceSufficiencyAssessment.evidence_id == evidence_id,
+            EvidenceSufficiencyAssessment.deleted_at.is_(None),
+        ))).scalar_one_or_none()
+        assessment_status = (
+            "contradicted" if relation_type == "evidence_contradicts_claim"
+            else "supported"
+        )
+        if assessment is None:
+            assessment = EvidenceSufficiencyAssessment(
+                tenant_id=tenant_id, case_id=case_id, issue_id=issue_id,
+                claim_id=claim_id, evidence_id=evidence_id,
+                status=assessment_status, legal_source_refs=[], fact_refs=[],
+                notes="Issue-scoped canonical evidence relationship.",
+            )
+            session.add(assessment)
+        else:
+            assessment.status = assessment_status
+            assessment.version += 1
         await session.flush()
-        return link
+        return link, assessment
 
     @staticmethod
     async def add_source_link(session: AsyncSession, **values):

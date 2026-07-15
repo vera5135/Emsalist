@@ -10,7 +10,8 @@ from app.db.case_chat_repository import CaseRepository
 from app.db.legal_reasoning_repository import LegalReasoningRepository, iso
 from app.db.models import (
     COUNTERARGUMENT_STATUSES, EVIDENCE_CLAIM_RELATIONS, LEGAL_ISSUE_STATUSES,
-    Claim, EvidenceClaimLink, MissingInformation, SourceParagraph, SourceRecord, SourceVersion,
+    CaseFact, Claim, Evidence, EvidenceClaimLink, MissingInformation,
+    SourceParagraph, SourceRecord, SourceVersion,
 )
 from app.db.session import get_session
 from app.models.legal_reasoning_models import (
@@ -19,7 +20,7 @@ from app.models.legal_reasoning_models import (
 )
 from app.services.auth_manager import require_case_read, require_case_write
 from app.services.auth_service import SecurityContext, get_auth_mode, resolve_current_user
-from app.services.legal_reasoning_service import legal_reasoning_service
+from app.services.legal_reasoning_service import ReasoningProviderUnavailable, legal_reasoning_service
 from app.services.source_ingestion_service import resolve_version_verification_status
 from app.services.source_verification import index_eligibility
 
@@ -98,9 +99,12 @@ async def rebuild_case_legal_issues(case_id: str, body: RebuildRequest,
     try:
         run = await legal_reasoning_service.rebuild(
             db, tenant_id=ctx.tenant_id, case_id=case_id, actor_id=ctx.actor_id,
-            prompt_version=body.prompt_version,
+            prompt_version=body.prompt_version, security_context=ctx,
         )
         await db.commit()
+    except ReasoningProviderUnavailable as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception:
         await db.rollback()
         raise
@@ -142,15 +146,18 @@ async def create_legal_issue_evidence_link(issue_id: str, body: EvidenceLinkRequ
                                            ctx: SecurityContext = Depends(resolve_current_user),
                                            db: AsyncSession = Depends(get_session)):
     issue = await _authorized_issue(db, ctx, issue_id, write=True)
-    link = await LegalReasoningRepository.add_evidence_link(
+    result = await LegalReasoningRepository.add_evidence_link(
         db, tenant_id=ctx.tenant_id, case_id=issue.case_id, issue_id=issue.id,
         claim_id=body.claim_id, evidence_id=body.evidence_id, relation_type=body.relation_type,
     )
-    if link is None:
+    if result is None:
         raise HTTPException(status_code=404, detail="Evidence not found")
+    link, assessment = result
     await db.commit()
-    return {"id": link.id, "claim_id": link.claim_id, "evidence_id": link.evidence_id,
-            "relation_type": link.relation_type}
+    return {"id": link.id, "assessment_id": assessment.id,
+            "issue_id": assessment.issue_id, "claim_id": link.claim_id,
+            "evidence_id": link.evidence_id, "relation_type": link.relation_type,
+            "support_status": assessment.status}
 
 
 @router.post("/legal-issues/{issue_id}/source-links", operation_id="create_legal_issue_source_link")
@@ -214,16 +221,35 @@ async def _graph_response(db, tenant_id, case_id, issue_id=None):
         Claim.tenant_id == tenant_id, Claim.case_id == case_id,
         Claim.deleted_at.is_(None),
     ))).scalars().all())
-    linked_claim_ids = set((await db.execute(select(EvidenceClaimLink.claim_id).where(
+    supporting_claim_ids = set((await db.execute(select(EvidenceClaimLink.claim_id).where(
         EvidenceClaimLink.tenant_id == tenant_id, EvidenceClaimLink.case_id == case_id,
         EvidenceClaimLink.deleted_at.is_(None),
+        EvidenceClaimLink.relation_type == "evidence_supports_claim",
     ))).scalars().all())
+    contradicting_claim_ids = set((await db.execute(select(EvidenceClaimLink.claim_id).where(
+        EvidenceClaimLink.tenant_id == tenant_id, EvidenceClaimLink.case_id == case_id,
+        EvidenceClaimLink.deleted_at.is_(None),
+        EvidenceClaimLink.relation_type == "evidence_contradicts_claim",
+    ))).scalars().all())
+    fact_by_id = {x.id: x for x in (await db.execute(select(CaseFact).where(
+        CaseFact.tenant_id == tenant_id, CaseFact.case_id == case_id,
+        CaseFact.deleted_at.is_(None),
+    ))).scalars().all()}
+    evidence_by_id = {x.id: x for x in (await db.execute(select(Evidence).where(
+        Evidence.tenant_id == tenant_id, Evidence.case_id == case_id,
+        Evidence.deleted_at.is_(None),
+    ))).scalars().all()}
     return GraphResponse(case_id=case_id, stale=stale,
         issues=[{"id": i.id, "parent_issue_id": i.parent_issue_id, "title": i.title,
                  "description": i.description, "status": i.status,
                  "support_state": _support(i.id, graph), "version": i.version} for i in graph["issues"]],
-        fact_links=[{**base(x), "fact_id": x.fact_id, "relation_type": x.relation_type} for x in graph["fact_links"]],
+        fact_links=[{**base(x), "fact_id": x.fact_id,
+                    "fact_label": ((fact_by_id[x.fact_id].value or fact_by_id[x.fact_id].fact_type)
+                                   if x.fact_id in fact_by_id else ""),
+                    "relation_type": x.relation_type} for x in graph["fact_links"]],
         evidence_links=[{**base(x), "claim_id": x.claim_id, "evidence_id": x.evidence_id,
+                         "evidence_label": (evidence_by_id[x.evidence_id].title
+                                            if x.evidence_id in evidence_by_id else ""),
                          "status": x.status, "notes": x.notes} for x in graph["assessments"]],
         source_links=[{**base(x), "source_record_id": x.source_record_id,
                        "source_version_id": x.source_version_id, "source_paragraph_id": x.source_paragraph_id,
@@ -238,6 +264,10 @@ async def _graph_response(db, tenant_id, case_id, issue_id=None):
                            "source_refs": x.source_refs} for x in graph["counterarguments"]],
         missing_information=[{"id": x.id, "label": x.label, "status": x.status,
                               "importance": x.importance} for x in missing],
-        unsupported_claims=[{"id": x.id, "title": x.title, "status": "unsupported",
-                             "reason": "linked_evidence_missing"}
-                            for x in claims if x.id not in linked_claim_ids])
+        unsupported_claims=[{
+            "id": x.id, "title": x.title,
+            "status": "contradicted" if x.id in contradicting_claim_ids else "unsupported",
+            "reason": ("contradiction_only" if x.id in contradicting_claim_ids
+                       else "supporting_evidence_missing"),
+            "source_state": "review_required",
+        } for x in claims if x.id not in supporting_claim_ids])

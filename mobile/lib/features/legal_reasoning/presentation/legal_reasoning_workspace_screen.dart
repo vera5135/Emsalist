@@ -148,7 +148,7 @@ class _WorkspaceBody extends StatelessWidget {
   }
 }
 
-class _IssueCard extends StatelessWidget {
+class _IssueCard extends ConsumerWidget {
   const _IssueCard({
     required this.issue,
     required this.children,
@@ -163,13 +163,17 @@ class _IssueCard extends StatelessWidget {
       rows.where((row) => row['issue_id'] == issue.id);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final Iterable<Map<String, dynamic>> burdens = _forIssue(workspace.burdens);
     final Iterable<Map<String, dynamic>> counterarguments = _forIssue(
       workspace.counterarguments,
     );
     final Iterable<Map<String, dynamic>> sources = _forIssue(
       workspace.sourceLinks,
+    );
+    final Iterable<Map<String, dynamic>> facts = _forIssue(workspace.factLinks);
+    final Iterable<Map<String, dynamic>> evidence = _forIssue(
+      workspace.evidenceLinks,
     );
     return Card(
       child: ExpansionTile(
@@ -190,6 +194,18 @@ class _IssueCard extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(issue.description),
             ),
+          OverflowBar(
+            children: <Widget>[
+              TextButton(
+                onPressed: () => _update(ref, 'accepted'),
+                child: const Text('Kabul et'),
+              ),
+              TextButton(
+                onPressed: () => _update(ref, 'disputed'),
+                child: const Text('İtirazlı işaretle'),
+              ),
+            ],
+          ),
           ...children.map(
             (LegalIssueSummary child) => ListTile(
               contentPadding: const EdgeInsets.only(left: 16),
@@ -206,6 +222,28 @@ class _IssueCard extends StatelessWidget {
                 '${row['burden_type'] ?? 'belirlenmedi'} · '
                 '${row['evidence_status'] ?? 'inceleme gerekli'}',
               ),
+            ),
+          ),
+          ...facts.map(
+            (row) => ListTile(
+              leading: Icon(
+                row['relation_type'] == 'fact_contradicts_issue'
+                    ? Icons.remove_circle_outline
+                    : Icons.add_circle_outline,
+              ),
+              title: Text(row['fact_label'] as String? ?? 'Bağlı olgu'),
+              subtitle: Text(
+                row['relation_type'] == 'fact_contradicts_issue'
+                    ? 'Çelişiyor'
+                    : 'Destekliyor',
+              ),
+            ),
+          ),
+          ...evidence.map(
+            (row) => ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: Text(row['evidence_label'] as String? ?? 'Bağlı delil'),
+              subtitle: Text(_evidenceLabel(row['status'] as String? ?? '')),
             ),
           ),
           ...counterarguments.map(
@@ -228,6 +266,12 @@ class _IssueCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _update(WidgetRef ref, String status) async {
+    await ref.read(legalReasoningRepositoryProvider).updateIssue(issue, status);
+    ref.invalidate(legalReasoningWorkspaceProvider(workspace.caseId));
+    await ref.read(legalReasoningWorkspaceProvider(workspace.caseId).future);
   }
 }
 
@@ -269,4 +313,11 @@ String _statusLabel(String value) => switch (value) {
   'resolved' => 'Çözüldü',
   'rejected' => 'Reddedildi',
   _ => 'Belirlendi',
+};
+
+String _evidenceLabel(String value) => switch (value) {
+  'supported' => 'Destekliyor',
+  'contradicted' => 'Çelişiyor',
+  'partially_supported' => 'Kısmi destek',
+  _ => 'Destek belirsiz',
 };

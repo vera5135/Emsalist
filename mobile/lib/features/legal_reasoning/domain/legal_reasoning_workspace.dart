@@ -40,6 +40,7 @@ class LegalReasoningWorkspace {
     required this.counterarguments,
     required this.sourceLinks,
     required this.evidenceLinks,
+    required this.factLinks,
     required this.missingInformation,
     required this.unsupportedClaims,
     required this.stale,
@@ -51,6 +52,7 @@ class LegalReasoningWorkspace {
   final List<Map<String, dynamic>> counterarguments;
   final List<Map<String, dynamic>> sourceLinks;
   final List<Map<String, dynamic>> evidenceLinks;
+  final List<Map<String, dynamic>> factLinks;
   final List<Map<String, dynamic>> missingInformation;
   final List<Map<String, dynamic>> unsupportedClaims;
   final bool stale;
@@ -75,6 +77,7 @@ class LegalReasoningWorkspace {
       counterarguments: maps('counterarguments'),
       sourceLinks: maps('source_links'),
       evidenceLinks: maps('evidence_links'),
+      factLinks: maps('fact_links'),
       missingInformation: maps('missing_information'),
       unsupportedClaims: maps('unsupported_claims'),
     );

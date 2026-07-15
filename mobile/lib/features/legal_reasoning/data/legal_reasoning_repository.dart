@@ -25,6 +25,7 @@ class LegalReasoningRepository {
         counterarguments: const <Map<String, dynamic>>[],
         sourceLinks: const <Map<String, dynamic>>[],
         evidenceLinks: const <Map<String, dynamic>>[],
+        factLinks: const <Map<String, dynamic>>[],
         missingInformation: const <Map<String, dynamic>>[],
         unsupportedClaims: const <Map<String, dynamic>>[],
         stale: false,
@@ -41,4 +42,11 @@ class LegalReasoningRepository {
     '/api/v1/cases/$caseId/legal-issues/rebuild',
     body: const <String, dynamic>{'prompt_version': 'p2.8b-legal-reasoning-1'},
   );
+
+  Future<void> updateIssue(LegalIssueSummary issue, String status) async {
+    await _client.patchJson<Map<String, dynamic>>(
+      '/api/v1/legal-issues/${issue.id}',
+      body: <String, dynamic>{'version': issue.version, 'status': status},
+    );
+  }
 }

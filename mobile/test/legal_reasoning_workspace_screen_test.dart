@@ -73,6 +73,7 @@ Map<String, dynamic> _graph({bool stale = false}) => <String, dynamic>{
     },
   ],
   'evidence_links': <dynamic>[],
+  'fact_links': <dynamic>[],
   'missing_information': <dynamic>[],
   'unsupported_claims': <dynamic>[],
 };
@@ -135,4 +136,50 @@ void main() {
     expect(find.text('Bağlantı kurulamadı.'), findsOneWidget);
     expect(find.text('Tekrar Dene'), findsOneWidget);
   });
+
+  testWidgets(
+    'renders fact and evidence direction and mutates accepted issue',
+    (WidgetTester tester) async {
+      final Map<String, dynamic> graph = _graph()
+        ..['fact_links'] = <dynamic>[
+          <String, dynamic>{
+            'issue_id': 'root',
+            'fact_label': 'Servis raporu arızayı doğruluyor',
+            'relation_type': 'fact_supports_issue',
+          },
+          <String, dynamic>{
+            'issue_id': 'root',
+            'fact_label': 'Teslim tutanağı arızayı göstermiyor',
+            'relation_type': 'fact_contradicts_issue',
+          },
+        ]
+        ..['evidence_links'] = <dynamic>[
+          <String, dynamic>{
+            'issue_id': 'root',
+            'evidence_label': 'Ekspertiz raporu',
+            'status': 'contradicted',
+          },
+        ];
+      final FakeApiClient client = FakeApiClient()
+        ..whenGetRaw(_issuesPath, _issues())
+        ..whenGet(_graphPath, graph)
+        ..whenPost('/api/v1/legal-issues/root', <String, dynamic>{
+          'id': 'root',
+        });
+      await tester.pumpWidget(_host(client));
+      await tester.pumpAndSettle();
+      expect(find.text('Servis raporu arızayı doğruluyor'), findsOneWidget);
+      expect(find.text('Teslim tutanağı arızayı göstermiyor'), findsOneWidget);
+      expect(find.text('Ekspertiz raporu'), findsOneWidget);
+      expect(find.text('Çelişiyor'), findsWidgets);
+      await tester.tap(find.text('Kabul et'));
+      await tester.pumpAndSettle();
+      expect(client.patchPaths, contains('/api/v1/legal-issues/root'));
+      expect(client.patchBodies.single, <String, dynamic>{
+        'version': 1,
+        'status': 'accepted',
+      });
+      expect(client.getPaths.where((path) => path == _issuesPath).length, 2);
+    },
+  );
 }

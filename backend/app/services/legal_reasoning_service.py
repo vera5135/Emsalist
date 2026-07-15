@@ -20,12 +20,53 @@ from app.services.legal_reasoning_reproducibility import (
     compute_case_source_fingerprint, compute_memory_fingerprint,
     next_memory_revision_number, output_hash,
 )
+from app.models.search_models import LegalSearchRequest
+from app.services.auth_service import SecurityContext
+from app.services.hybrid_search_service import execute_legal_search
 
 
 class LegalReasoningProvider(Protocol):
     provider_name: str
     model_version: str
     async def analyze(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+
+class ReasoningProviderUnavailable(RuntimeError):
+    pass
+
+
+class UnavailableLegalReasoningProvider:
+    """Fail-closed production default until a canonical live provider exists."""
+    provider_name = "unavailable"
+    model_version = "none"
+
+    async def analyze(self, payload: dict[str, Any]) -> dict[str, Any]:
+        raise ReasoningProviderUnavailable("reasoning_provider_unavailable")
+
+
+class LegalSourceAcquirer(Protocol):
+    async def acquire(self, db: AsyncSession, *, case_id: str,
+                      security_context: SecurityContext) -> list[dict[str, str]]: ...
+
+
+class P27LegalSourceAcquirer:
+    """Narrow adapter over the canonical P2.7 production search boundary."""
+    async def acquire(self, db: AsyncSession, *, case_id: str,
+                      security_context: SecurityContext) -> list[dict[str, str]]:
+        response = await execute_legal_search(
+            db,
+            LegalSearchRequest(
+                query="mevzuat içtihat", case_id=case_id,
+                official_only=False, limit=10,
+            ),
+            security_context,
+        )
+        return [{
+            "source_record_id": item.source_id,
+            "source_version_id": item.source_version_id,
+            "source_paragraph_id": item.source_paragraph_id,
+            "effective_trust": item.verification_status,
+        } for item in response.results]
 
 
 class DeterministicLegalReasoningProvider:
@@ -65,8 +106,10 @@ class DeterministicLegalReasoningProvider:
 
 
 class LegalReasoningService:
-    def __init__(self, provider: LegalReasoningProvider | None = None):
-        self.provider = provider or DeterministicLegalReasoningProvider()
+    def __init__(self, provider: LegalReasoningProvider | None = None,
+                 source_acquirer: LegalSourceAcquirer | None = None):
+        self.provider = provider or UnavailableLegalReasoningProvider()
+        self.source_acquirer = source_acquirer or P27LegalSourceAcquirer()
 
     async def current_state(self, db: AsyncSession, tenant_id: str, case_id: str):
         memory = await compute_memory_fingerprint(db, tenant_id=tenant_id, case_id=case_id)
@@ -83,7 +126,8 @@ class LegalReasoningService:
         return stale, memory, sources
 
     async def rebuild(self, db: AsyncSession, *, tenant_id: str, case_id: str,
-                      actor_id: str, prompt_version: str = P2_8_PROMPT_VERSION):
+                      actor_id: str, prompt_version: str = P2_8_PROMPT_VERSION,
+                      security_context: SecurityContext | None = None):
         """Caller owns commit; any exception rolls back the entire rebuild."""
         memory_hash = await compute_memory_fingerprint(db, tenant_id=tenant_id, case_id=case_id)
         source_hash = await compute_case_source_fingerprint(db, tenant_id=tenant_id, case_id=case_id)
@@ -102,7 +146,12 @@ class LegalReasoningService:
             db.add(revision)
             await db.flush()
 
-        payload = await self._input(db, tenant_id, case_id)
+        ctx = security_context or SecurityContext()
+        ctx.tenant_id, ctx.actor_id = tenant_id, actor_id
+        acquired_sources = await self.source_acquirer.acquire(
+            db, case_id=case_id, security_context=ctx,
+        )
+        payload = await self._input(db, tenant_id, case_id, acquired_sources)
         candidate = await self.provider.analyze(payload)
         assert_no_hidden_reasoning_keys(candidate)
         self._validate_candidate(candidate)
@@ -125,6 +174,16 @@ class LegalReasoningService:
             parent_code = item.get("parent_code")
             if parent_code:
                 by_code[item["issue_code"]].parent_issue_id = by_code[parent_code].id
+
+        root_issue = next((by_code[item["issue_code"]] for item in candidate["issues"]
+                           if not item.get("parent_code")), next(iter(by_code.values())))
+        await self._replace_source_links(
+            db, tenant_id, case_id, root_issue.id, acquired_sources,
+        )
+        await db.flush()
+        source_hash = await compute_case_source_fingerprint(
+            db, tenant_id=tenant_id, case_id=case_id,
+        )
 
         for item in candidate.get("counterarguments", []):
             issue = by_code[item["issue_code"]]
@@ -179,30 +238,6 @@ class LegalReasoningService:
                 db.add(LegalIssueFactLink(tenant_id=tenant_id, case_id=case_id,
                     issue_id=defect_issue.id, fact_id=fact.id, relation_type="fact_supports_issue"))
 
-        evidence_links = list((await db.execute(select(EvidenceClaimLink).where(
-            EvidenceClaimLink.tenant_id == tenant_id, EvidenceClaimLink.case_id == case_id,
-            EvidenceClaimLink.deleted_at.is_(None),
-        ))).scalars().all())
-        for link in evidence_links:
-            assessment = (await db.execute(select(EvidenceSufficiencyAssessment).where(
-                EvidenceSufficiencyAssessment.tenant_id == tenant_id,
-                EvidenceSufficiencyAssessment.case_id == case_id,
-                EvidenceSufficiencyAssessment.issue_id == defect_issue.id,
-                EvidenceSufficiencyAssessment.claim_id == link.claim_id,
-                EvidenceSufficiencyAssessment.evidence_id == link.evidence_id,
-                EvidenceSufficiencyAssessment.deleted_at.is_(None),
-            ))).scalar_one_or_none()
-            deterministic_status = ("contradicted" if link.relation_type == "evidence_contradicts_claim"
-                                    else "supported")
-            if assessment is None:
-                db.add(EvidenceSufficiencyAssessment(tenant_id=tenant_id, case_id=case_id,
-                    issue_id=defect_issue.id, claim_id=link.claim_id, evidence_id=link.evidence_id,
-                    status=deterministic_status, legal_source_refs=source_refs,
-                    fact_refs=[f.id for f in facts], notes="Kanonik delil bağlantısından türetildi."))
-            else:
-                assessment.status = deterministic_status
-                assessment.version += 1
-
         result_hash = output_hash(candidate)
         run = LegalReasoningRun(
             tenant_id=tenant_id, case_id=case_id, memory_revision_id=revision.id,
@@ -216,7 +251,8 @@ class LegalReasoningService:
         await db.flush()
         return run
 
-    async def _input(self, db: AsyncSession, tenant_id: str, case_id: str):
+    async def _input(self, db: AsyncSession, tenant_id: str, case_id: str,
+                     acquired_sources: list[dict[str, str]]):
         facts = list((await db.execute(select(CaseFact).where(
             CaseFact.tenant_id == tenant_id, CaseFact.case_id == case_id,
             CaseFact.deleted_at.is_(None),
@@ -225,16 +261,20 @@ class LegalReasoningService:
             MissingInformation.tenant_id == tenant_id, MissingInformation.case_id == case_id,
             MissingInformation.deleted_at.is_(None),
         ))).scalars().all())
-        source_rows = (await db.execute(select(
-            LegalIssueSourceLink, SourceRecord, SourceVersion, SourceParagraph,
-        ).join(SourceRecord, LegalIssueSourceLink.source_record_id == SourceRecord.id)
-         .join(SourceVersion, LegalIssueSourceLink.source_version_id == SourceVersion.id)
-         .join(SourceParagraph, LegalIssueSourceLink.source_paragraph_id == SourceParagraph.id)
-         .where(LegalIssueSourceLink.tenant_id == tenant_id,
-                LegalIssueSourceLink.case_id == case_id,
-                LegalIssueSourceLink.deleted_at.is_(None)))).all()
+        triples = {(x["source_record_id"], x["source_version_id"],
+                    x["source_paragraph_id"]) for x in acquired_sources}
+        source_rows = []
+        if triples:
+            source_rows = (await db.execute(select(
+                SourceRecord, SourceVersion, SourceParagraph,
+            ).join(SourceVersion, SourceVersion.source_record_id == SourceRecord.id)
+             .join(SourceParagraph, SourceParagraph.source_version_id == SourceVersion.id)
+             .where(SourceRecord.current_version_id == SourceVersion.id,
+                    SourceRecord.deleted_at.is_(None)))).all()
         legal_sources = []
-        for link, record, version, paragraph in source_rows:
+        for record, version, paragraph in source_rows:
+            if (record.id, version.id, paragraph.id) not in triples:
+                continue
             legal_sources.append({
                 "source_record_id": record.id, "source_version_id": version.id,
                 "source_paragraph_id": paragraph.id,
@@ -253,6 +293,34 @@ class LegalReasoningService:
             },
             "legal_sources": {"content_boundary": "UNTRUSTED_LEGAL_CONTENT", "items": legal_sources},
         }
+
+    @staticmethod
+    async def _replace_source_links(db: AsyncSession, tenant_id: str, case_id: str,
+                                    issue_id: str,
+                                    sources: list[dict[str, str]]) -> None:
+        desired = {(x["source_record_id"], x["source_version_id"],
+                    x["source_paragraph_id"]) for x in sources}
+        existing = list((await db.execute(select(LegalIssueSourceLink).where(
+            LegalIssueSourceLink.tenant_id == tenant_id,
+            LegalIssueSourceLink.case_id == case_id,
+            LegalIssueSourceLink.issue_id == issue_id,
+            LegalIssueSourceLink.deleted_at.is_(None),
+        ))).scalars().all())
+        present = set()
+        for link in existing:
+            triple = (link.source_record_id, link.source_version_id,
+                      link.source_paragraph_id)
+            if triple not in desired:
+                link.deleted_at = datetime.now(UTC)
+            else:
+                present.add(triple)
+        for record_id, version_id, paragraph_id in desired - present:
+            db.add(LegalIssueSourceLink(
+                tenant_id=tenant_id, case_id=case_id, issue_id=issue_id,
+                source_record_id=record_id, source_version_id=version_id,
+                source_paragraph_id=paragraph_id,
+                relation_type="source_governs_issue",
+            ))
 
     @staticmethod
     def _validate_candidate(candidate):
