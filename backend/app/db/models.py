@@ -1093,6 +1093,64 @@ class Evidence(Base):
     )
 
 
+EVIDENCE_CLAIM_RELATIONS = frozenset({
+    "evidence_supports_claim", "evidence_contradicts_claim",
+})
+
+
+class EvidenceClaimLink(Base):
+    __tablename__ = "evidence_claim_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    claim_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "claim_id"],
+            ["claims.tenant_id", "claims.case_id", "claims.id"],
+            name="fk_evidence_claim_links_claim",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "evidence_id"],
+            ["evidence.tenant_id", "evidence.case_id", "evidence.id"],
+            name="fk_evidence_claim_links_evidence",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            f"relation_type IN ({', '.join(repr(s) for s in sorted(EVIDENCE_CLAIM_RELATIONS))})",
+            name="ck_evidence_claim_links_relation_type",
+        ),
+        Index(
+            "ix_evidence_claim_links_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_evidence_claim_links_claim",
+            "case_id", "claim_id",
+        ),
+        Index(
+            "ix_evidence_claim_links_evidence",
+            "case_id", "evidence_id",
+        ),
+        Index(
+            "uq_evidence_claim_links_active_relation",
+            "tenant_id", "case_id", "claim_id", "evidence_id", "relation_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
 class Deadline(Base):
     __tablename__ = "deadlines"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
