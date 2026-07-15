@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from sqlalchemy import delete, select
 
-from app.db.models import AuthSession, Tenant, User
+from app.db.models import AuditEvent, AuthSession, Tenant, User
 from app.db.session import get_sessionmaker
 from app.main import app
 from app.services.auth_service import create_access_token
@@ -80,6 +80,7 @@ async def _seed(tv=0):
         await session.execute(delete(CaseMember).where(CaseMember.tenant_id == TENANT))
         await session.execute(delete(Case).where(Case.tenant_id == TENANT))
         await session.execute(delete(User).where(User.tenant_id == TENANT))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TENANT))
         await session.execute(delete(Tenant).where(Tenant.id == TENANT))
         await session.flush()
         session.add(Tenant(id=TENANT, name="T", slug=TENANT, status="active"))
@@ -185,6 +186,7 @@ async def test_logout_all_invalidates_both_tokens():
         await session.execute(delete(CaseMember).where(CaseMember.tenant_id == TENANT))
         await session.execute(delete(Case).where(Case.tenant_id == TENANT))
         await session.execute(delete(User).where(User.tenant_id == TENANT))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TENANT))
         await session.execute(delete(Tenant).where(Tenant.id == TENANT))
         await session.flush()
         session.add(Tenant(id=TENANT, name="T", slug=TENANT, status="active"))
@@ -220,6 +222,7 @@ async def test_password_change_invalidates_token():
         await session.execute(delete(CaseMember).where(CaseMember.tenant_id == TENANT))
         await session.execute(delete(Case).where(Case.tenant_id == TENANT))
         await session.execute(delete(User).where(User.tenant_id == TENANT))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TENANT))
         await session.execute(delete(Tenant).where(Tenant.id == TENANT))
         await session.flush()
         from app.services.auth_service import hash_password
@@ -253,6 +256,7 @@ async def test_session_user_mismatch_rejected():
         await session.execute(delete(CaseMember).where(CaseMember.tenant_id == TENANT))
         await session.execute(delete(Case).where(Case.tenant_id == TENANT))
         await session.execute(delete(User).where(User.tenant_id == TENANT))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == TENANT))
         await session.execute(delete(Tenant).where(Tenant.id == TENANT))
         await session.flush()
         session.add(Tenant(id=TENANT, name="T", slug=TENANT, status="active"))
@@ -285,6 +289,7 @@ async def test_session_tenant_mismatch_rejected():
         await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_([TENANT, T2])))
         await session.execute(delete(Case).where(Case.tenant_id.in_([TENANT, T2])))
         await session.execute(delete(User).where(User.tenant_id.in_([TENANT, T2])))
+        await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_([TENANT, T2])))
         await session.execute(delete(Tenant).where(Tenant.id.in_([TENANT, T2])))
         await session.flush()
         session.add(Tenant(id=TENANT, name="T1", slug=TENANT, status="active"))
