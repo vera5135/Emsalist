@@ -6,10 +6,18 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from app.db.models import Claim, Evidence, SourceParagraph, SourceRecord, SourceVersion
+from sqlalchemy import delete
+
+from app.db.models import (
+    BurdenOfProof, Case, Claim, Counterargument, Evidence, EvidenceClaimLink,
+    EvidenceSufficiencyAssessment, LegalIssue, LegalIssueFactLink,
+    LegalIssueSourceLink, LegalReasoningRun, MemoryRevision,
+)
 from app.db.session import get_sessionmaker
 from app.main import app
 from app.services.legal_reasoning_service import legal_reasoning_service
+
+_created_cases: list[str] = []
 
 
 class _GenericCaseProvider:
@@ -44,8 +52,8 @@ async def client():
         yield value
 
 
-@pytest.fixture(autouse=True)
-def injected_reasoning_dependencies():
+@pytest_asyncio.fixture(autouse=True)
+async def injected_reasoning_dependencies():
     old_provider = legal_reasoning_service.provider
     old_acquirer = legal_reasoning_service.source_acquirer
     legal_reasoning_service.provider = _GenericCaseProvider()
@@ -53,6 +61,19 @@ def injected_reasoning_dependencies():
     yield
     legal_reasoning_service.provider = old_provider
     legal_reasoning_service.source_acquirer = old_acquirer
+    maker = get_sessionmaker()
+    async with maker() as session:
+        for case_id in _created_cases:
+            for model in (
+                EvidenceSufficiencyAssessment, EvidenceClaimLink,
+                LegalIssueFactLink, LegalIssueSourceLink, Counterargument,
+                BurdenOfProof, LegalReasoningRun, MemoryRevision, LegalIssue,
+                Evidence, Claim,
+            ):
+                await session.execute(delete(model).where(model.case_id == case_id))
+            await session.execute(delete(Case).where(Case.id == case_id))
+        await session.commit()
+    _created_cases.clear()
 
 
 async def _case(client: AsyncClient) -> str:
@@ -60,7 +81,9 @@ async def _case(client: AsyncClient) -> str:
         "/api/v1/cases", json={"title": f"P2.8 {uuid.uuid4().hex[:8]}"},
     )
     assert response.status_code == 201
-    return response.json()["id"]
+    case_id = response.json()["id"]
+    _created_cases.append(case_id)
+    return case_id
 
 
 @pytest.mark.asyncio
@@ -129,7 +152,6 @@ async def test_evidence_issue_scope_does_not_collapse(client: AsyncClient):
     await client.post(f"/api/v1/cases/{case_id}/legal-issues/rebuild", json={})
     first = (await client.get(f"/api/v1/cases/{case_id}/legal-issues")).json()[0]
     maker = get_sessionmaker()
-    from app.db.models import LegalIssue
     async with maker() as session:
         second = LegalIssue(
             tenant_id="local", case_id=case_id, issue_code="second_issue",
@@ -177,4 +199,3 @@ async def test_invalid_relation_status_and_missing_objects_rejected(client: Asyn
     )
     assert bad_relation.status_code == 422
     assert (await client.get("/api/v1/legal-issues/missing/graph")).status_code == 404
-
