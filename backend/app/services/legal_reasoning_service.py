@@ -199,44 +199,45 @@ class LegalReasoningService:
                     rationale=item["rationale"], basis=item["basis"], created_by=actor_id,
                 ))
 
-        defect_issue = by_code.get("defect") or next(iter(by_code.values()))
-        source_links = list((await db.execute(select(LegalIssueSourceLink).where(
-            LegalIssueSourceLink.tenant_id == tenant_id,
-            LegalIssueSourceLink.case_id == case_id,
-            LegalIssueSourceLink.deleted_at.is_(None),
-        ))).scalars().all())
-        source_refs = [{"source_record_id": x.source_record_id,
-                        "source_version_id": x.source_version_id,
-                        "source_paragraph_id": x.source_paragraph_id} for x in source_links]
-        burden = (await db.execute(select(BurdenOfProof).where(
-            BurdenOfProof.tenant_id == tenant_id, BurdenOfProof.case_id == case_id,
-            BurdenOfProof.issue_id == defect_issue.id, BurdenOfProof.deleted_at.is_(None),
-        ))).scalar_one_or_none()
-        burden_status = "finalized" if source_refs else "review_required"
-        if burden is None:
-            db.add(BurdenOfProof(tenant_id=tenant_id, case_id=case_id,
-                issue_id=defect_issue.id, burden_party_id="claimant",
-                burden_type="defect_and_delivery_time", required_standard="preponderance_of_evidence",
-                legal_source_refs=source_refs, evidence_status="unsupported",
-                status=burden_status, notes="Kaynak ve delil durumu kullanıcı incelemesine sunulur."))
-        else:
-            burden.legal_source_refs, burden.status = source_refs, burden_status
-            burden.version += 1
-
-        facts = list((await db.execute(select(CaseFact).where(
-            CaseFact.tenant_id == tenant_id, CaseFact.case_id == case_id,
-            CaseFact.deleted_at.is_(None),
-        ))).scalars().all())
-        for fact in facts:
-            exists = (await db.execute(select(LegalIssueFactLink).where(
-                LegalIssueFactLink.tenant_id == tenant_id, LegalIssueFactLink.case_id == case_id,
-                LegalIssueFactLink.issue_id == defect_issue.id, LegalIssueFactLink.fact_id == fact.id,
-                LegalIssueFactLink.relation_type == "fact_supports_issue",
-                LegalIssueFactLink.deleted_at.is_(None),
+        defect_issue = by_code.get("defect")
+        if defect_issue is not None:
+            source_links = list((await db.execute(select(LegalIssueSourceLink).where(
+                LegalIssueSourceLink.tenant_id == tenant_id,
+                LegalIssueSourceLink.case_id == case_id,
+                LegalIssueSourceLink.deleted_at.is_(None),
+            ))).scalars().all())
+            source_refs = [{"source_record_id": x.source_record_id,
+                            "source_version_id": x.source_version_id,
+                            "source_paragraph_id": x.source_paragraph_id} for x in source_links]
+            burden = (await db.execute(select(BurdenOfProof).where(
+                BurdenOfProof.tenant_id == tenant_id, BurdenOfProof.case_id == case_id,
+                BurdenOfProof.issue_id == defect_issue.id, BurdenOfProof.deleted_at.is_(None),
             ))).scalar_one_or_none()
-            if exists is None:
-                db.add(LegalIssueFactLink(tenant_id=tenant_id, case_id=case_id,
-                    issue_id=defect_issue.id, fact_id=fact.id, relation_type="fact_supports_issue"))
+            burden_status = "finalized" if source_refs else "review_required"
+            if burden is None:
+                db.add(BurdenOfProof(tenant_id=tenant_id, case_id=case_id,
+                    issue_id=defect_issue.id, burden_party_id="claimant",
+                    burden_type="defect_and_delivery_time", required_standard="preponderance_of_evidence",
+                    legal_source_refs=source_refs, evidence_status="unsupported",
+                    status=burden_status, notes="Kaynak ve delil durumu kullanıcı incelemesine sunulur."))
+            else:
+                burden.legal_source_refs, burden.status = source_refs, burden_status
+                burden.version += 1
+
+            facts = list((await db.execute(select(CaseFact).where(
+                CaseFact.tenant_id == tenant_id, CaseFact.case_id == case_id,
+                CaseFact.deleted_at.is_(None),
+            ))).scalars().all())
+            for fact in facts:
+                exists = (await db.execute(select(LegalIssueFactLink).where(
+                    LegalIssueFactLink.tenant_id == tenant_id, LegalIssueFactLink.case_id == case_id,
+                    LegalIssueFactLink.issue_id == defect_issue.id, LegalIssueFactLink.fact_id == fact.id,
+                    LegalIssueFactLink.relation_type == "fact_supports_issue",
+                    LegalIssueFactLink.deleted_at.is_(None),
+                ))).scalar_one_or_none()
+                if exists is None:
+                    db.add(LegalIssueFactLink(tenant_id=tenant_id, case_id=case_id,
+                        issue_id=defect_issue.id, fact_id=fact.id, relation_type="fact_supports_issue"))
 
         result_hash = output_hash(candidate)
         run = LegalReasoningRun(

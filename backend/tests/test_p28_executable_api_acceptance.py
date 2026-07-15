@@ -6,16 +6,21 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.db.models import (
-    BurdenOfProof, Case, Claim, Counterargument, Evidence, EvidenceClaimLink,
-    EvidenceSufficiencyAssessment, LegalIssue, LegalIssueFactLink,
-    LegalIssueSourceLink, LegalReasoningRun, MemoryRevision,
+    BurdenOfProof, Case, CaseFact, Claim, Counterargument, Evidence,
+    EvidenceClaimLink, EvidenceSufficiencyAssessment, LegalIssue,
+    LegalIssueFactLink, LegalIssueSourceLink, LegalReasoningRun,
+    MemoryRevision,
 )
 from app.db.session import get_sessionmaker
 from app.main import app
-from app.services.legal_reasoning_service import legal_reasoning_service
+from app.services.legal_reasoning_service import (
+    DeterministicLegalReasoningProvider,
+    LegalReasoningService,
+    legal_reasoning_service,
+)
 
 _created_cases: list[str] = []
 
@@ -199,3 +204,150 @@ async def test_invalid_relation_status_and_missing_objects_rejected(client: Asyn
     )
     assert bad_relation.status_code == 422
     assert (await client.get("/api/v1/legal-issues/missing/graph")).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# P2.8B11 — regression proofs for defect-fallback removal
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generic_provider_does_not_receive_defect_burden(client: AsyncClient):
+    """Proof A: generic provider MUST NOT leak defect semantics."""
+    case_id = await _case(client)
+    maker = get_sessionmaker()
+
+    async with maker() as session:
+        fact = CaseFact(
+            tenant_id="local", case_id=case_id,
+            fact_type="observation", value="Satıcı aracı teslim etti",
+            verification_status="document_verified",
+        )
+        session.add(fact)
+        await session.commit()
+
+    rebuilt = await client.post(
+        f"/api/v1/cases/{case_id}/legal-issues/rebuild", json={},
+    )
+    assert rebuilt.status_code == 200
+
+    listed = await client.get(f"/api/v1/cases/{case_id}/legal-issues")
+    assert listed.status_code == 200
+    issues = listed.json()
+    codes = {i["issue_code"] for i in issues}
+
+    assert "generic_contract_dispute" in codes
+    assert "defective_vehicle" not in codes
+    assert "defect" not in codes
+
+    async with maker() as session:
+        burdens = (await session.execute(
+            select(BurdenOfProof).where(
+                BurdenOfProof.case_id == case_id,
+                BurdenOfProof.burden_type == "defect_and_delivery_time",
+                BurdenOfProof.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        assert len(burdens) == 0
+
+    async with maker() as session:
+        generic_issue_id = next(
+            i["id"] for i in issues if i["issue_code"] == "generic_contract_dispute"
+        )
+        fact_links = (await session.execute(
+            select(LegalIssueFactLink).where(
+                LegalIssueFactLink.case_id == case_id,
+                LegalIssueFactLink.issue_id == generic_issue_id,
+                LegalIssueFactLink.relation_type == "fact_supports_issue",
+                LegalIssueFactLink.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        assert len(fact_links) == 0
+
+        await session.execute(
+            delete(CaseFact).where(CaseFact.case_id == case_id)
+        )
+        await session.commit()
+
+    runs = await client.get(f"/api/v1/cases/{case_id}/reasoning-runs")
+    assert runs.status_code == 200
+    assert runs.json()[0]["status"] == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_deterministic_defect_pilot_preserves_burden_and_fact_links(client: AsyncClient):
+    """Proof B: deterministic defect pilot MUST retain defect semantics."""
+    case_id = await _case(client)
+
+    maker = get_sessionmaker()
+    async with maker() as session:
+        fact = CaseFact(
+            tenant_id="local", case_id=case_id,
+            fact_type="defect", value="motor arızası mevcut",
+            verification_status="document_verified",
+        )
+        session.add(fact)
+        await session.commit()
+
+    service = LegalReasoningService(
+        provider=DeterministicLegalReasoningProvider(),
+        source_acquirer=_NoNetworkSources(),
+    )
+
+    async with maker() as session:
+        await service.rebuild(
+            session, tenant_id="local", case_id=case_id, actor_id="tester",
+        )
+        await session.commit()
+
+    async with maker() as session:
+        issues = (await session.execute(
+            select(LegalIssue).where(
+                LegalIssue.tenant_id == "local",
+                LegalIssue.case_id == case_id,
+                LegalIssue.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        by_code = {i.issue_code: i for i in issues}
+
+        assert "defect" in by_code
+        assert "defective_vehicle" in by_code
+        defect_issue = by_code["defect"]
+
+        burdens = (await session.execute(
+            select(BurdenOfProof).where(
+                BurdenOfProof.case_id == case_id,
+                BurdenOfProof.issue_id == defect_issue.id,
+                BurdenOfProof.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        assert len(burdens) >= 1
+        assert burdens[0].burden_type == "defect_and_delivery_time"
+        assert burdens[0].issue_id == defect_issue.id
+
+        fact_links = (await session.execute(
+            select(LegalIssueFactLink).where(
+                LegalIssueFactLink.case_id == case_id,
+                LegalIssueFactLink.issue_id == defect_issue.id,
+                LegalIssueFactLink.relation_type == "fact_supports_issue",
+                LegalIssueFactLink.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        assert len(fact_links) >= 1
+
+        root_issue = by_code.get("defective_vehicle")
+        assert root_issue is not None
+        root_links = (await session.execute(
+            select(LegalIssueFactLink).where(
+                LegalIssueFactLink.case_id == case_id,
+                LegalIssueFactLink.issue_id == root_issue.id,
+                LegalIssueFactLink.relation_type == "fact_supports_issue",
+                LegalIssueFactLink.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        assert len(root_links) == 0
+
+        await session.execute(
+            delete(CaseFact).where(CaseFact.case_id == case_id)
+        )
+        await session.commit()
