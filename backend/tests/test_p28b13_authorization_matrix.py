@@ -1,4 +1,4 @@
-"""P2.8B13 — real JWT authorization matrix for P2.8 legal reasoning endpoints."""
+"""P2.8B13C — complete seven-endpoint JWT authorization matrix for P2.8 legal reasoning."""
 from __future__ import annotations
 
 import uuid
@@ -18,27 +18,24 @@ from app.db.models import (
     MemoryRevision, SourceParagraph, SourceRecord, SourceVersion, Tenant,
     User,
 )
-from app.db.auth_repository import CaseMemberRepository
-from app.db.case_chat_repository import CaseRepository
 from app.db.session import get_sessionmaker
 from app.main import app
-from app.services.auth_service import create_access_token, set_security_context, \
-    SecurityContext
+from app.services.auth_service import create_access_token
 from app.services.legal_reasoning_service import legal_reasoning_service
 
 
 # ── identity constants ───────────────────────────────────────────────────────
 
-TENANT_A = "tenant-a-p28b13"
-TENANT_B = "tenant-b-p28b13"
+TENANT_A = "tenant-a-p28b13c"
+TENANT_B = "tenant-b-p28b13c"
 
-TENANT_ADMIN_A = "user-ta-a-p28b13"
-WRITER_A = "user-w-a-p28b13"
-VIEWER_A = "user-v-a-p28b13"
-NONMEMBER_A = "user-nm-a-p28b13"
-REVOKED_MEMBER_A = "user-rm-a-p28b13"
-FOREIGN_USER_B = "user-f-b-p28b13"
-TENANT_ADMIN_B = "user-ta-b-p28b13"
+TENANT_ADMIN_A = "user-ta-a-p28b13c"
+WRITER_A = "user-w-a-p28b13c"
+VIEWER_A = "user-v-a-p28b13c"
+NONMEMBER_A = "user-nm-a-p28b13c"
+REVOKED_MEMBER_A = "user-rm-a-p28b13c"
+FOREIGN_USER_B = "user-f-b-p28b13c"
+TENANT_ADMIN_B = "user-ta-b-p28b13c"
 
 SEED_USER_IDS = [
     TENANT_ADMIN_A, WRITER_A, VIEWER_A, NONMEMBER_A,
@@ -49,46 +46,33 @@ _case_id: str = ""
 _issue_id: str = ""
 _claim_id: str = ""
 _evidence_id: str = ""
-
-_maker = get_sessionmaker
+_source_rec_id: str = ""
+_source_ver_id: str = ""
+_source_para_id: str = ""
 
 
 # ── controlled test doubles ──────────────────────────────────────────────────
 
-
 class _B13Provider:
-    provider_name = "b13_auth_provider"
+    provider_name = "b13c_auth_provider"
     model_version = "1"
-
     async def analyze(self, payload):
-        return {
-            "issues": [{
-                "issue_code": "contract_dispute",
-                "title": "Sozlesme uyusmazligi",
-                "description": "Auth matrix test.",
-                "status": "proposed",
-                "parent_code": None,
-            }],
-            "counterarguments": [],
-            "safe_summary": {"kind": "b13_auth_test"},
-        }
+        return {"issues": [{"issue_code": "contract_dispute", "title": "Sözleşme uyuşmazlığı",
+                "description": "Auth matrix test.", "status": "proposed", "parent_code": None}],
+                "counterarguments": [], "safe_summary": {"kind": "b13c_auth_test"}}
 
 
 class _B13SourceAcquirer:
-    async def acquire(self, db, *, case_id, security_context):
-        return []
+    async def acquire(self, db, *, case_id, security_context): return []
 
 
 # ── JWT helpers ──────────────────────────────────────────────────────────────
 
-
 def _jwt(user_id: str, role: str, tenant_id: str = TENANT_A) -> str:
-    return create_access_token(user_id, tenant_id, role, f"session-{user_id}")
+    return create_access_token(user_id, tenant_id, role, f"s-{user_id}")
 
-
-def _headers(user_id: str, role: str, tenant_id: str = TENANT_A) -> dict:
+def _h(user_id: str, role: str, tenant_id: str = TENANT_A) -> dict:
     return {"Authorization": f"Bearer {_jwt(user_id, role, tenant_id)}"}
-
 
 _PATCH_MODULES = [
     "app.services.auth_service.get_auth_mode",
@@ -96,41 +80,93 @@ _PATCH_MODULES = [
     "app.routes.legal_reasoning_routes.get_auth_mode",
 ]
 
-
 @contextmanager
 def _jwt_mode():
     patches = [patch(p, return_value="jwt") for p in _PATCH_MODULES]
-    for p in patches:
-        p.start()
-    try:
-        yield
+    for p in patches: p.start()
+    try: yield
     finally:
-        for p in patches:
-            p.stop()
+        for p in patches: p.stop()
+
+
+# ── HTTP helpers ─────────────────────────────────────────────────────────────
+
+async def _req(method, path, json=None, headers=None, expect=None):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        kwargs = {"headers": headers or {}}
+        if json is not None:
+            kwargs["json"] = json
+        r = await ac.request(method, path, **kwargs)
+        if expect is not None:
+            assert r.status_code == expect, f"{method} {path}: expected {expect} got {r.status_code}"
+        return r
+
+async def _get(path, headers=None, expect=None):
+    return await _req("GET", path, headers=headers, expect=expect)
+
+async def _post(path, json=None, headers=None, expect=None):
+    return await _req("POST", path, json=json if json is not None else {}, headers=headers, expect=expect)
+
+async def _patch(path, json, headers=None, expect=None):
+    return await _req("PATCH", path, json=json, headers=headers, expect=expect)
+
+
+# ── snapshot helper ──────────────────────────────────────────────────────────
+
+async def _snapshot():
+    async with get_sessionmaker()() as session:
+        async def _rows(model):
+            result = await session.execute(select(model).where(
+                model.tenant_id == TENANT_A, model.case_id == _case_id
+            ))
+            return list(result.scalars().all())
+
+        return {
+            "runs": [(r.id, r.status, r.source_fingerprint) for r in await _rows(LegalReasoningRun)],
+            "issues": [(i.id, i.issue_code, i.title, i.description, i.status, i.version,
+                         i.parent_issue_id, bool(i.deleted_at)) for i in await _rows(LegalIssue)],
+            "ecl": [(e.id, e.claim_id, e.evidence_id, e.relation_type, e.status,
+                      bool(e.deleted_at)) for e in await _rows(EvidenceClaimLink)],
+            "esa": [(a.id, a.issue_id, a.claim_id, a.evidence_id, a.status, a.version,
+                      bool(a.deleted_at)) for a in await _rows(EvidenceSufficiencyAssessment)],
+            "sl": [(s.id, s.issue_id, s.source_record_id, s.source_version_id,
+                     s.source_paragraph_id, s.relation_type, bool(s.deleted_at))
+                    for s in await _rows(LegalIssueSourceLink)],
+            "ca": [(c.id, c.issue_id, c.category, c.title, c.rationale, c.basis,
+                     c.status, c.version, bool(c.deleted_at)) for c in await _rows(Counterargument)],
+            "bop": [(b.id, b.issue_id, b.burden_party_id, b.burden_type, b.required_standard,
+                      str(b.legal_source_refs), b.evidence_status, b.status, b.notes,
+                      b.version, bool(b.deleted_at)) for b in await _rows(BurdenOfProof)],
+        }
+
+
+def _assert_snapshot_equal(a, b, label):
+    for key in sorted(set(a) | set(b)):
+        assert a.get(key) == b.get(key), f"snapshot changed: {key} in {label}"
 
 
 # ── fixture ──────────────────────────────────────────────────────────────────
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def b13_setup():
+async def b13c_setup():
     global _case_id, _issue_id, _claim_id, _evidence_id
+    global _source_rec_id, _source_ver_id, _source_para_id
 
     old_provider = legal_reasoning_service.provider
     old_acquirer = legal_reasoning_service.source_acquirer
     legal_reasoning_service.provider = _B13Provider()
     legal_reasoning_service.source_acquirer = _B13SourceAcquirer()
 
-    async with _maker()() as session:
-        # Clean up from previous runs
+    maker = get_sessionmaker()
+    async with maker() as session:
         for uid in SEED_USER_IDS:
-            await session.execute(delete(CaseMember).where(
-                CaseMember.user_id == uid,
-            ))
+            await session.execute(delete(CaseMember).where(CaseMember.user_id == uid))
         for model in (LegalReasoningRun, MemoryRevision, LegalIssueSourceLink,
-                       LegalIssueFactLink, Counterargument, BurdenOfProof,
-                       EvidenceSufficiencyAssessment, LegalIssue,
-                       EvidenceClaimLink, Evidence, Claim, CaseFact, Case):
+                      LegalIssueFactLink, Counterargument, BurdenOfProof,
+                      EvidenceSufficiencyAssessment, LegalIssue, EvidenceClaimLink,
+                      Evidence, Claim, CaseFact, Case):
             await session.execute(delete(model).where(
                 model.tenant_id.in_([TENANT_A, TENANT_B])
             ))
@@ -140,89 +176,77 @@ async def b13_setup():
             await session.execute(delete(Tenant).where(Tenant.id == tid))
         await session.commit()
 
-    # Seed tenants
-    session.add(Tenant(id=TENANT_A, name="Tenant A", slug=TENANT_A, status="active"))
-    session.add(Tenant(id=TENANT_B, name="Tenant B", slug=TENANT_B, status="active"))
-    await session.flush()
+    async with maker() as session:
+        session.add(Tenant(id=TENANT_A, name="Tenant A", slug=TENANT_A, status="active"))
+        session.add(Tenant(id=TENANT_B, name="Tenant B", slug=TENANT_B, status="active"))
+        await session.flush()
+        _au = lambda uid, tid, role: session.add(User(id=uid, tenant_id=tid,
+            email_normalized=f"{uid}@test", display_name=uid, status="active", role=role))
+        _au(TENANT_ADMIN_A, TENANT_A, "tenant_admin")
+        _au(WRITER_A, TENANT_A, "lawyer")
+        _au(VIEWER_A, TENANT_A, "lawyer")
+        _au(NONMEMBER_A, TENANT_A, "lawyer")
+        _au(REVOKED_MEMBER_A, TENANT_A, "lawyer")
+        _au(FOREIGN_USER_B, TENANT_B, "lawyer")
+        _au(TENANT_ADMIN_B, TENANT_B, "tenant_admin")
+        await session.flush()
 
-    # Seed users
-    _add_user = lambda uid, tid, role: session.add(User(
-        id=uid, tenant_id=tid,
-        email_normalized=f"{uid}@test",
-        display_name=uid, status="active", role=role,
-    ))
-    _add_user(TENANT_ADMIN_A, TENANT_A, "tenant_admin")
-    _add_user(WRITER_A, TENANT_A, "lawyer")
-    _add_user(VIEWER_A, TENANT_A, "lawyer")
-    _add_user(NONMEMBER_A, TENANT_A, "lawyer")
-    _add_user(REVOKED_MEMBER_A, TENANT_A, "lawyer")
-    _add_user(FOREIGN_USER_B, TENANT_B, "lawyer")
-    _add_user(TENANT_ADMIN_B, TENANT_B, "tenant_admin")
-    await session.flush()
+        case = Case(tenant_id=TENANT_A, owner_user_id=TENANT_ADMIN_A,
+                     title="Auth Matrix Case A", status="active", version=1)
+        session.add(case)
+        await session.flush()
+        _case_id = case.id
 
-    # Create Case A in Tenant A
-    case = Case(
-        tenant_id=TENANT_A, owner_user_id=TENANT_ADMIN_A,
-        title="Auth Matrix Case A", status="active", version=1,
-    )
-    session.add(case)
-    await session.flush()
-    _case_id = case.id
+        claim = Claim(tenant_id=TENANT_A, case_id=_case_id, claim_type="contract",
+                       title="Borcun ihlali", description="Ifa edilmedi")
+        evidence = Evidence(tenant_id=TENANT_A, case_id=_case_id,
+                            evidence_type="document", title="Sözleşme", description="İmzalı sözleşme metni")
+        session.add_all([claim, evidence])
+        await session.flush()
+        _claim_id = claim.id
+        _evidence_id = evidence.id
 
-    # Create Claim + Evidence in Case A
-    claim = Claim(
-        tenant_id=TENANT_A, case_id=_case_id, claim_type="contract",
-        title="Borcun ihlali", description="Ifa edilmedi",
-    )
-    evidence = Evidence(
-        tenant_id=TENANT_A, case_id=_case_id,
-        evidence_type="document", title="Sozlesme",
-        description="Imzali sozlesme metni",
-    )
-    session.add_all([claim, evidence])
-    await session.flush()
-    _claim_id = claim.id
-    _evidence_id = evidence.id
-
-    # CaseMember rows
-    session.add(CaseMember(
-        tenant_id=TENANT_A, case_id=_case_id, user_id=WRITER_A,
-        membership_role="owner",
-    ))
-    session.add(CaseMember(
-        tenant_id=TENANT_A, case_id=_case_id, user_id=VIEWER_A,
-        membership_role="viewer",
-    ))
-    revoked = CaseMember(
-        tenant_id=TENANT_A, case_id=_case_id, user_id=REVOKED_MEMBER_A,
-        membership_role="owner", revoked_at=None,
-    )
-    session.add(revoked)
-    await session.flush()
-    # Revoke the revoked member's membership
-    revoked.revoked_at = revoked.created_at.__class__(2025, 1, 1)
-    await session.commit()
-
-    # Run baseline rebuild via local mode to seed the graph
-    async with _maker()() as session:
-        from app.services.legal_reasoning_service import (
-            LegalReasoningService,
-        )
-        svc = LegalReasoningService(provider=_B13Provider(),
-                                     source_acquirer=_B13SourceAcquirer())
-        await svc.rebuild(
-            session, tenant_id=TENANT_A, case_id=_case_id,
-            actor_id=TENANT_ADMIN_A,
-        )
+        session.add(CaseMember(tenant_id=TENANT_A, case_id=_case_id,
+                               user_id=WRITER_A, membership_role="owner"))
+        session.add(CaseMember(tenant_id=TENANT_A, case_id=_case_id,
+                               user_id=VIEWER_A, membership_role="viewer"))
+        revoked = CaseMember(tenant_id=TENANT_A, case_id=_case_id,
+                             user_id=REVOKED_MEMBER_A, membership_role="owner")
+        session.add(revoked)
+        await session.flush()
+        from datetime import datetime, UTC
+        revoked.revoked_at = datetime(2025, 1, 1, tzinfo=UTC)
         await session.commit()
 
-    async with _maker()() as session:
-        issues = (await session.execute(
-            select(LegalIssue).where(
-                LegalIssue.case_id == _case_id,
-                LegalIssue.deleted_at.is_(None),
-            )
-        )).scalars().all()
+    # Eligible source triple for source-link tests
+    _source_rec_id = f"src-b13c-{uuid.uuid4().hex[:8]}"
+    _source_ver_id = f"svr-b13c-{uuid.uuid4().hex[:8]}"
+    _source_para_id = f"sp-b13c-{uuid.uuid4().hex[:8]}"
+    async with maker() as session:
+        rec = SourceRecord(id=_source_rec_id, source_type="legislation",
+            canonical_key=f"b13c-key-{uuid.uuid4().hex[:12]}",
+            title="Test Statute", verification_status="needs_review",
+            current_version_id=_source_ver_id)
+        ver = SourceVersion(id=_source_ver_id, source_record_id=_source_rec_id,
+            version_label="v1", content_hash=f"h-{uuid.uuid4().hex[:8]}",
+            normalized_text="Article text")
+        session.add_all([rec, ver])
+        await session.flush()
+        para = SourceParagraph(id=_source_para_id, source_version_id=_source_ver_id,
+            paragraph_index=1, text="Article text", text_hash=f"th-{uuid.uuid4().hex[:8]}")
+        session.add(para)
+        await session.commit()
+
+    # Baseline rebuild
+    async with maker() as session:
+        from app.services.legal_reasoning_service import LegalReasoningService
+        svc = LegalReasoningService(provider=_B13Provider(), source_acquirer=_B13SourceAcquirer())
+        await svc.rebuild(session, tenant_id=TENANT_A, case_id=_case_id, actor_id=TENANT_ADMIN_A)
+        await session.commit()
+
+    async with maker() as session:
+        issues = (await session.execute(select(LegalIssue).where(
+            LegalIssue.case_id == _case_id, LegalIssue.deleted_at.is_(None)))).scalars().all()
         assert len(issues) >= 1
         _issue_id = issues[0].id
 
@@ -231,18 +255,25 @@ async def b13_setup():
     legal_reasoning_service.provider = old_provider
     legal_reasoning_service.source_acquirer = old_acquirer
 
-    async with _maker()() as session:
+    async with maker() as session:
         for uid in SEED_USER_IDS:
-            await session.execute(delete(CaseMember).where(
-                CaseMember.user_id == uid,
-            ))
+            await session.execute(delete(CaseMember).where(CaseMember.user_id == uid))
         for model in (LegalReasoningRun, MemoryRevision, LegalIssueSourceLink,
-                       LegalIssueFactLink, Counterargument, BurdenOfProof,
-                       EvidenceSufficiencyAssessment, LegalIssue,
-                       EvidenceClaimLink, Evidence, Claim, CaseFact, Case):
+                      LegalIssueFactLink, Counterargument, BurdenOfProof,
+                      EvidenceSufficiencyAssessment, LegalIssue, EvidenceClaimLink,
+                      Evidence, Claim, CaseFact, Case):
             await session.execute(delete(model).where(
-                model.tenant_id.in_([TENANT_A, TENANT_B])
-            ))
+                model.tenant_id.in_([TENANT_A, TENANT_B])))
+        await session.flush()
+        await session.execute(delete(SourceParagraph).where(
+            SourceParagraph.id == _source_para_id))
+        await session.flush()
+        await session.execute(delete(SourceVersion).where(
+            SourceVersion.id == _source_ver_id))
+        await session.flush()
+        await session.execute(delete(SourceRecord).where(
+            SourceRecord.id == _source_rec_id))
+        await session.flush()
         for uid in SEED_USER_IDS:
             await session.execute(delete(User).where(User.id == uid))
         for tid in [TENANT_A, TENANT_B]:
@@ -250,319 +281,310 @@ async def b13_setup():
         await session.commit()
 
 
-def _post(path, json=None, headers=None):
-    async def _do():
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            return await ac.post(path, json=json or {}, headers=headers or {})
-    return _do
+def _R(path, h, expect=200):
+    """Read endpoint."""
+    return _get(path, headers=h, expect=expect)
+
+def _W(method, path, h, json=None, expect=200):
+    """Write endpoint."""
+    if method == "POST":
+        return _post(path, json=json, headers=h, expect=expect)
+    elif method == "PATCH":
+        return _patch(path, json=json, headers=h, expect=expect)
 
 
-def _get(path, headers=None):
-    async def _do():
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            return await ac.get(path, headers=headers or {})
-    return _do
+# ── path helpers ─────────────────────────────────────────────────────────────
 
-
-def _patch(path, json, headers=None):
-    async def _do():
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            return await ac.patch(path, json=json, headers=headers or {})
-    return _do
-
-
-# ── snapshot helper ──────────────────────────────────────────────────────────
-
-
-async def _snapshot():
-    async with _maker()() as session:
-        runs = (await session.execute(
-            select(LegalReasoningRun).where(LegalReasoningRun.case_id == _case_id)
-        )).scalars().all()
-        issues = (await session.execute(
-            select(LegalIssue).where(LegalIssue.case_id == _case_id)
-        )).scalars().all()
-        ecl = (await session.execute(
-            select(EvidenceClaimLink).where(EvidenceClaimLink.case_id == _case_id)
-        )).scalars().all()
-        sl = (await session.execute(
-            select(LegalIssueSourceLink).where(LegalIssueSourceLink.case_id == _case_id)
-        )).scalars().all()
-        ca = (await session.execute(
-            select(Counterargument).where(Counterargument.case_id == _case_id)
-        )).scalars().all()
-        bop = (await session.execute(
-            select(BurdenOfProof).where(BurdenOfProof.case_id == _case_id)
-        )).scalars().all()
-        return {
-            "run_ids": {r.id for r in runs},
-            "run_count": len(runs),
-            "issue_versions": {i.id: i.version for i in issues},
-            "ecl_count": len(ecl),
-            "sl_count": len(sl),
-            "ca_count": len(ca),
-            "bop_count": len(bop),
-        }
-
-
-def _rebuild_path(): return f"/api/v1/cases/{_case_id}/legal-issues/rebuild"
-def _issues_path():  return f"/api/v1/cases/{_case_id}/legal-issues"
-def _runs_path():    return f"/api/v1/cases/{_case_id}/reasoning-runs"
-def _graph_path():   return f"/api/v1/legal-issues/{_issue_id}/graph"
-def _patch_path():   return f"/api/v1/legal-issues/{_issue_id}"
-def _evidence_path(): return f"/api/v1/legal-issues/{_issue_id}/evidence-links"
-def _source_path():  return f"/api/v1/legal-issues/{_issue_id}/source-links"
+def _rebuild():   return f"/api/v1/cases/{_case_id}/legal-issues/rebuild"
+def _issues():    return f"/api/v1/cases/{_case_id}/legal-issues"
+def _runs():      return f"/api/v1/cases/{_case_id}/reasoning-runs"
+def _graph():     return f"/api/v1/legal-issues/{_issue_id}/graph"
+def _patch_path(): return f"/api/v1/legal-issues/{_issue_id}"
+def _evidence():  return f"/api/v1/legal-issues/{_issue_id}/evidence-links"
+def _source():    return f"/api/v1/legal-issues/{_issue_id}/source-links"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# UNAUTHENTICATED
+# UNAUTHENTICATED — all 7 endpoints
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_unauthenticated_all_rejected():
+async def test_unauthenticated_all_seven():
     with _jwt_mode():
-        for fn in [
-            _get(_issues_path()), _get(_runs_path()), _get(_graph_path()),
-            _post(_rebuild_path()), _post(_evidence_path()), _post(_source_path()),
-        ]:
-            r = await fn()
-            assert r.status_code == 401, f"{r.status_code} for unauth"
+        # reads
+        await _get(_issues(), expect=401)
+        await _get(_graph(), expect=401)
+        await _get(_runs(), expect=401)
+        # writes
+        await _post(_rebuild(), expect=401)
+        await _patch(_patch_path(), json={"version": 1}, expect=401)
+        await _post(_evidence(), json={"claim_id": "x", "evidence_id": "y",
+            "relation_type": "evidence_supports_claim"}, expect=401)
+        await _post(_source(), json={"source_record_id": "x", "source_version_id": "y",
+            "source_paragraph_id": "z", "relation_type": "source_governs_issue"}, expect=401)
 
 
 @pytest.mark.asyncio
-async def test_invalid_token_rejected():
+async def test_invalid_token_all_seven():
+    h = {"Authorization": "Bearer invalid.token"}
     with _jwt_mode():
-        h = {"Authorization": "Bearer invalid.token.here"}
-        for fn in [
-            _get(_issues_path(), h), _post(_rebuild_path(), headers=h),
-        ]:
-            r = await fn()
-            assert r.status_code == 401, f"{r.status_code} for invalid token"
+        await _get(_issues(), headers=h, expect=401)
+        await _get(_graph(), headers=h, expect=401)
+        await _get(_runs(), headers=h, expect=401)
+        await _post(_rebuild(), headers=h, expect=401)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=401)
+        await _post(_evidence(), json={"claim_id": "x", "evidence_id": "y",
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=401)
+        await _post(_source(), json={"source_record_id": "x", "source_version_id": "y",
+            "source_paragraph_id": "z", "relation_type": "source_governs_issue"}, headers=h, expect=401)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# VIEWER_A — reads allowed, writes denied
+# VIEWER_A — reads 200, writes 404
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_viewer_reads_allowed():
-    h = _headers(VIEWER_A, "lawyer")
+async def test_viewer_matrix():
+    h = _h(VIEWER_A, "lawyer")
     with _jwt_mode():
-        r = await _get(_issues_path(), h)()
-        assert r.status_code == 200
-        r = await _get(_graph_path(), h)()
-        assert r.status_code == 200
-        r = await _get(_runs_path(), h)()
-        assert r.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_viewer_writes_denied_no_mutation():
-    h = _headers(VIEWER_A, "lawyer")
-    snap = await _snapshot()
-    with _jwt_mode():
-        r = await _post(_rebuild_path(), headers=h)()
-        assert r.status_code == 404
-        r = await _patch(_patch_path(), {"version": 1}, h)()
-        assert r.status_code == 404
-        r = await _post(_evidence_path(), json={
-            "claim_id": _claim_id, "evidence_id": _evidence_id,
-            "relation_type": "evidence_supports_claim",
-        }, headers=h)()
-        assert r.status_code == 404
-        r = await _post(_source_path(), json={
-            "source_record_id": "nonexistent",
-            "source_version_id": "nonexistent",
-            "source_paragraph_id": "nonexistent",
-            "relation_type": "source_governs_issue",
-        }, headers=h)()
-        assert r.status_code == 404
-    snap2 = await _snapshot()
-    assert snap2["run_ids"] == snap["run_ids"], "no new run"
-    assert snap2["ecl_count"] == snap["ecl_count"], "no new evidence link"
-    assert snap2["sl_count"] == snap["sl_count"], "no new source link"
+        await _R(_issues(), h, 200)
+        await _R(_graph(), h, 200)
+        await _R(_runs(), h, 200)
+        await _post(_rebuild(), headers=h, expect=404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# WRITER_A — all reads + writes allowed
+# WRITER_A — all read/write success
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_writer_reads_allowed():
-    h = _headers(WRITER_A, "lawyer")
+async def test_writer_matrix():
+    h = _h(WRITER_A, "lawyer")
     with _jwt_mode():
-        for fn in [_get(_issues_path(), h), _get(_graph_path(), h),
-                   _get(_runs_path(), h)]:
-            r = await fn()
-            assert r.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_writer_writes_allowed():
-    h = _headers(WRITER_A, "lawyer")
-    with _jwt_mode():
-        r = await _post(_rebuild_path(), headers=h)()
-        assert r.status_code == 200
-        r = await _get(_issues_path(), h)()
-        issues = r.json()
-        issue = issues[0]
-        r = await _patch(_patch_path(),
-                         {"version": issue["version"], "status": "accepted"}, h)()
-        assert r.status_code == 200
-        r = await _post(_evidence_path(), json={
-            "claim_id": _claim_id, "evidence_id": _evidence_id,
-            "relation_type": "evidence_supports_claim",
-        }, headers=h)()
-        assert r.status_code == 200
+        # reads
+        await _R(_issues(), h, 200)
+        await _R(_graph(), h, 200)
+        await _R(_runs(), h, 200)
+        # writes
+        await _post(_rebuild(), headers=h, expect=200)
+        # fetch current issue for version-dependent operations
+        r = await _get(_issues(), headers=h)
+        issue = r.json()[0]
+        await _patch(_patch_path(), json={"version": issue["version"], "status": "accepted"}, headers=h, expect=200)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=200)
+        # source-link success
+        r = await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=200)
+        body = r.json()
+        assert body["source_record_id"] == _source_rec_id
+        assert body["source_version_id"] == _source_ver_id
+        assert body["source_paragraph_id"] == _source_para_id
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# NONMEMBER_A — all denied
+# NONMEMBER_A — all 404
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_nonmember_all_denied():
-    h = _headers(NONMEMBER_A, "lawyer")
+async def test_nonmember_matrix():
+    h = _h(NONMEMBER_A, "lawyer")
     with _jwt_mode():
-        for fn in [
-            _get(_issues_path(), h), _get(_graph_path(), h), _get(_runs_path(), h),
-            _post(_rebuild_path(), headers=h),
-            _post(_evidence_path(), json={
-                "claim_id": "nonex", "evidence_id": "nonex",
-                "relation_type": "evidence_supports_claim",
-            }, headers=h),
-            _post(_source_path(), json={
-                "source_record_id": "nonex",
-                "source_version_id": "nonex",
-                "source_paragraph_id": "nonex",
-                "relation_type": "source_governs_issue",
-            }, headers=h),
-        ]:
-            r = await fn()
-            assert r.status_code == 404, f"nonmember got {r.status_code}"
+        await _R(_issues(), h, 404)
+        await _R(_graph(), h, 404)
+        await _R(_runs(), h, 404)
+        await _post(_rebuild(), headers=h, expect=404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# REVOKED_MEMBER_A — all denied
+# REVOKED_MEMBER_A — all 404
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_revoked_member_all_denied():
-    h = _headers(REVOKED_MEMBER_A, "lawyer")
+async def test_revoked_member_matrix():
+    h = _h(REVOKED_MEMBER_A, "lawyer")
     with _jwt_mode():
-        r = await _get(_issues_path(), h)()
-        assert r.status_code == 404
-        r = await _post(_rebuild_path(), headers=h)()
-        assert r.status_code == 404
-        r = await _get(_graph_path(), h)()
-        assert r.status_code == 404
+        await _R(_issues(), h, 404)
+        await _R(_graph(), h, 404)
+        await _R(_runs(), h, 404)
+        await _post(_rebuild(), headers=h, expect=404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FOREIGN_USER_B (tenant B, non-admin) — all Tenant A paths denied
+# FOREIGN_USER_B — all Tenant A paths 404
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_foreign_user_all_tenant_a_denied():
-    h = _headers(FOREIGN_USER_B, "lawyer", TENANT_B)
+async def test_foreign_user_matrix():
+    h = _h(FOREIGN_USER_B, "lawyer", TENANT_B)
     with _jwt_mode():
-        r = await _get(_issues_path(), h)()
-        assert r.status_code == 404
-        r = await _post(_rebuild_path(), headers=h)()
-        assert r.status_code == 404
-        r = await _get(_graph_path(), h)()
-        assert r.status_code == 404
-        r = await _patch(_patch_path(), {"version": 1}, h)()
-        assert r.status_code == 404
+        await _R(_issues(), h, 404)
+        await _R(_graph(), h, 404)
+        await _R(_runs(), h, 404)
+        await _post(_rebuild(), headers=h, expect=404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TENANT_ADMIN_B — Tenant A paths denied (no cross-tenant)
+# TENANT_ADMIN_B — all Tenant A paths 404 (no cross-tenant)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_tenant_admin_b_denied_tenant_a():
-    h = _headers(TENANT_ADMIN_B, "tenant_admin", TENANT_B)
+async def test_tenant_admin_b_matrix():
+    h = _h(TENANT_ADMIN_B, "tenant_admin", TENANT_B)
     with _jwt_mode():
-        r = await _get(_issues_path(), h)()
-        assert r.status_code == 404
-        r = await _post(_rebuild_path(), headers=h)()
-        assert r.status_code == 404
-        r = await _get(_graph_path(), h)()
-        assert r.status_code == 404
+        await _R(_issues(), h, 404)
+        await _R(_graph(), h, 404)
+        await _R(_runs(), h, 404)
+        await _post(_rebuild(), headers=h, expect=404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TENANT_ADMIN_A — reads + writes allowed, WITH NO CaseMember membership
+# TENANT_ADMIN_A — all reads + writes, NO CaseMember
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_tenant_admin_a_reads_allowed_no_membership():
-    h = _headers(TENANT_ADMIN_A, "tenant_admin")
+async def test_tenant_admin_a_matrix():
+    h = _h(TENANT_ADMIN_A, "tenant_admin")
     with _jwt_mode():
-        for fn in [_get(_issues_path(), h), _get(_graph_path(), h),
-                   _get(_runs_path(), h)]:
-            r = await fn()
-            assert r.status_code == 200, f"admin read: {r.status_code}"
-
-
-@pytest.mark.asyncio
-async def test_tenant_admin_a_rebuild_without_membership():
-    """Regression: require_case_write must allow tenant_admin without CaseMember."""
-    h = _headers(TENANT_ADMIN_A, "tenant_admin")
-    with _jwt_mode():
-        r = await _post(_rebuild_path(), headers=h)()
-        assert r.status_code == 200, (
-            f"tenant_admin rebuild without membership got {r.status_code}, "
-            "expected 200 — require_case_write must allow tenant_admin bypass"
-        )
-
-
-@pytest.mark.asyncio
-async def test_tenant_admin_a_issue_writes_allowed():
-    h = _headers(TENANT_ADMIN_A, "tenant_admin")
-    with _jwt_mode():
-        r = await _get(_issues_path(), h)()
-        issues = r.json()
-        issue = issues[0]
-        r = await _patch(_patch_path(),
-                         {"version": issue["version"], "status": "accepted"}, h)()
-        assert r.status_code == 200, f"admin patch: {r.status_code}"
-        r = await _post(_evidence_path(), json={
-            "claim_id": _claim_id, "evidence_id": _evidence_id,
-            "relation_type": "evidence_supports_claim",
-        }, headers=h)()
-        assert r.status_code == 200, f"admin evidence-link: {r.status_code}"
+        await _R(_issues(), h, 200)
+        await _R(_graph(), h, 200)
+        await _R(_runs(), h, 200)
+        await _post(_rebuild(), headers=h, expect=200)
+        r = await _get(_issues(), headers=h)
+        issue = r.json()[0]
+        await _patch(_patch_path(), json={"version": issue["version"], "status": "accepted"}, headers=h, expect=200)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=200)
+        r = await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=200)
+        body = r.json()
+        assert body["source_record_id"] == _source_rec_id
+        assert body["source_version_id"] == _source_ver_id
+        assert body["source_paragraph_id"] == _source_para_id
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FOREIGN ISSUE ID NO-DISCLOSURE (uses real Tenant A issue ID)
+# ISSUE-SCOPED NO-DISCLOSURE — real Tenant A issue ID, four endpoints
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_foreign_issue_id_no_disclosure_nonmember():
-    h = _headers(NONMEMBER_A, "lawyer")
+async def test_issue_no_disclosure_nonmember():
+    h = _h(NONMEMBER_A, "lawyer")
     with _jwt_mode():
-        r = await _get(_graph_path(), h)()
-        assert r.status_code == 404
+        await _R(_graph(), h, 404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
 
 
 @pytest.mark.asyncio
-async def test_foreign_issue_id_no_disclosure_foreign_user():
-    h = _headers(FOREIGN_USER_B, "lawyer", TENANT_B)
+async def test_issue_no_disclosure_foreign_user():
+    h = _h(FOREIGN_USER_B, "lawyer", TENANT_B)
     with _jwt_mode():
-        r = await _get(_graph_path(), h)()
-        assert r.status_code == 404
-        r = await _patch(_patch_path(), {"version": 1}, h)()
-        assert r.status_code == 404
+        await _R(_graph(), h, 404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
 
 
 @pytest.mark.asyncio
-async def test_foreign_issue_id_no_disclosure_foreign_admin():
-    h = _headers(TENANT_ADMIN_B, "tenant_admin", TENANT_B)
+async def test_issue_no_disclosure_foreign_admin():
+    h = _h(TENANT_ADMIN_B, "tenant_admin", TENANT_B)
     with _jwt_mode():
-        r = await _get(_graph_path(), h)()
-        assert r.status_code == 404
+        await _R(_graph(), h, 404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DENIED-WRITE NO-MUTATION — viewer, nonmember, foreign user
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_viewer_denied_writes_no_mutation():
+    h = _h(VIEWER_A, "lawyer")
+    before = await _snapshot()
+    with _jwt_mode():
+        await _post(_rebuild(), headers=h, expect=404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
+    after = await _snapshot()
+    _assert_snapshot_equal(before, after, "viewer")
+
+
+@pytest.mark.asyncio
+async def test_nonmember_denied_writes_no_mutation():
+    h = _h(NONMEMBER_A, "lawyer")
+    before = await _snapshot()
+    with _jwt_mode():
+        await _post(_rebuild(), headers=h, expect=404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
+    after = await _snapshot()
+    _assert_snapshot_equal(before, after, "nonmember")
+
+
+@pytest.mark.asyncio
+async def test_foreign_user_denied_writes_no_mutation():
+    h = _h(FOREIGN_USER_B, "lawyer", TENANT_B)
+    before = await _snapshot()
+    with _jwt_mode():
+        await _post(_rebuild(), headers=h, expect=404)
+        await _patch(_patch_path(), json={"version": 1}, headers=h, expect=404)
+        await _post(_evidence(), json={"claim_id": _claim_id, "evidence_id": _evidence_id,
+            "relation_type": "evidence_supports_claim"}, headers=h, expect=404)
+        await _post(_source(), json={"source_record_id": _source_rec_id,
+            "source_version_id": _source_ver_id, "source_paragraph_id": _source_para_id,
+            "relation_type": "source_governs_issue"}, headers=h, expect=404)
+    after = await _snapshot()
+    _assert_snapshot_equal(before, after, "foreign_user")
