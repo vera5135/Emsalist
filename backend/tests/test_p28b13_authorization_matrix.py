@@ -13,9 +13,10 @@ from sqlalchemy import delete, select
 
 from app.db.models import (
     BurdenOfProof, Case, CaseFact, CaseMember, Claim, Counterargument,
-    Evidence, EvidenceClaimLink, LegalIssue, LegalIssueFactLink,
-    LegalIssueSourceLink, LegalReasoningRun, MemoryRevision,
-    SourceParagraph, SourceRecord, SourceVersion, Tenant, User,
+    Evidence, EvidenceClaimLink, EvidenceSufficiencyAssessment, LegalIssue,
+    LegalIssueFactLink, LegalIssueSourceLink, LegalReasoningRun,
+    MemoryRevision, SourceParagraph, SourceRecord, SourceVersion, Tenant,
+    User,
 )
 from app.db.auth_repository import CaseMemberRepository
 from app.db.case_chat_repository import CaseRepository
@@ -127,8 +128,9 @@ async def b13_setup():
                 CaseMember.user_id == uid,
             ))
         for model in (LegalReasoningRun, MemoryRevision, LegalIssueSourceLink,
-                      LegalIssueFactLink, Counterargument, BurdenOfProof,
-                      LegalIssue, EvidenceClaimLink, Evidence, Claim, CaseFact, Case):
+                       LegalIssueFactLink, Counterargument, BurdenOfProof,
+                       EvidenceSufficiencyAssessment, LegalIssue,
+                       EvidenceClaimLink, Evidence, Claim, CaseFact, Case):
             await session.execute(delete(model).where(
                 model.tenant_id.in_([TENANT_A, TENANT_B])
             ))
@@ -235,8 +237,9 @@ async def b13_setup():
                 CaseMember.user_id == uid,
             ))
         for model in (LegalReasoningRun, MemoryRevision, LegalIssueSourceLink,
-                      LegalIssueFactLink, Counterargument, BurdenOfProof,
-                      LegalIssue, EvidenceClaimLink, Evidence, Claim, CaseFact, Case):
+                       LegalIssueFactLink, Counterargument, BurdenOfProof,
+                       EvidenceSufficiencyAssessment, LegalIssue,
+                       EvidenceClaimLink, Evidence, Claim, CaseFact, Case):
             await session.execute(delete(model).where(
                 model.tenant_id.in_([TENANT_A, TENANT_B])
             ))
