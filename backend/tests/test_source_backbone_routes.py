@@ -71,7 +71,6 @@ async def db_setup():
         session.add(User(id=JWT_USERS["editor"], tenant_id=JWT_TENANT, email_normalized="jwt-editor@source.test", display_name="JWT Editor", status="active", role="editor"))
         session.add(User(id=JWT_USERS["admin"], tenant_id=JWT_TENANT, email_normalized="jwt-admin@source.test", display_name="JWT Admin", status="active", role="admin"))
         # Seed AuthSessions for JWT identities
-        from app.db.models import AuthSession
         from datetime import UTC, datetime, timedelta
         from hashlib import sha256
         now = datetime.now(UTC)
