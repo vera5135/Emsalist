@@ -443,6 +443,7 @@ async def require_case_read(ctx: SecurityContext = Depends(resolve_current_user)
 
 async def require_case_write(ctx: SecurityContext = Depends(resolve_current_user), case_id: str = "") -> SecurityContext:
     if get_auth_mode() == "local": return ctx
+    if ctx.role == "tenant_admin": return ctx
     from app.db.auth_repository import CaseMemberRepository
     from app.db.session import get_sessionmaker
     sm = get_sessionmaker()
@@ -450,7 +451,6 @@ async def require_case_write(ctx: SecurityContext = Depends(resolve_current_user
         m = await CaseMemberRepository.get_active_membership(db, ctx.tenant_id, case_id, ctx.actor_id)
         if not m or m.membership_role == "viewer":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
-        if ctx.role == "tenant_admin": return ctx
     return ctx
 
 
