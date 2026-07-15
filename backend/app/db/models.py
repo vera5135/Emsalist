@@ -1245,6 +1245,61 @@ class BurdenOfProof(Base):
     )
 
 
+class EvidenceSufficiencyAssessment(Base):
+    __tablename__ = "evidence_sufficiency_assessments"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    claim_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    legal_source_refs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    fact_refs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_evidence_sufficiency_assessments_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "claim_id"],
+            ["claims.tenant_id", "claims.case_id", "claims.id"],
+            name="fk_evidence_sufficiency_assessments_claim",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "evidence_id"],
+            ["evidence.tenant_id", "evidence.case_id", "evidence.id"],
+            name="fk_evidence_sufficiency_assessments_evidence",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_evidence_sufficiency_assessments_tenant_case", "tenant_id", "case_id"),
+        Index("ix_evidence_sufficiency_assessments_issue", "case_id", "issue_id"),
+        Index("ix_evidence_sufficiency_assessments_claim", "case_id", "claim_id"),
+        Index("ix_evidence_sufficiency_assessments_evidence", "case_id", "evidence_id"),
+        Index(
+            "uq_evidence_sufficiency_assessments_active_scope",
+            "tenant_id", "case_id", "issue_id", "claim_id", "evidence_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(EVIDENCE_SUFFICIENCY_STATUSES))})",
+            name="ck_evidence_sufficiency_assessments_status",
+        ),
+    )
+
+
 LEGAL_REASONING_RUN_STATUSES = frozenset({
     "started", "succeeded", "failed", "stale",
 })
