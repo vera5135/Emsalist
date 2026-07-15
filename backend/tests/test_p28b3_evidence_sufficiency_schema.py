@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.db.models import (
+    Case,
     Claim,
     Evidence,
     EvidenceSufficiencyAssessment,
