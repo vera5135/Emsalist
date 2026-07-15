@@ -151,12 +151,14 @@ async def _seed_source_v1() -> tuple[str, str, str]:
             content_hash=f"hash-{uuid.uuid4().hex[:8]}",
             normalized_text="V1 article 1 text",
         )
+        session.add_all([rec, ver])
+        await session.flush()
         para = SourceParagraph(
             id=para_id, source_version_id=ver_id, paragraph_index=1,
             text="V1 article 1 text",
             text_hash=f"th-{uuid.uuid4().hex[:8]}",
         )
-        session.add_all([rec, ver, para])
+        session.add(para)
         await session.commit()
 
     _created_source_ids.append({
@@ -176,14 +178,16 @@ async def _seed_source_v2(rec_id: str) -> tuple[str, str]:
             content_hash=f"hash2-{uuid.uuid4().hex[:8]}",
             normalized_text="V2 article 1 text",
         )
+        session.add(ver2)
+        rec = await session.get(SourceRecord, rec_id)
+        rec.current_version_id = ver2_id
+        await session.flush()
         para2 = SourceParagraph(
             id=para2_id, source_version_id=ver2_id, paragraph_index=1,
             text="V2 article 1 text",
             text_hash=f"th2-{uuid.uuid4().hex[:8]}",
         )
-        rec = await session.get(SourceRecord, rec_id)
-        rec.current_version_id = ver2_id
-        session.add_all([ver2, para2])
+        session.add(para2)
         await session.commit()
 
     _created_source_ids.append({
