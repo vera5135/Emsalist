@@ -1297,6 +1297,7 @@ class SourceVersion(Base):
     __table_args__ = (
         Index("ix_source_versions_record", "source_record_id"),
         UniqueConstraint("source_record_id", "content_hash", name="uq_source_versions_record_hash"),
+        UniqueConstraint("source_record_id", "id", name="uq_source_versions_record_id"),
     )
 
 
@@ -1322,6 +1323,7 @@ class SourceParagraph(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (
         Index("ix_source_paragraphs_version", "source_version_id", "paragraph_index"),
+        UniqueConstraint("source_version_id", "id", name="uq_source_paragraphs_version_id"),
     )
 
 
