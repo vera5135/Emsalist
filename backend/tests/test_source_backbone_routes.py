@@ -8,6 +8,7 @@ from sqlalchemy import delete, select
 
 from app.db.models import (
     AuditEvent,
+    AuthSession,
     Case,
     SourceParagraph,
     SourceRecord,
@@ -53,6 +54,7 @@ async def db_setup():
         await session.execute(delete(SourceRecord))
         await session.execute(delete(Case).where(Case.tenant_id.in_(tenants)))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(tenants)))
+        await session.execute(delete(AuthSession).where(AuthSession.user_id.in_(user_ids)))
         await session.execute(delete(User).where(User.id.in_(user_ids)))
         await session.execute(delete(Tenant).where(Tenant.id.in_(tenants)))
 
