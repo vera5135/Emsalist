@@ -103,12 +103,16 @@ async def lifecycle_deps():
                         SourceParagraph.id == para_id
                     )
                 )
+        await session.flush()
+        for entry in _created_source_ids:
             for ver_id in entry.get("version_ids", []):
                 await session.execute(
                     delete(SourceVersion).where(
                         SourceVersion.id == ver_id
                     )
                 )
+        await session.flush()
+        for entry in _created_source_ids:
             for rec_id in entry.get("record_ids", []):
                 await session.execute(
                     delete(SourceRecord).where(
