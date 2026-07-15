@@ -73,7 +73,7 @@ async def injected_reasoning_dependencies():
                 EvidenceSufficiencyAssessment, EvidenceClaimLink,
                 LegalIssueFactLink, LegalIssueSourceLink, Counterargument,
                 BurdenOfProof, LegalReasoningRun, MemoryRevision, LegalIssue,
-                Evidence, Claim,
+                Evidence, Claim, CaseFact,
             ):
                 await session.execute(delete(model).where(model.case_id == case_id))
             await session.execute(delete(Case).where(Case.id == case_id))
@@ -264,11 +264,6 @@ async def test_generic_provider_does_not_receive_defect_burden(client: AsyncClie
         )).scalars().all()
         assert len(fact_links) == 0
 
-        await session.execute(
-            delete(CaseFact).where(CaseFact.case_id == case_id)
-        )
-        await session.commit()
-
     runs = await client.get(f"/api/v1/cases/{case_id}/reasoning-runs")
     assert runs.status_code == 200
     assert runs.json()[0]["status"] == "succeeded"
@@ -346,8 +341,3 @@ async def test_deterministic_defect_pilot_preserves_burden_and_fact_links(client
             )
         )).scalars().all()
         assert len(root_links) == 0
-
-        await session.execute(
-            delete(CaseFact).where(CaseFact.case_id == case_id)
-        )
-        await session.commit()
