@@ -1,6 +1,6 @@
-"""Search query builder and P2.7 hybrid legal search endpoints."""
+"""Search profile, dynamic precedent pool and P2.7 hybrid search endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
@@ -11,6 +11,8 @@ from app.models.case_models import (
     SearchBuildResponse,
 )
 from app.models.search_models import (
+    DynamicPrecedentPoolRequest,
+    DynamicPrecedentPoolResponse,
     LegalSearchRequest,
     LegalSearchResponse,
     OpposingSearchRequest,
@@ -23,6 +25,7 @@ from app.models.search_models import (
 )
 from app.services.auth_service import SecurityContext, resolve_current_user
 from app.services.case_search_profile import case_search_profile_provider
+from app.services.dynamic_precedent_pool_service import build_dynamic_precedent_pool
 from app.services.hybrid_search_service import (
     execute_legal_search,
     execute_opposing_search,
@@ -50,10 +53,22 @@ def build_case_search_profile(
     ctx: SecurityContext = Depends(resolve_current_user),
 ) -> CaseSearchProfileResponse:
     # Authentication is required because the narrative may contain privileged
-    # client information. This first slice is read-only and does not persist the
-    # raw narrative or provider queries.
+    # client information. The raw narrative and provider queries are not stored.
     _ = ctx
     return case_search_profile_provider.build(request)
+
+
+@router.post(
+    "/dynamic-pool",
+    response_model=DynamicPrecedentPoolResponse,
+    operation_id="search_build_dynamic_precedent_pool",
+)
+async def create_dynamic_precedent_pool(
+    request: DynamicPrecedentPoolRequest,
+    db: AsyncSession = Depends(get_session),
+    ctx: SecurityContext = Depends(resolve_current_user),
+) -> DynamicPrecedentPoolResponse:
+    return await build_dynamic_precedent_pool(db, request, ctx)
 
 
 @router.post("/legal", response_model=LegalSearchResponse)
