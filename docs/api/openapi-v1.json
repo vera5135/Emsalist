@@ -2660,6 +2660,546 @@
         "title": "DraftAuditResponse",
         "type": "object"
       },
+      "DraftCreateRequest": {
+        "properties": {
+          "draft_type": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Draft Type",
+            "type": "string"
+          },
+          "supersedes_draft_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Draft Id"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "draft_type"
+        ],
+        "title": "DraftCreateRequest",
+        "type": "object"
+      },
+      "DraftDetailResponse": {
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "default": "",
+            "title": "Created By",
+            "type": "string"
+          },
+          "draft_type": {
+            "title": "Draft Type",
+            "type": "string"
+          },
+          "finalized_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finalized At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "paragraph_count": {
+            "default": 0,
+            "title": "Paragraph Count",
+            "type": "integer"
+          },
+          "paragraphs": {
+            "items": {
+              "$ref": "#/components/schemas/DraftParagraphResponse"
+            },
+            "title": "Paragraphs",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "supersedes_draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Draft Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "title",
+          "draft_type",
+          "status",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "DraftDetailResponse",
+        "type": "object"
+      },
+      "DraftFinalizeRequest": {
+        "properties": {
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "DraftFinalizeRequest",
+        "type": "object"
+      },
+      "DraftFinalizeResponse": {
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "finalized_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finalized At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "issue_link_count": {
+            "title": "Issue Link Count",
+            "type": "integer"
+          },
+          "marked_source_usage_count": {
+            "title": "Marked Source Usage Count",
+            "type": "integer"
+          },
+          "paragraph_count": {
+            "title": "Paragraph Count",
+            "type": "integer"
+          },
+          "source_link_count": {
+            "title": "Source Link Count",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "status",
+          "version",
+          "paragraph_count",
+          "issue_link_count",
+          "source_link_count",
+          "marked_source_usage_count"
+        ],
+        "title": "DraftFinalizeResponse",
+        "type": "object"
+      },
+      "DraftListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DraftResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "DraftListResponse",
+        "type": "object"
+      },
+      "DraftParagraphCreateRequest": {
+        "properties": {
+          "paragraph_order": {
+            "minimum": 1.0,
+            "title": "Paragraph Order",
+            "type": "integer"
+          },
+          "paragraph_type": {
+            "default": "body",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Paragraph Type",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 50000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paragraph_order",
+          "text"
+        ],
+        "title": "DraftParagraphCreateRequest",
+        "type": "object"
+      },
+      "DraftParagraphIssueLinkRequest": {
+        "properties": {
+          "legal_issue_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Legal Issue Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "legal_issue_id"
+        ],
+        "title": "DraftParagraphIssueLinkRequest",
+        "type": "object"
+      },
+      "DraftParagraphIssueLinkResponse": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "draft_paragraph_id": {
+            "title": "Draft Paragraph Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "legal_issue_id": {
+            "title": "Legal Issue Id",
+            "type": "string"
+          },
+          "relation_type": {
+            "title": "Relation Type",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "draft_paragraph_id",
+          "legal_issue_id",
+          "relation_type",
+          "created_at",
+          "version"
+        ],
+        "title": "DraftParagraphIssueLinkResponse",
+        "type": "object"
+      },
+      "DraftParagraphResponse": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "draft_document_id": {
+            "title": "Draft Document Id",
+            "type": "string"
+          },
+          "generated_by": {
+            "title": "Generated By",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "issue_links": {
+            "items": {
+              "$ref": "#/components/schemas/DraftParagraphIssueLinkResponse"
+            },
+            "title": "Issue Links",
+            "type": "array"
+          },
+          "model_name": {
+            "default": "",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "paragraph_order": {
+            "title": "Paragraph Order",
+            "type": "integer"
+          },
+          "paragraph_type": {
+            "title": "Paragraph Type",
+            "type": "string"
+          },
+          "source_links": {
+            "items": {
+              "$ref": "#/components/schemas/DraftParagraphSourceLinkResponse"
+            },
+            "title": "Source Links",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "draft_document_id",
+          "paragraph_order",
+          "paragraph_type",
+          "text",
+          "verification_status",
+          "generated_by",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "DraftParagraphResponse",
+        "type": "object"
+      },
+      "DraftParagraphSourceLinkRequest": {
+        "properties": {
+          "quote_hash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Quote Hash",
+            "type": "string"
+          },
+          "source_paragraph_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Paragraph Id",
+            "type": "string"
+          },
+          "source_record_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Record Id",
+            "type": "string"
+          },
+          "source_version_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Version Id",
+            "type": "string"
+          },
+          "usage_type": {
+            "default": "citation",
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Usage Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_record_id",
+          "source_version_id",
+          "source_paragraph_id",
+          "quote_hash"
+        ],
+        "title": "DraftParagraphSourceLinkRequest",
+        "type": "object"
+      },
+      "DraftParagraphSourceLinkResponse": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "draft_paragraph_id": {
+            "title": "Draft Paragraph Id",
+            "type": "string"
+          },
+          "effective_trust": {
+            "default": "",
+            "title": "Effective Trust",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "quote_hash": {
+            "title": "Quote Hash",
+            "type": "string"
+          },
+          "source_paragraph_id": {
+            "title": "Source Paragraph Id",
+            "type": "string"
+          },
+          "source_record_id": {
+            "title": "Source Record Id",
+            "type": "string"
+          },
+          "source_version_id": {
+            "title": "Source Version Id",
+            "type": "string"
+          },
+          "usage_type": {
+            "title": "Usage Type",
+            "type": "string"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "draft_paragraph_id",
+          "source_record_id",
+          "source_version_id",
+          "source_paragraph_id",
+          "usage_type",
+          "quote_hash",
+          "verification_status",
+          "created_at",
+          "version"
+        ],
+        "title": "DraftParagraphSourceLinkResponse",
+        "type": "object"
+      },
+      "DraftParagraphUpdateRequest": {
+        "properties": {
+          "paragraph_order": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paragraph Order"
+          },
+          "paragraph_type": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paragraph Type"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 50000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "verification_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Status"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "DraftParagraphUpdateRequest",
+        "type": "object"
+      },
       "DraftRefineRequest": {
         "properties": {
           "case_enrichment": {
@@ -2746,6 +3286,124 @@
           "accepted"
         ],
         "title": "DraftRefineResponse",
+        "type": "object"
+      },
+      "DraftResponse": {
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "default": "",
+            "title": "Created By",
+            "type": "string"
+          },
+          "draft_type": {
+            "title": "Draft Type",
+            "type": "string"
+          },
+          "finalized_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finalized At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "paragraph_count": {
+            "default": 0,
+            "title": "Paragraph Count",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "supersedes_draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Draft Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "title",
+          "draft_type",
+          "status",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "DraftResponse",
+        "type": "object"
+      },
+      "DraftUpdateRequest": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "DraftUpdateRequest",
         "type": "object"
       },
       "DraftingCaseIdentity": {
@@ -13560,6 +14218,822 @@
         "summary": "Set Document Type",
         "tags": [
           "Documents"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts": {
+      "get": {
+        "operationId": "draft_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Drafts",
+        "tags": [
+          "Drafts"
+        ]
+      },
+      "post": {
+        "operationId": "draft_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Draft",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}": {
+      "delete": {
+        "operationId": "draft_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Draft",
+        "tags": [
+          "Drafts"
+        ]
+      },
+      "get": {
+        "operationId": "draft_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Draft",
+        "tags": [
+          "Drafts"
+        ]
+      },
+      "patch": {
+        "operationId": "draft_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Draft",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/finalize": {
+      "post": {
+        "operationId": "draft_finalize",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftFinalizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftFinalizeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Finalize Draft",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs": {
+      "post": {
+        "operationId": "draft_paragraph_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftParagraphResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Paragraph",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}": {
+      "delete": {
+        "operationId": "draft_paragraph_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Paragraph",
+        "tags": [
+          "Drafts"
+        ]
+      },
+      "patch": {
+        "operationId": "draft_paragraph_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftParagraphResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Paragraph",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/issues": {
+      "post": {
+        "operationId": "draft_paragraph_issue_link_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphIssueLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftParagraphIssueLinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Paragraph Issue Link",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/issues/{link_id}": {
+      "delete": {
+        "operationId": "draft_paragraph_issue_link_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "title": "Link Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Paragraph Issue Link",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/sources": {
+      "post": {
+        "operationId": "draft_paragraph_source_link_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphSourceLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftParagraphSourceLinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Paragraph Source Link",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/sources/{link_id}": {
+      "delete": {
+        "operationId": "draft_paragraph_source_link_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "title": "Link Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Paragraph Source Link",
+        "tags": [
+          "Drafts"
         ]
       }
     },
