@@ -1,9 +1,11 @@
-"""P2.7 — Hybrid legal search request/response contract models."""
+"""P2.7/P2 Core — Hybrid search and dynamic precedent pool contracts."""
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.models.case_models import CaseSearchProfileResponse
 
 
 # ── Request models ────────────────────────────────────────────────────────────
@@ -17,6 +19,39 @@ class LegalSearchRequest(BaseModel):
     court: str | None = Field(None, description="Mahkeme adi filtresi")
     limit: int = Field(20, ge=1, le=100, description="Sayfa basina sonuc sayisi")
     cursor: str | None = Field(None, description="Sayfalama imleci")
+
+
+class DynamicPrecedentPoolRequest(BaseModel):
+    """One bounded case-to-corpus-to-shortlist operation."""
+
+    case_id: str | None = None
+    case_text: str = Field(
+        min_length=20,
+        max_length=20_000,
+        description="Avukatın doğal dille anlattığı olay ve uyuşmazlık özeti",
+    )
+    preferred_relief: list[str] = Field(default_factory=list, max_length=8)
+    max_queries: int = Field(default=6, ge=3, le=6)
+    max_candidates: int = Field(default=50, ge=10, le=50)
+    shortlist_size: int = Field(default=12, ge=3, le=15)
+
+    @field_validator("case_text")
+    @classmethod
+    def normalize_case_text(cls, value: str) -> str:
+        return " ".join(value.split())
+
+    @field_validator("preferred_relief")
+    @classmethod
+    def normalize_relief(cls, values: list[str]) -> list[str]:
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            cleaned = " ".join(value.split())
+            key = cleaned.casefold()
+            if cleaned and key not in seen:
+                seen.add(key)
+                result.append(cleaned)
+        return result
 
 
 # ── Response models ───────────────────────────────────────────────────────────
@@ -63,6 +98,40 @@ class LegalSearchResponse(BaseModel):
     index_version: str = Field("")
 
 
+class DynamicPrecedentIngestionRun(BaseModel):
+    query: str
+    budget: int = Field(ge=1, le=50)
+    status: str
+    discovered: int = 0
+    fetched: int = 0
+    ingested: int = 0
+    duplicate: int = 0
+    new_version: int = 0
+    conflict: int = 0
+    failed: int = 0
+    safe_error_code: str = ""
+
+
+DynamicPoolStatus = Literal[
+    "completed",
+    "completed_with_errors",
+    "degraded_existing_corpus",
+]
+
+
+class DynamicPrecedentPoolResponse(BaseModel):
+    profile: CaseSearchProfileResponse
+    provider_code: str = "yargitay"
+    provider_status: DynamicPoolStatus
+    candidate_cap: int = Field(ge=10, le=50)
+    ingestion_runs: list[DynamicPrecedentIngestionRun] = Field(default_factory=list)
+    total_discovered: int = 0
+    total_ingested: int = 0
+    total_duplicate: int = 0
+    total_failed: int = 0
+    shortlist: LegalSearchResponse
+
+
 # ── Similar search ────────────────────────────────────────────────────────────
 
 class SimilarSearchRequest(BaseModel):
@@ -87,13 +156,13 @@ class OpposingSearchResponse(BaseModel):
     opposition_basis: str = Field("")
 
 
-# ── Suggestions ────────────────────────────────────────────────────────────────
+# ── Suggestions ───────────────────────────────────────────────────────────────
 
 class SearchSuggestionResponse(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
 
 
-# ── Feedback ───────────────────────────────────────────────────────────────────
+# ── Feedback ──────────────────────────────────────────────────────────────────
 
 FeedbackType = Literal[
     "relevant", "irrelevant", "valuable_opposing",
