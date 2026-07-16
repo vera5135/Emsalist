@@ -3538,6 +3538,11 @@
       },
       "ExtractionResponse": {
         "properties": {
+          "analysis_run_id": {
+            "default": "",
+            "title": "Analysis Run Id",
+            "type": "string"
+          },
           "case_id": {
             "title": "Case Id",
             "type": "string"
@@ -3587,6 +3592,21 @@
               }
             ],
             "title": "Page Number"
+          },
+          "provider_model": {
+            "default": "",
+            "title": "Provider Model",
+            "type": "string"
+          },
+          "provider_name": {
+            "default": "",
+            "title": "Provider Name",
+            "type": "string"
+          },
+          "source_quote": {
+            "default": "",
+            "title": "Source Quote",
+            "type": "string"
           },
           "text_span": {
             "title": "Text Span",
