@@ -37,6 +37,10 @@ from app.db.models import (  # noqa: E402
 )
 from app.db.session import get_sessionmaker  # noqa: E402
 from app.main import app  # noqa: E402
+from app.routes import document_pipeline_routes as pipeline_routes  # noqa: E402
+from app.services.document_intelligence_provider import (  # noqa: E402
+    UnavailableDocumentIntelligenceProvider,
+)
 
 OTHER_TENANT = "tenant-doc-other"
 OTHER_USER = "user-doc-other"
@@ -112,6 +116,19 @@ async def client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest.fixture(autouse=True)
+def no_document_intelligence_provider(monkeypatch: pytest.MonkeyPatch):
+    """Pin the P2.5 no-provider semantics these tests were written against.
+
+    Guarantees no live Gemini call can ever happen from this suite, even when
+    a developer's local ``backend/.env`` configures a real provider/key.
+    """
+    monkeypatch.setattr(
+        pipeline_routes, "_document_intelligence_provider",
+        lambda: UnavailableDocumentIntelligenceProvider(),
+    )
 
 
 async def _make_case(client: AsyncClient, title: str = "Doc Case") -> str:

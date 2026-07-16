@@ -47,8 +47,12 @@ class ExtractionResponse(BaseModel):
     value: str
     page_number: int | None = None
     text_span: str
+    source_quote: str = ""
     confidence: float
     verification_status: str
+    provider_name: str = ""
+    provider_model: str = ""
+    analysis_run_id: str = ""
     memory_fact_id: str | None = None
     version: int
     created_at: str

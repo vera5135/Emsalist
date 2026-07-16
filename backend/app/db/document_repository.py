@@ -263,6 +263,10 @@ class DocumentExtractionRepository:
         source_quote_hash: str,
         confidence: float,
         created_by: str,
+        source_quote: str = "",
+        provider_name: str = "deterministic",
+        provider_model: str = "",
+        analysis_run_id: str = "",
     ) -> DocumentExtraction:
         extraction = DocumentExtraction(
             tenant_id=tenant_id,
@@ -274,9 +278,13 @@ class DocumentExtractionRepository:
             normalized_value=normalized_value,
             page_number=page_number,
             text_span=text_span,
+            source_quote=source_quote,
             source_quote_hash=source_quote_hash,
             confidence=confidence,
             verification_status="detected",
+            provider_name=provider_name,
+            provider_model=provider_model,
+            analysis_run_id=analysis_run_id,
             created_by=created_by,
         )
         session.add(extraction)

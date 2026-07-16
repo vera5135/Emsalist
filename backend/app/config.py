@@ -37,7 +37,13 @@ class Settings(BaseModel):
     gemini_enabled: bool = False
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
-    gemini_timeout_seconds: int = 30
+    gemini_timeout_seconds: int = 120
+    # ── P2.8 Document Intelligence (Gemini OCR / findings) ──────
+    document_intelligence_provider: str = ""  # "" | gemini | deterministic
+    gemini_document_ai_enabled: bool = False
+    gemini_max_retries: int = 2
+    gemini_max_pages_per_run: int = 20
+    gemini_max_file_bytes: int = 0  # 0 -> fall back to max_upload_size_bytes
     ai_reasoning_provider: str = ""
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
@@ -245,7 +251,12 @@ def get_settings() -> Settings:
         gemini_enabled=gemini_enabled,
         gemini_api_key=gemini_api_key,
         gemini_model=getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-        gemini_timeout_seconds=int(getenv("GEMINI_TIMEOUT_SECONDS", "30")),
+        gemini_timeout_seconds=int(getenv("GEMINI_TIMEOUT_SECONDS", "120")),
+        document_intelligence_provider=getenv("DOCUMENT_INTELLIGENCE_PROVIDER", "").strip().lower(),
+        gemini_document_ai_enabled=getenv("GEMINI_DOCUMENT_AI_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
+        gemini_max_retries=int(getenv("GEMINI_MAX_RETRIES", "2")),
+        gemini_max_pages_per_run=int(getenv("GEMINI_MAX_PAGES_PER_RUN", "20")),
+        gemini_max_file_bytes=int(getenv("GEMINI_MAX_FILE_BYTES", "0") or "0"),
         ai_reasoning_provider=getenv("AI_REASONING_PROVIDER", "").strip().lower(),
         deepseek_api_key=getenv("DEEPSEEK_API_KEY", "").strip(),
         deepseek_base_url=getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/"),
