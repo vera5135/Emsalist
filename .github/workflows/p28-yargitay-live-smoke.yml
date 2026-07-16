@@ -1,0 +1,153 @@
+name: P2.8 Yargitay Live Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  live-smoke:
+    name: Bounded Yargitay live corpus smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: emsalist
+          POSTGRES_PASSWORD: smoke_secret_pwd
+          POSTGRES_DB: emsalist_p28sy1_yargitay_corpus_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://emsalist:smoke_secret_pwd@localhost:5432/emsalist_p28sy1_yargitay_corpus_smoke
+      OFFICIAL_PROVIDER_LIVE_SMOKE: "1"
+      OFFICIAL_PROVIDER_YARGITAY_ENABLED: "1"
+      PYTHONPATH: ${{ github.workspace }}/backend
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Verify PostgreSQL health
+        run: |
+          for i in $(seq 1 20); do
+            pg_isready -h localhost -p 5432 -U emsalist && break
+            echo "waiting for postgres..."
+            sleep 3
+          done
+          pg_isready -h localhost -p 5432 -U emsalist
+
+      - name: Alembic upgrade head
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      - name: Run bounded Yargitay live smoke
+        id: smoke
+        working-directory: backend
+        run: |
+          set -e
+          python -m scripts.p28sy1_yargitay_corpus_smoke --confirm-live-smoke 2>&1 | tee /tmp/smoke-output.log
+          echo "SMOKE_EXIT=$?" >> $GITHUB_ENV
+
+      - name: Prove ingested records
+        working-directory: backend
+        run: |
+          python -c "
+          import asyncio, json, sys
+          from app.db.session import get_sessionmaker
+          from app.db.models import SourceRecord, SourceVersion, SourceParagraph, SourceVerification
+          from sqlalchemy import select
+
+          async def prove():
+              maker = get_sessionmaker()
+              async with maker() as db:
+                  records = (await db.execute(
+                      select(SourceRecord).where(SourceRecord.source_type == 'supreme_court_decision')
+                  )).scalars().all()
+
+                  proof = {
+                      'source_records': len(records),
+                      'decisions': []
+                  }
+                  for rec in records:
+                      ver = (await db.execute(
+                          select(SourceVersion).where(SourceVersion.id == rec.current_version_id)
+                      )).scalar_one()
+                      paras = (await db.execute(
+                          select(SourceParagraph).where(SourceParagraph.source_version_id == ver.id)
+                      )).scalars().all()
+                      verifications = (await db.execute(
+                          select(SourceVerification).where(
+                              SourceVerification.source_record_id == rec.id,
+                              SourceVerification.source_version_id == ver.id,
+                          )
+                      )).scalars().all()
+
+                      verif_methods = [v.verification_method for v in verifications]
+                      official_verified = any(
+                          v.verification_method == 'official_fetch_match'
+                          and v.result == 'verified_official'
+                          for v in verifications
+                      )
+
+                      proof['decisions'].append({
+                          'source_record_id': rec.id,
+                          'source_version_id': ver.id,
+                          'title': rec.title,
+                          'court': rec.court,
+                          'chamber': rec.chamber,
+                          'case_number': rec.case_number,
+                          'decision_number': rec.decision_number,
+                          'decision_date': rec.decision_date,
+                          'canonical_key': rec.canonical_key,
+                          'paragraph_count': len(paras),
+                          'verification_status': rec.verification_status,
+                          'content_hash': ver.content_hash,
+                          'retrieval_method': ver.retrieval_method,
+                          'official_verified': official_verified,
+                          'verification_methods': verif_methods,
+                          'has_paragraph_text': all((p.text or '').strip() and p.text_hash for p in paras),
+                          'paragraph_text_lengths': [len(p.text or '') for p in paras],
+                      })
+
+                  proof['total_decisions'] = len(records)
+                  proof['has_current_version'] = all(r.current_version_id for r in records)
+                  proof['all_court_yargitay'] = all(r.court == 'Yargıtay' for r in records)
+
+                  print(json.dumps(proof, ensure_ascii=False, indent=2))
+
+          asyncio.run(prove())
+          " > /tmp/ingestion-proof.json
+
+      - name: Upload sanitized smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-8-yargitay-live-smoke-evidence
+          path: |
+            /tmp/smoke-output.log
+            /tmp/ingestion-proof.json
+          retention-days: 30
+
+      - name: Smoke summary
+        run: |
+          echo "=== P2.8 YARGITAY LIVE SMOKE COMPLETE ==="
+          echo "Head: ${{ github.sha }}"
+          echo "Run ID: ${{ github.run_id }}"
+          echo "---"
+          grep "total_ingested=" /tmp/smoke-output.log || echo "total_ingested not found in output"
+          grep "live_requests=" /tmp/smoke-output.log || echo "live_requests not found in output"
