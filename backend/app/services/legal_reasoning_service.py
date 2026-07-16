@@ -108,7 +108,7 @@ class DeterministicLegalReasoningProvider:
 class LegalReasoningService:
     def __init__(self, provider: LegalReasoningProvider | None = None,
                  source_acquirer: LegalSourceAcquirer | None = None):
-        self.provider = provider or UnavailableLegalReasoningProvider()
+        self.provider = provider or create_configured_legal_reasoning_provider()
         self.source_acquirer = source_acquirer or P27LegalSourceAcquirer()
 
     async def current_state(self, db: AsyncSession, tenant_id: str, case_id: str):
@@ -282,6 +282,14 @@ class LegalReasoningService:
                 "effective_trust": await __import__(
                     "app.services.source_ingestion_service", fromlist=["resolve_version_verification_status"]
                 ).resolve_version_verification_status(db, record.id, version.id, record.verification_status),
+                "court": record.court,
+                "chamber": record.chamber,
+                "case_number": record.case_number,
+                "decision_number": record.decision_number,
+                "decision_date": record.decision_date,
+                "article_number": paragraph.article_number,
+                "paragraph_index": paragraph.paragraph_index,
+                "text_hash": paragraph.text_hash,
                 "text": paragraph.text,
             })
         return {
@@ -334,6 +342,23 @@ class LegalReasoningService:
                 raise ValueError("invalid_reasoning_issue")
             if item.get("parent_code") and item["parent_code"] not in codes:
                 raise ValueError("invalid_reasoning_parent")
+
+
+def create_configured_legal_reasoning_provider() -> LegalReasoningProvider:
+    from app.config import get_settings
+
+    settings = get_settings()
+    if settings.ai_reasoning_provider == "deepseek":
+        from app.services.deepseek_reasoning_provider import DeepSeekReasoningProvider
+        return DeepSeekReasoningProvider(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            model=settings.deepseek_model,
+            reasoning_effort=settings.deepseek_reasoning_effort,
+            timeout_seconds=settings.deepseek_timeout_seconds,
+            max_retries=settings.deepseek_max_retries,
+        )
+    return UnavailableLegalReasoningProvider()
 
 
 legal_reasoning_service = LegalReasoningService()
