@@ -46,6 +46,10 @@ class Settings(BaseModel):
     deepseek_timeout_seconds: int = 60
     deepseek_max_retries: int = 2
     deepseek_max_tokens: int = 8192
+    deepseek_precedent_batch_size: int = 2
+    deepseek_batch_concurrency: int = 2
+    deepseek_max_paragraphs_per_source: int = 3
+    deepseek_max_source_chars: int = 6000
     # ── P2.7 Hybrid Search ───────────────────────────────────────
     search_semantic_enabled: bool = False
     search_embedding_model: str = "gemini-embedding-001"
@@ -250,6 +254,10 @@ def get_settings() -> Settings:
         deepseek_timeout_seconds=int(getenv("DEEPSEEK_TIMEOUT_SECONDS", "60")),
         deepseek_max_retries=int(getenv("DEEPSEEK_MAX_RETRIES", "2")),
         deepseek_max_tokens=int(getenv("DEEPSEEK_MAX_TOKENS", "8192")),
+        deepseek_precedent_batch_size=int(getenv("DEEPSEEK_PRECEDENT_BATCH_SIZE", "2")),
+        deepseek_batch_concurrency=int(getenv("DEEPSEEK_BATCH_CONCURRENCY", "2")),
+        deepseek_max_paragraphs_per_source=int(getenv("DEEPSEEK_MAX_PARAGRAPHS_PER_SOURCE", "3")),
+        deepseek_max_source_chars=int(getenv("DEEPSEEK_MAX_SOURCE_CHARS", "6000")),
         search_semantic_enabled=getenv("EMSALIST_SEARCH_SEMANTIC_ENABLED", "false").lower() in {"1", "true", "yes"},
         search_embedding_model=getenv("EMSALIST_SEARCH_EMBEDDING_MODEL", "gemini-embedding-001"),
         search_embedding_version=getenv("EMSALIST_SEARCH_EMBEDDING_VERSION", "p2.7-embedding-1"),
