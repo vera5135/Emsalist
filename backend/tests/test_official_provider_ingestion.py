@@ -59,8 +59,12 @@ class StubResp:
 
 
 def make_transport(mapping: dict[str, StubResp]):
-    """Substring-keyed transport: first key found in the URL wins."""
-    def _t(url: str):
+    """Substring-keyed transport: first key found in the URL wins.
+
+    Accepts the optional controlled ``request`` descriptor so provider POST
+    discovery (Yargıtay ``/aramalist``) can flow through the same stub.
+    """
+    def _t(url: str, request=None):
         for key, resp in mapping.items():
             if key in url:
                 return resp
@@ -120,10 +124,28 @@ YARGITAY_DETAIL = _html(
     f"Davacı satış bedelinin iadesini talep etmiştir. {BODY_SENTINEL} "
     "Mahkemece davanın kabulüne karar verilmiştir ve hüküm onanmıştır."
 )
-YARGITAY_SEARCH = _search_html(
-    '<a class="karar-link" data-karar-id="Y-1">Karar 1 ozeti uzun metin</a>'
-    '<a class="karar-link" data-karar-id="Y-2">Karar 2 ozeti uzun metin</a>'
-)
+
+
+def _yargitay_search_json(records: list[dict], *, total: int | None = None) -> bytes:
+    """Live-shape Yargıtay /aramalist JSON discovery payload."""
+    import json as _json
+
+    return _json.dumps({
+        "data": {
+            "data": records,
+            "recordsTotal": len(records) if total is None else total,
+            "recordsFiltered": len(records) if total is None else total,
+        },
+        "metadata": {"FMTY": "SUCCESS"},
+    }, ensure_ascii=False).encode("utf-8")
+
+
+YARGITAY_SEARCH = _yargitay_search_json([
+    {"id": "Y-1", "daire": "13. Hukuk Dairesi", "esasNo": "2020/123",
+     "kararNo": "2021/456", "kararTarihi": "12.06.2021", "siraNo": 1, "index": 1},
+    {"id": "Y-2", "daire": "13. Hukuk Dairesi", "esasNo": "2020/124",
+     "kararNo": "2021/457", "kararTarihi": "12.06.2021", "siraNo": 2, "index": 2},
+])
 DANISTAY_DETAIL = _html(
     "Danıştay İdari Dava Daireleri Kurulu\n"
     "Esas No: 2019/50 Karar No: 2020/75\n"
@@ -181,7 +203,8 @@ def _prov_transport(detail: bytes, search: bytes | None = None):
                "/BB": StubResp(content=detail),
                "eskiler": StubResp(content=detail)}
     if search is not None:
-        mapping = {"aramalist": StubResp(content=search),
+        search_ct = "application/json" if search.lstrip().startswith(b"{") else "text/html"
+        mapping = {"aramalist": StubResp(content=search, content_type=search_ct),
                    "/Ara": StubResp(content=search),
                    "fihrist": StubResp(content=search), **mapping}
     return make_transport(mapping)
@@ -220,7 +243,7 @@ async def _run(**kw):
 
     if (
         "browser_backend" not in kw
-        and kw.get("provider_code") in {"yargitay", "danistay", "aym", "uyusmazlik"}
+        and kw.get("provider_code") in {"danistay", "aym", "uyusmazlik"}
         and kw.get("run_type") != "exact_source"
     ):
         kw["browser_backend"] = FixtureBrowserBackend()
@@ -657,18 +680,20 @@ async def test_run_cancel_queued():
 @pytest.mark.asyncio
 async def test_run_completed_with_errors(enabled_all):
     # One good candidate + one UI-only candidate → completed_with_errors.
-    search = _search_html(
-        '<a class="karar-link" data-karar-id="OK">iyi karar ozet metni</a>'
-        '<a class="karar-link" data-karar-id="BAD">bos</a>')
-    def _t(url):
+    search = _yargitay_search_json([
+        {"id": "OK", "daire": "13. Hukuk Dairesi", "esasNo": "2020/123",
+         "kararNo": "2021/456", "kararTarihi": "12.06.2021"},
+        {"id": "BAD", "daire": "13. Hukuk Dairesi", "esasNo": "2020/999",
+         "kararNo": "2021/999", "kararTarihi": "12.06.2021"},
+    ])
+    def _t(url, request=None):
         if "aramalist" in url:
-            return StubResp(content=search)
+            return StubResp(content=search, content_type="application/json")
         if "id=OK" in url:
             return StubResp(content=YARGITAY_DETAIL)
         return StubResp(content=UI_ONLY_DETAIL)
     summary = await _run(provider_code="yargitay", run_type="fetch_and_ingest",
-                         transport=_t, max_items=2,
-                         browser_candidate_ids=("OK", "BAD"))
+                         transport=_t, max_items=2)
     assert summary.ingested == 1
     assert summary.failed == 1
     assert summary.status == "completed_with_errors"
@@ -935,7 +960,7 @@ async def test_injected_resolver_used_for_discovery_and_fetch_no_external_dns(en
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider_code,search_key,link", [
-    ("yargitay", "aramalist", '<a class="karar-link" data-karar-id="Y-1">Y</a>'),
+    ("yargitay", "aramalist", None),
     ("danistay", "aramalist", '<a class="karar-link" data-karar-id="D-1">D</a>'),
     ("aym", "/Ara", '<a class="karar-link" data-karar-id="A-1">A</a>'),
     ("uyusmazlik", "aramalist", '<a class="karar-link" data-karar-id="U-1">U</a>'),
@@ -945,12 +970,22 @@ async def test_injected_resolver_used_for_discovery_and_fetch_no_external_dns(en
 async def test_discover_only_all_providers_use_injected_resolver(
     enabled_all, provider_code, search_key, link,
 ):
+    if provider_code == "yargitay":
+        search_resp = StubResp(
+            content=_yargitay_search_json([
+                {"id": "Y-1", "daire": "13. Hukuk Dairesi", "esasNo": "2020/123",
+                 "kararNo": "2021/456", "kararTarihi": "12.06.2021"},
+            ]),
+            content_type="application/json",
+        )
+    else:
+        search_resp = StubResp(content=_search_html(link))
     with patch("app.services.source_fetcher.default_resolver",
                side_effect=AssertionError("external DNS")) as dns:
         summary = await _run(
             provider_code=provider_code,
             run_type="discover_only",
-            transport=make_transport({search_key: StubResp(content=_search_html(link))}),
+            transport=make_transport({search_key: search_resp}),
             max_items=1,
         )
     assert summary.discovered == 1

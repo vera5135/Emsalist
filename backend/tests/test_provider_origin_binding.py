@@ -27,7 +27,6 @@ from app.services.provider_ingestion_service import (
     _fetch_parse_ingest,
     run_ingestion,
 )
-from app.services.browser_provider_discovery import BrowserDiscoveryResult
 from app.services.source_fetcher import (
     FetchResult,
     SourceFetchError,
@@ -194,10 +193,6 @@ async def test_yargitay_foreign_candidate_target_never_fetches_or_creates_trust(
 
     provider.build_exact_candidate = foreign_candidate
 
-    class IdentifierOnlyBackend:
-        async def discover(self, strategy, **_kwargs):
-            return BrowserDiscoveryResult(strategy.surface_code, ("Y-foreign",))
-
     def respond(url: str):
         return StubResp(content=FOREIGN_BYTES)
 
@@ -211,11 +206,10 @@ async def test_yargitay_foreign_candidate_target_never_fetches_or_creates_trust(
             summary = await run_ingestion(
                 db,
                 provider_code="yargitay",
-                run_type="fetch_and_ingest",
-                query="fixture",
+                run_type="exact_source",
+                external_id="Y-foreign",
                 max_items=1,
                 transport=transport,
-                browser_backend=IdentifierOnlyBackend(),
                 resolver=public_resolver,
                 sleeper=no_sleep,
             )
