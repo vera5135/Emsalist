@@ -36,7 +36,7 @@ from app.db.document_repository import (
     STATUS_QUEUED,
     STATUS_UNSUPPORTED,
 )
-from app.db.models import Case, Document
+from app.db.models import Case, Document, new_uuid
 from app.db.session import get_session
 from app.models.document_pipeline_models import (
     DocumentAnalysisResponse,
@@ -49,6 +49,11 @@ from app.models.document_pipeline_models import (
 from app.services import document_parsing as parsing
 from app.services import document_storage as storage
 from app.services.document_extractor import extract_from_pages
+from app.services.document_intelligence_provider import (
+    DocumentAnalysisInput,
+    DocumentIntelligenceError,
+    create_configured_document_intelligence_provider,
+)
 from app.services.auth_service import SecurityContext, resolve_current_user
 
 logger = logging.getLogger(__name__)
@@ -101,22 +106,171 @@ def _extraction_resp(e) -> ExtractionResponse:
     return ExtractionResponse(
         id=e.id, document_id=e.document_id, case_id=e.case_id,
         extraction_type=e.extraction_type, field_key=e.field_key, value=e.value,
-        page_number=e.page_number, text_span=e.text_span, confidence=e.confidence,
-        verification_status=e.verification_status, memory_fact_id=e.memory_fact_id,
+        page_number=e.page_number, text_span=e.text_span,
+        source_quote=e.source_quote, confidence=e.confidence,
+        verification_status=e.verification_status,
+        provider_name=e.provider_name, provider_model=e.provider_model,
+        analysis_run_id=e.analysis_run_id, memory_fact_id=e.memory_fact_id,
         version=e.version, created_at=_iso(e.created_at) or "",
     )
+
+
+# Native text below this length is treated as an insufficient extraction and
+# becomes eligible for AI document intelligence (when a provider is enabled).
+_MIN_NATIVE_TEXT_CHARS = 20
+
+# Provider outcomes that mean "AI analysis is simply not available for this
+# document"; the pipeline then keeps today's honest non-AI behavior.
+_AI_UNAVAILABLE_CODES = {
+    "document_intelligence_unavailable",
+    "gemini_disabled",
+    "gemini_api_key_missing",
+    "gemini_unsupported_document",
+}
+
+_DETERMINISTIC_EXTRACTOR_VERSION = "p2.5-regex-1"
+
+
+def _document_intelligence_provider():
+    """Route-local factory; tests may monkeypatch this to inject a fake provider."""
+    return create_configured_document_intelligence_provider()
+
+
+async def _persist_deterministic_extractions(
+    db: AsyncSession, ctx: SecurityContext, doc: Document,
+    pages: list[parsing.ParsedPage], analysis_run_id: str,
+) -> None:
+    for cand in extract_from_pages(pages):
+        if await DocumentExtractionRepository.exists(
+            db, doc.id, cand.field_key, cand.normalized_value
+        ):
+            continue
+        await DocumentExtractionRepository.create(
+            db, tenant_id=ctx.tenant_id, case_id=doc.case_id, document_id=doc.id,
+            extraction_type=cand.extraction_type, field_key=cand.field_key,
+            value=cand.value, normalized_value=cand.normalized_value,
+            page_number=cand.page_number, text_span=cand.text_span,
+            source_quote=cand.source_quote,
+            source_quote_hash=parsing.text_hash(cand.source_quote),
+            confidence=cand.confidence, created_by=ctx.actor_id,
+            provider_name="deterministic",
+            provider_model=_DETERMINISTIC_EXTRACTOR_VERSION,
+            analysis_run_id=analysis_run_id,
+        )
+
+
+async def _finish_analyzed(
+    db: AsyncSession, doc: Document, page_count: int
+) -> None:
+    extractions = await DocumentExtractionRepository.list_for_document(
+        db, doc.tenant_id, doc.id
+    )
+    await DocumentRepository.set_analysis(
+        db, doc, analysis_status="analyzed",
+        page_count=page_count, extracted_text_available=page_count > 0,
+    )
+    target = STATUS_AWAITING if extractions else STATUS_ANALYZED
+    await DocumentRepository.transition(db, doc, target)
+
+
+async def _run_document_intelligence(
+    db: AsyncSession, ctx: SecurityContext, doc: Document,
+    content: bytes, analysis_run_id: str,
+) -> bool:
+    """Run the configured AI provider; returns False when AI is unavailable.
+
+    Hard provider failures (timeout, invalid schema, provenance mismatch, ...)
+    fail the document closed with a sanitized failure code. Raw document bytes,
+    OCR text and provider responses are never logged.
+    """
+    provider = _document_intelligence_provider()
+    request = DocumentAnalysisInput(
+        document_id=doc.id, extension=doc.extension,
+        mime_type=doc.mime_type or "application/octet-stream", content=content,
+    )
+    started_metrics = {"document_id": doc.id, "case_id": doc.case_id,
+                       "provider": provider.provider_name,
+                       "model": provider.model_version}
+    try:
+        result = await provider.analyze(request)
+    except DocumentIntelligenceError as exc:
+        if exc.code in _AI_UNAVAILABLE_CODES:
+            return False
+        logger.warning(
+            "document_intelligence_failed document_id=%s case_id=%s provider=%s "
+            "model=%s safe_error_code=%s",
+            doc.id, doc.case_id, provider.provider_name,
+            provider.model_version, exc.code,
+        )
+        await DocumentRepository.set_analysis(
+            db, doc, analysis_status="ai_failed",
+            page_count=0, extracted_text_available=False, failure_code=exc.code[:50],
+        )
+        await DocumentRepository.transition(db, doc, STATUS_FAILED)
+        return True
+
+    pages_payload = [
+        (page["page_number"],
+         "\n".join(block["text"] for block in page["text_blocks"]),
+         "ocr")
+        for page in result["pages"]
+    ]
+    pages_payload = [(number, text, status) for number, text, status in pages_payload if text]
+    if pages_payload:
+        await DocumentPageRepository.replace_pages(
+            db, tenant_id=ctx.tenant_id, document_id=doc.id, pages=pages_payload
+        )
+    for entry in result["extractions"]:
+        if await DocumentExtractionRepository.exists(
+            db, doc.id, entry["field_key"], entry["normalized_value"]
+        ):
+            continue
+        await DocumentExtractionRepository.create(
+            db, tenant_id=ctx.tenant_id, case_id=doc.case_id, document_id=doc.id,
+            extraction_type=entry["extraction_type"], field_key=entry["field_key"],
+            value=entry["value"], normalized_value=entry["normalized_value"],
+            page_number=entry["page_number"], text_span="",
+            source_quote=entry["source_quote"],
+            source_quote_hash=parsing.text_hash(entry["source_quote"]),
+            confidence=entry["confidence"], created_by=ctx.actor_id,
+            provider_name=provider.provider_name,
+            provider_model=provider.model_version,
+            analysis_run_id=analysis_run_id,
+        )
+    suggestion = result["document_type_suggestion"]
+    if suggestion and not (doc.document_type or "").strip():
+        await DocumentRepository.set_document_type(db, doc, suggestion, "ai_suggested")
+    await _finish_analyzed(db, doc, len(pages_payload))
+    logger.info(
+        "document_intelligence_completed document_id=%s case_id=%s provider=%s "
+        "model=%s page_count=%d status=%s",
+        started_metrics["document_id"], started_metrics["case_id"],
+        started_metrics["provider"], started_metrics["model"],
+        len(pages_payload), doc.status,
+    )
+    return True
 
 
 async def _run_pipeline(
     db: AsyncSession, ctx: SecurityContext, doc: Document, content: bytes
 ) -> None:
-    """Extract text → persist pages → deterministic suggestions → set status.
+    """Extract text → persist pages → suggestions → set status.
 
-    Partial page failure is tolerated. Images / unparseable UDF get a clear
-    non-analyzed status rather than a fabricated result.
+    Native extraction is always preferred. AI document intelligence only runs
+    for image/scanned/empty-text documents and only when a provider is enabled;
+    otherwise images / unparseable UDF keep a clear non-analyzed status rather
+    than a fabricated result.
     """
     await DocumentRepository.transition(db, doc, STATUS_PROCESSING)
     result = parsing.parse_document(doc.extension, content)
+    analysis_run_id = new_uuid()
+
+    native_ok = result.status in ("extracted", "partial")
+    text_sufficient = len(result.full_text.strip()) >= _MIN_NATIVE_TEXT_CHARS
+    if result.status == "ocr_required" or (native_ok and not text_sufficient):
+        handled = await _run_document_intelligence(db, ctx, doc, content, analysis_run_id)
+        if handled:
+            return
 
     pages_payload = [
         (p.page_number, p.text, "extracted") for p in result.pages if p.text
@@ -126,27 +280,14 @@ async def _run_pipeline(
             db, tenant_id=ctx.tenant_id, document_id=doc.id, pages=pages_payload
         )
 
-    if result.status in ("extracted", "partial"):
-        candidates = extract_from_pages(result.pages)
-        for cand in candidates:
-            if await DocumentExtractionRepository.exists(
-                db, doc.id, cand.field_key, cand.normalized_value
-            ):
-                continue
-            await DocumentExtractionRepository.create(
-                db, tenant_id=ctx.tenant_id, case_id=doc.case_id, document_id=doc.id,
-                extraction_type=cand.extraction_type, field_key=cand.field_key,
-                value=cand.value, normalized_value=cand.normalized_value,
-                page_number=cand.page_number, text_span=cand.text_span,
-                source_quote_hash=parsing.text_hash(cand.source_quote),
-                confidence=cand.confidence, created_by=ctx.actor_id,
-            )
-        extractions = await DocumentExtractionRepository.list_for_document(
-            db, ctx.tenant_id, doc.id
-        )
+    if native_ok:
+        await _persist_deterministic_extractions(db, ctx, doc, result.pages, analysis_run_id)
         await DocumentRepository.set_analysis(
             db, doc, analysis_status="analyzed",
             page_count=len(pages_payload), extracted_text_available=True,
+        )
+        extractions = await DocumentExtractionRepository.list_for_document(
+            db, ctx.tenant_id, doc.id
         )
         target = STATUS_AWAITING if extractions else STATUS_ANALYZED
         await DocumentRepository.transition(db, doc, target)

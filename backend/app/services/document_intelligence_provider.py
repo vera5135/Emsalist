@@ -448,4 +448,3 @@ def create_configured_document_intelligence_provider() -> DocumentIntelligencePr
     if settings.document_intelligence_provider == "deterministic":
         return DeterministicDocumentIntelligenceProvider()
     return UnavailableDocumentIntelligenceProvider()
-
