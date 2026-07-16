@@ -4,6 +4,9 @@ import '../domain/legal_reasoning_workspace.dart';
 class LegalReasoningRepository {
   const LegalReasoningRepository(this._client);
 
+  static const Duration _dynamicPoolReceiveTimeout = Duration(minutes: 10);
+  static const Duration _analyzePoolReceiveTimeout = Duration(minutes: 2);
+
   final ApiClient _client;
 
   Future<LegalReasoningWorkspace> load(String caseId) async {
@@ -96,6 +99,7 @@ class LegalReasoningRepository {
             'max_candidates': 30,
             'shortlist_size': 8,
           },
+          receiveTimeout: _dynamicPoolReceiveTimeout,
         );
     final String? poolId =
         response['pool_id'] as String? ?? (response['id'] as String?);
@@ -103,6 +107,7 @@ class LegalReasoningRepository {
       await _client.postJson<Map<String, dynamic>>(
         '/api/v1/precedent-pools/$poolId/analyze',
         body: const <String, dynamic>{'force': false},
+        receiveTimeout: _analyzePoolReceiveTimeout,
       );
     }
   }

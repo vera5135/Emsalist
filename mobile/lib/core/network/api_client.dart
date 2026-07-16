@@ -21,6 +21,7 @@ abstract class ApiClient {
     Object? body,
     Map<String, dynamic>? queryParameters,
     Object? cancelToken,
+    Duration? receiveTimeout,
   });
 
   /// Performs a PATCH request with an optional JSON body.
