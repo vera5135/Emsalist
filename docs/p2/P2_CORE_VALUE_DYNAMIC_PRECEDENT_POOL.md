@@ -19,6 +19,7 @@ Implemented in this branch:
 - no raw narrative persistence
 - no hidden chain-of-thought
 - no migration
+- runtime OpenAPI snapshot synchronized with the new authenticated endpoint
 
 ## Next slice
 
