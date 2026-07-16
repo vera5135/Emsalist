@@ -210,6 +210,10 @@ async def test_case_and_precedent_calls_are_split_and_compact():
 
     assert result["issues"][0]["issue_code"] == "defective_vehicle"
     assert result["counterarguments"]
+    from app.db.models import COUNTERARGUMENT_CATEGORIES
+    assert all(item["category"] in COUNTERARGUMENT_CATEGORIES
+               for item in result["counterarguments"])
+    assert result["counterarguments"][0]["category"] == "opposing_precedent"
     summary = result["safe_summary"]
     assert summary["paragraph_references"] == [{
         "source_record_id": "sr-1", "source_version_id": "sv-1", "source_paragraph_id": "sp-1",

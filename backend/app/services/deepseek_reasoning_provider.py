@@ -17,7 +17,7 @@ from typing import Any
 
 import httpx
 
-from app.services.legal_reasoning_service import ReasoningProviderUnavailable
+from app.services.legal_reasoning_errors import ReasoningProviderUnavailable
 
 
 class DeepSeekReasoningError(ReasoningProviderUnavailable):
@@ -685,7 +685,7 @@ def normalize_deepseek_reasoning(
         if text:
             counterarguments.append({
                 "issue_code": issues[0]["issue_code"],
-                "category": "adverse_precedent_use",
+                "category": "opposing_precedent",
                 "title": f"Aleyhe kullanım {idx + 1}",
                 "rationale": text,
                 "basis": "DeepSeek structured output; exact paragraph provenance is in safe_summary.paragraph_references.",

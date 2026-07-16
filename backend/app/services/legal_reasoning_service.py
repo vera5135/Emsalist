@@ -23,16 +23,15 @@ from app.services.legal_reasoning_reproducibility import (
 from app.models.search_models import LegalSearchRequest
 from app.services.auth_service import SecurityContext
 from app.services.hybrid_search_service import execute_legal_search
+from app.services.legal_reasoning_errors import ReasoningProviderUnavailable
+
+__all__ = ["LegalReasoningProvider", "ReasoningProviderUnavailable"]
 
 
 class LegalReasoningProvider(Protocol):
     provider_name: str
     model_version: str
     async def analyze(self, payload: dict[str, Any]) -> dict[str, Any]: ...
-
-
-class ReasoningProviderUnavailable(RuntimeError):
-    pass
 
 
 class UnavailableLegalReasoningProvider:

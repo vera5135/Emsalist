@@ -210,9 +210,15 @@ def _evaluate_run(run_index: int, status_code: int, body: dict,
     checks["no_reasoning_content"] = "reasoning_content" not in serialized
     checks["no_raw_source_text"] = all(probe not in serialized for probe in raw_probes)
 
+    error_code = ""
+    if status_code != 200:
+        detail = body.get("detail", "") if isinstance(body, dict) else ""
+        error_code = detail if isinstance(detail, str) else "unparseable_error_detail"
+
     return {
         "run": run_index,
         "http_status": status_code,
+        "error_code": error_code,
         "response_model": body.get("model_version", ""),
         "provider": body.get("provider", ""),
         "request_count": int(metrics.get("request_count", 0)),
@@ -281,18 +287,23 @@ def main() -> None:
     server_env = dict(os.environ)
     server_env["SMOKE_POOL_ID"] = args.pool_id
     server_env["SMOKE_PORT"] = str(args.port)
+    server_log_path = BACKEND_DIR / "deepseek-batched-smoke-server.log"
+    server_log = server_log_path.open("ab")
     server = subprocess.Popen(
         [sys.executable, str(BACKEND_DIR / "scripts" / "deepseek_batched_smoke_server.py")],
         cwd=BACKEND_DIR, env=server_env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=server_log, stderr=subprocess.STDOUT,
     )
     from app.config import get_settings
     expected_model = get_settings().deepseek_model
 
     runs: list[dict] = []
     try:
+        print(json.dumps({"stage": "waiting_for_backend_health", "base_url": base_url}), flush=True)
         _wait_for_health(base_url)
+        print(json.dumps({"stage": "backend_ready", "runs_planned": args.runs}), flush=True)
         for run_index in range(1, args.runs + 1):
+            print(json.dumps({"stage": "run_started", "run": run_index}), flush=True)
             started = time.time()
             response = httpx.post(
                 f"{base_url}/api/v1/cases/{args.case_id}/legal-issues/rebuild",
@@ -313,6 +324,7 @@ def main() -> None:
                 "run": run_index,
                 "passed": result["passed"],
                 "http_status": result["http_status"],
+                "error_code": result["error_code"],
                 "request_count": result["request_count"],
                 "finish_reasons": result["finish_reasons"],
                 "covered_source_count": result["covered_source_count"],
@@ -324,6 +336,7 @@ def main() -> None:
             server.wait(timeout=30)
         except subprocess.TimeoutExpired:
             server.kill()
+        server_log.close()
         asyncio.run(_revoke_session(session_id))
 
     evidence = {
