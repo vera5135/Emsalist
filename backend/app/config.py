@@ -38,6 +38,18 @@ class Settings(BaseModel):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     gemini_timeout_seconds: int = 30
+    ai_reasoning_provider: str = ""
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-v4-pro"
+    deepseek_reasoning_effort: str = "high"
+    deepseek_timeout_seconds: int = 60
+    deepseek_max_retries: int = 2
+    deepseek_max_tokens: int = 8192
+    deepseek_precedent_batch_size: int = 2
+    deepseek_batch_concurrency: int = 2
+    deepseek_max_paragraphs_per_source: int = 3
+    deepseek_max_source_chars: int = 6000
     # ── P2.7 Hybrid Search ───────────────────────────────────────
     search_semantic_enabled: bool = False
     search_embedding_model: str = "gemini-embedding-001"
@@ -234,6 +246,18 @@ def get_settings() -> Settings:
         gemini_api_key=gemini_api_key,
         gemini_model=getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         gemini_timeout_seconds=int(getenv("GEMINI_TIMEOUT_SECONDS", "30")),
+        ai_reasoning_provider=getenv("AI_REASONING_PROVIDER", "").strip().lower(),
+        deepseek_api_key=getenv("DEEPSEEK_API_KEY", "").strip(),
+        deepseek_base_url=getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/"),
+        deepseek_model=getenv("DEEPSEEK_MODEL", "deepseek-v4-pro").strip(),
+        deepseek_reasoning_effort=getenv("DEEPSEEK_REASONING_EFFORT", "high").strip().lower(),
+        deepseek_timeout_seconds=int(getenv("DEEPSEEK_TIMEOUT_SECONDS", "60")),
+        deepseek_max_retries=int(getenv("DEEPSEEK_MAX_RETRIES", "2")),
+        deepseek_max_tokens=int(getenv("DEEPSEEK_MAX_TOKENS", "8192")),
+        deepseek_precedent_batch_size=int(getenv("DEEPSEEK_PRECEDENT_BATCH_SIZE", "2")),
+        deepseek_batch_concurrency=int(getenv("DEEPSEEK_BATCH_CONCURRENCY", "2")),
+        deepseek_max_paragraphs_per_source=int(getenv("DEEPSEEK_MAX_PARAGRAPHS_PER_SOURCE", "3")),
+        deepseek_max_source_chars=int(getenv("DEEPSEEK_MAX_SOURCE_CHARS", "6000")),
         search_semantic_enabled=getenv("EMSALIST_SEARCH_SEMANTIC_ENABLED", "false").lower() in {"1", "true", "yes"},
         search_embedding_model=getenv("EMSALIST_SEARCH_EMBEDDING_MODEL", "gemini-embedding-001"),
         search_embedding_version=getenv("EMSALIST_SEARCH_EMBEDDING_VERSION", "p2.7-embedding-1"),

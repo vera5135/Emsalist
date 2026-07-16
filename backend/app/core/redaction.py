@@ -9,6 +9,7 @@ _SENSITIVE_KEY_PATTERNS = frozenset({
     "refresh_token", "api_key", "apikey", "secret", "password", "passwd",
     "credential", "credentials", "private_key", "database_url", "db_url",
     "dsn", "connection_string", "gemini_api_key", "openai_api_key",
+    "deepseek_api_key",
     "jwt_secret", "backup_encryption_key", "x-api-key",
     "authorization_code", "id_token", "client_secret", "raw_nonce",
     "nonce", "link_ticket", "ticket_hash", "provider_subject_hash",

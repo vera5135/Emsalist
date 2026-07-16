@@ -229,6 +229,26 @@ class DatabaseUrlConfigTests(unittest.TestCase):
         self.assertIn("postgresql", settings.database_url)
 
 
+class DeepSeekConfigTests(unittest.TestCase):
+    """P2.8 — DeepSeek production defaults."""
+
+    def setUp(self):
+        import app.config
+        app.config.get_settings.cache_clear()
+
+    def tearDown(self):
+        import app.config
+        app.config.get_settings.cache_clear()
+
+    def test_deepseek_max_tokens_defaults_to_verified_uat_budget(self):
+        import app.config as app_config
+
+        with patch.dict(os.environ, {"EMSALIST_SKIP_PRODUCTION_VALIDATION": "1"}, clear=True):
+            with patch.object(app_config, "_load_env_file", lambda: None):
+                settings = app_config.get_settings()
+        self.assertEqual(settings.deepseek_max_tokens, 8192)
+
+
 class ProductionDatabaseValidationTests(unittest.TestCase):
     """P1.14 — Production database URL validation via make_url()."""
 
