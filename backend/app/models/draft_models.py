@@ -119,3 +119,53 @@ class DraftFinalizeResponse(BaseModel):
     issue_link_count: int
     source_link_count: int
     marked_source_usage_count: int
+
+
+class DraftReadinessResponse(BaseModel):
+    status: str
+    blocked_reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    metrics: dict[str, int] = Field(default_factory=dict)
+
+
+class SectionPlanEntry(BaseModel):
+    order: int
+    paragraph_type: str
+    required: bool
+    requires_source: bool
+    target_issue_ids: list[str] = Field(default_factory=list)
+
+
+class DraftPlanResponse(BaseModel):
+    draft_id: str
+    draft_type: str
+    draft_version: int
+    readiness_status: str
+    sections: list[SectionPlanEntry] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class DraftGenerateRequest(BaseModel):
+    version: int = Field(ge=1)
+    selected_legal_issue_ids: list[str] = Field(default_factory=list)
+    selected_source_usage_ids: list[str] = Field(default_factory=list)
+
+
+class DraftGenerateResponse(BaseModel):
+    draft_id: str
+    status: str
+    version: int
+    generation_run_id: str
+    provider: str
+    model_name: str
+    paragraph_count: int
+    issue_link_count: int
+    source_link_count: int
+    metrics: dict[str, int | str | list[str]] = Field(default_factory=dict)
+
+
+class DraftValidateResponse(BaseModel):
+    valid: bool
+    blocking_errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    metrics: dict[str, int] = Field(default_factory=dict)

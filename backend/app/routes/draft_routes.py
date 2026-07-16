@@ -55,11 +55,16 @@ from app.models.draft_models import (
     DraftParagraphSourceLinkRequest,
     DraftParagraphSourceLinkResponse,
     DraftParagraphUpdateRequest,
+    DraftPlanResponse,
+    DraftReadinessResponse,
     DraftResponse,
     DraftUpdateRequest,
+    SectionPlanEntry,
 )
 from app.services.auth_manager import require_case_read, require_case_write
 from app.services.auth_service import SecurityContext, get_auth_mode
+from app.services.draft_readiness import compute_draft_readiness
+from app.services.draft_section_plan import build_section_plan
 from app.services.source_ingestion_service import resolve_version_verification_status
 from app.services.source_paragraphs import text_hash as source_text_hash
 from app.services.source_verification import BLOCKED_FOR_USAGE, TRUSTED_STATUSES
@@ -758,4 +763,50 @@ async def finalize_draft(
         issue_link_count=len(issue_links),
         source_link_count=len(source_links),
         marked_source_usage_count=marked_usage_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# P2.9B — Deterministic readiness + section plan (no LLM, no persistence)
+# ---------------------------------------------------------------------------
+@router.post("/{draft_id}/readiness", response_model=DraftReadinessResponse,
+             operation_id="draft_readiness_check")
+async def draft_readiness_check(
+    case_id: str,
+    draft_id: str,
+    ctx: SecurityContext = Depends(require_case_read),
+    db: AsyncSession = Depends(get_session),
+) -> DraftReadinessResponse:
+    await _authorized_case(db, ctx, case_id, write=False)
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    result = await compute_draft_readiness(db, ctx.tenant_id, case_id, draft)
+    return DraftReadinessResponse(
+        status=result.status,
+        blocked_reasons=result.blocked_reasons,
+        warnings=result.warnings,
+        metrics=result.metrics,
+    )
+
+
+@router.post("/{draft_id}/plan", response_model=DraftPlanResponse,
+             operation_id="draft_section_plan")
+async def draft_section_plan(
+    case_id: str,
+    draft_id: str,
+    ctx: SecurityContext = Depends(require_case_read),
+    db: AsyncSession = Depends(get_session),
+) -> DraftPlanResponse:
+    await _authorized_case(db, ctx, case_id, write=False)
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    result = await compute_draft_readiness(db, ctx.tenant_id, case_id, draft)
+    if result.status == "blocked":
+        raise HTTPException(status_code=422, detail="readiness_blocked")
+    sections = build_section_plan(draft.draft_type, result.active_issue_ids)
+    return DraftPlanResponse(
+        draft_id=draft.id,
+        draft_type=draft.draft_type,
+        draft_version=draft.version,
+        readiness_status=result.status,
+        sections=[SectionPlanEntry(**section) for section in sections],
+        warnings=result.warnings,
     )
