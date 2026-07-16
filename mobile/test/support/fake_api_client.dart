@@ -19,6 +19,8 @@ class FakeApiClient implements ApiClient {
   final List<String> getPaths = <String>[];
   final List<String> postPaths = <String>[];
   final List<Object?> postBodies = <Object?>[];
+  final List<String> patchPaths = <String>[];
+  final List<Object?> patchBodies = <Object?>[];
 
   void whenGet(String path, Map<String, dynamic> response) {
     _getResponses[path] = response;
@@ -109,6 +111,24 @@ class FakeApiClient implements ApiClient {
     throw const ApiException(
       kind: ApiErrorKind.unexpected,
       message: 'no fake POST',
+    );
+  }
+
+  @override
+  Future<T> patchJson<T>(
+    String path, {
+    Object? body,
+    Object? cancelToken,
+  }) async {
+    patchPaths.add(path);
+    patchBodies.add(body);
+    final Object? error = _postErrors[path];
+    if (error != null) throw error;
+    final Object? value = _postResponses[path];
+    if (value is T) return value;
+    throw const ApiException(
+      kind: ApiErrorKind.unexpected,
+      message: 'no fake PATCH',
     );
   }
 

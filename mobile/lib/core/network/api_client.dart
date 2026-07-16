@@ -23,6 +23,9 @@ abstract class ApiClient {
     Object? cancelToken,
   });
 
+  /// Performs a PATCH request with an optional JSON body.
+  Future<T> patchJson<T>(String path, {Object? body, Object? cancelToken});
+
   /// Performs a DELETE request and returns the decoded JSON body (or an empty
   /// map for 204 responses).
   Future<T> deleteJson<T>(String path, {Object? cancelToken});

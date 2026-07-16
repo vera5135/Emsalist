@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Index
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint, Index, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -751,6 +751,7 @@ class CaseFact(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_case_facts_tenant_case_id"),
         Index("ix_case_facts_tenant_case", "tenant_id", "case_id"),
         Index("ix_case_facts_case_type", "case_id", "fact_type"),
     )
@@ -857,7 +858,546 @@ class Risk(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_risks_tenant_case_id"),
         Index("ix_risks_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+# ── P2.8 Legal Issue Graph ────────────────────────────────────────────────────
+
+MEMORY_REVISION_TRIGGER_TYPES = frozenset({
+    "user_message", "document_analysis", "uyap_sync", "manual_edit", "system_recompute",
+})
+
+
+class MemoryRevision(Base):
+    __tablename__ = "memory_revisions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    memory_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    trigger_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    change_summary_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_memory_revisions_tenant_case_id"),
+        UniqueConstraint("tenant_id", "case_id", "revision_number", name="uq_memory_revisions_case_number"),
+        UniqueConstraint("tenant_id", "case_id", "memory_fingerprint", name="uq_memory_revisions_case_fingerprint"),
+        Index("ix_memory_revisions_tenant_case", "tenant_id", "case_id"),
+        CheckConstraint(
+            f"trigger_type IN ({', '.join(repr(s) for s in sorted(MEMORY_REVISION_TRIGGER_TYPES))})",
+            name="ck_memory_revisions_trigger_type",
+        ),
+        CheckConstraint(
+            "length(memory_fingerprint) = 64",
+            name="ck_memory_revisions_fingerprint_len",
+        ),
+    )
+
+
+LEGAL_ISSUE_STATUSES = frozenset({
+    "proposed", "accepted", "disputed", "unsupported",
+    "satisfied", "failed", "needs_review",
+})
+
+
+class LegalIssue(Base):
+    __tablename__ = "legal_issues"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    parent_issue_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    issue_code: Mapped[str] = mapped_column(String(60), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="proposed")
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_legal_issues_tenant_case_id"),
+        Index("ix_legal_issues_tenant_case", "tenant_id", "case_id"),
+        Index("ix_legal_issues_case_parent", "case_id", "parent_issue_id"),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(LEGAL_ISSUE_STATUSES))})",
+            name="ck_legal_issues_status",
+        ),
+        CheckConstraint(
+            "confidence >= 0.0 AND confidence <= 1.0",
+            name="ck_legal_issues_confidence",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "parent_issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issues_parent_hierarchy",
+            ondelete="RESTRICT",
+        ),
+    )
+
+
+class LegalIssueDependency(Base):
+    __tablename__ = "legal_issue_dependencies"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    required_issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_dependencies_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "required_issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_dependencies_required_issue",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "issue_id <> required_issue_id",
+            name="ck_legal_issue_dependencies_no_self",
+        ),
+        Index(
+            "ix_legal_issue_dependencies_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_legal_issue_dependencies_issue",
+            "case_id", "issue_id",
+        ),
+        Index(
+            "ix_legal_issue_dependencies_required_issue",
+            "case_id", "required_issue_id",
+        ),
+        Index(
+            "uq_legal_issue_dependencies_active_pair",
+            "tenant_id", "case_id", "issue_id", "required_issue_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
+LEGAL_ISSUE_FACT_RELATIONS = frozenset({
+    "fact_supports_issue", "fact_contradicts_issue",
+})
+
+
+class LegalIssueFactLink(Base):
+    __tablename__ = "legal_issue_fact_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    fact_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_fact_links_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "fact_id"],
+            ["case_facts.tenant_id", "case_facts.case_id", "case_facts.id"],
+            name="fk_legal_issue_fact_links_fact",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            f"relation_type IN ({', '.join(repr(s) for s in sorted(LEGAL_ISSUE_FACT_RELATIONS))})",
+            name="ck_legal_issue_fact_links_relation_type",
+        ),
+        Index(
+            "ix_legal_issue_fact_links_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_legal_issue_fact_links_issue",
+            "case_id", "issue_id",
+        ),
+        Index(
+            "ix_legal_issue_fact_links_fact",
+            "case_id", "fact_id",
+        ),
+        Index(
+            "uq_legal_issue_fact_links_active_relation",
+            "tenant_id", "case_id", "issue_id", "fact_id", "relation_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
+LEGAL_ISSUE_RISK_RELATIONS = frozenset({
+    "issue_affects_risk",
+})
+
+
+class LegalIssueRiskLink(Base):
+    __tablename__ = "legal_issue_risk_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    risk_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False, default="issue_affects_risk")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_risk_links_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "risk_id"],
+            ["risks.tenant_id", "risks.case_id", "risks.id"],
+            name="fk_legal_issue_risk_links_risk",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            f"relation_type IN ({', '.join(repr(s) for s in sorted(LEGAL_ISSUE_RISK_RELATIONS))})",
+            name="ck_legal_issue_risk_links_relation_type",
+        ),
+        Index(
+            "ix_legal_issue_risk_links_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_legal_issue_risk_links_issue",
+            "case_id", "issue_id",
+        ),
+        Index(
+            "ix_legal_issue_risk_links_risk",
+            "case_id", "risk_id",
+        ),
+        Index(
+            "uq_legal_issue_risk_links_active_relation",
+            "tenant_id", "case_id", "issue_id", "risk_id", "relation_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
+LEGAL_ISSUE_SOURCE_RELATIONS = frozenset({
+    "source_governs_issue",
+})
+
+
+class LegalIssueSourceLink(Base):
+    __tablename__ = "legal_issue_source_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_record_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_version_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_paragraph_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False, default="source_governs_issue")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_legal_issue_source_links_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_record_id"],
+            ["source_records.id"],
+            name="fk_legal_issue_source_links_source_record",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_record_id", "source_version_id"],
+            ["source_versions.source_record_id", "source_versions.id"],
+            name="fk_legal_issue_source_links_source_version",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_version_id", "source_paragraph_id"],
+            ["source_paragraphs.source_version_id", "source_paragraphs.id"],
+            name="fk_legal_issue_source_links_source_paragraph",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            f"relation_type IN ({', '.join(repr(s) for s in sorted(LEGAL_ISSUE_SOURCE_RELATIONS))})",
+            name="ck_legal_issue_source_links_relation_type",
+        ),
+        Index(
+            "ix_legal_issue_source_links_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_legal_issue_source_links_issue",
+            "case_id", "issue_id",
+        ),
+        Index(
+            "ix_legal_issue_source_links_source_provenance",
+            "source_record_id", "source_version_id", "source_paragraph_id",
+        ),
+        Index(
+            "uq_legal_issue_source_links_active_relation",
+            "tenant_id", "case_id", "issue_id",
+            "source_record_id", "source_version_id", "source_paragraph_id",
+            "relation_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
+BURDEN_OF_PROOF_STATUSES = frozenset({
+    "candidate", "review_required", "finalized",
+})
+
+EVIDENCE_SUFFICIENCY_STATUSES = frozenset({
+    "supported", "partially_supported", "unsupported", "contradicted",
+    "inadmissibility_risk", "authenticity_risk",
+})
+
+
+class BurdenOfProof(Base):
+    __tablename__ = "burdens_of_proof"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    burden_party_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    burden_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    required_standard: Mapped[str] = mapped_column(String(80), nullable=False)
+    legal_source_refs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    evidence_status: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="candidate")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_burdens_of_proof_issue",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_burdens_of_proof_tenant_case", "tenant_id", "case_id"),
+        Index("ix_burdens_of_proof_issue", "case_id", "issue_id"),
+        Index(
+            "uq_burdens_of_proof_active_scope",
+            "tenant_id", "case_id", "issue_id", "burden_party_id", "burden_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(BURDEN_OF_PROOF_STATUSES))})",
+            name="ck_burdens_of_proof_status",
+        ),
+        CheckConstraint(
+            f"evidence_status IN ({', '.join(repr(s) for s in sorted(EVIDENCE_SUFFICIENCY_STATUSES))})",
+            name="ck_burdens_of_proof_evidence_status",
+        ),
+        CheckConstraint(
+            "status <> 'finalized' OR json_array_length(legal_source_refs) > 0",
+            name="ck_burdens_of_proof_finalized_requires_sources",
+        ),
+    )
+
+
+class EvidenceSufficiencyAssessment(Base):
+    __tablename__ = "evidence_sufficiency_assessments"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    claim_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    legal_source_refs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    fact_refs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_evidence_sufficiency_assessments_issue",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "claim_id"],
+            ["claims.tenant_id", "claims.case_id", "claims.id"],
+            name="fk_evidence_sufficiency_assessments_claim",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "evidence_id"],
+            ["evidence.tenant_id", "evidence.case_id", "evidence.id"],
+            name="fk_evidence_sufficiency_assessments_evidence",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_evidence_sufficiency_assessments_tenant_case", "tenant_id", "case_id"),
+        Index("ix_evidence_sufficiency_assessments_issue", "case_id", "issue_id"),
+        Index("ix_evidence_sufficiency_assessments_claim", "case_id", "claim_id"),
+        Index("ix_evidence_sufficiency_assessments_evidence", "case_id", "evidence_id"),
+        Index(
+            "uq_evidence_sufficiency_assessments_active_scope",
+            "tenant_id", "case_id", "issue_id", "claim_id", "evidence_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(EVIDENCE_SUFFICIENCY_STATUSES))})",
+            name="ck_evidence_sufficiency_assessments_status",
+        ),
+    )
+
+
+COUNTERARGUMENT_CATEGORIES = frozenset({
+    "alternative_fact_interpretation", "missing_evidence",
+    "opposing_precedent", "procedural_time_bar", "overbroad_request",
+})
+
+COUNTERARGUMENT_STATUSES = frozenset({
+    "proposed", "accepted", "rejected", "needs_review",
+})
+
+
+class Counterargument(Base):
+    """Concise, user-facing argument against an issue; never hidden reasoning."""
+
+    __tablename__ = "counterarguments"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    basis: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_refs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="proposed")
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_counterarguments_issue", ondelete="RESTRICT",
+        ),
+        Index("ix_counterarguments_tenant_case", "tenant_id", "case_id"),
+        Index("ix_counterarguments_issue", "case_id", "issue_id"),
+        CheckConstraint(
+            f"category IN ({', '.join(repr(s) for s in sorted(COUNTERARGUMENT_CATEGORIES))})",
+            name="ck_counterarguments_category",
+        ),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(COUNTERARGUMENT_STATUSES))})",
+            name="ck_counterarguments_status",
+        ),
+    )
+
+
+LEGAL_REASONING_RUN_STATUSES = frozenset({
+    "started", "succeeded", "failed", "stale",
+})
+
+
+class LegalReasoningRun(Base):
+    __tablename__ = "legal_reasoning_runs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    memory_revision_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    output_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    safe_summary_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "memory_revision_id"],
+            ["memory_revisions.tenant_id", "memory_revisions.case_id", "memory_revisions.id"],
+            name="fk_legal_reasoning_runs_memory_revision",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_legal_reasoning_runs_tenant_case", "tenant_id", "case_id"),
+        Index("ix_legal_reasoning_runs_case_created", "case_id", "created_at"),
+        Index(
+            "ix_legal_reasoning_runs_reproducibility",
+            "case_id", "memory_revision_id", "source_fingerprint", "prompt_version",
+            "provider", "model_version",
+        ),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(LEGAL_REASONING_RUN_STATUSES))})",
+            name="ck_legal_reasoning_runs_status",
+        ),
+        CheckConstraint(
+            "length(source_fingerprint) = 64",
+            name="ck_legal_reasoning_runs_source_fingerprint_len",
+        ),
+        CheckConstraint(
+            "length(output_hash) = 64",
+            name="ck_legal_reasoning_runs_output_hash_len",
+        ),
     )
 
 
@@ -882,6 +1422,7 @@ class Claim(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_claims_tenant_case_id"),
         Index("ix_claims_tenant_case", "tenant_id", "case_id"),
     )
 
@@ -931,7 +1472,66 @@ class Evidence(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_evidence_tenant_case_id"),
         Index("ix_evidence_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+EVIDENCE_CLAIM_RELATIONS = frozenset({
+    "evidence_supports_claim", "evidence_contradicts_claim",
+})
+
+
+class EvidenceClaimLink(Base):
+    __tablename__ = "evidence_claim_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    claim_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "claim_id"],
+            ["claims.tenant_id", "claims.case_id", "claims.id"],
+            name="fk_evidence_claim_links_claim",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "evidence_id"],
+            ["evidence.tenant_id", "evidence.case_id", "evidence.id"],
+            name="fk_evidence_claim_links_evidence",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            f"relation_type IN ({', '.join(repr(s) for s in sorted(EVIDENCE_CLAIM_RELATIONS))})",
+            name="ck_evidence_claim_links_relation_type",
+        ),
+        Index(
+            "ix_evidence_claim_links_tenant_case",
+            "tenant_id", "case_id",
+        ),
+        Index(
+            "ix_evidence_claim_links_claim",
+            "case_id", "claim_id",
+        ),
+        Index(
+            "ix_evidence_claim_links_evidence",
+            "case_id", "evidence_id",
+        ),
+        Index(
+            "uq_evidence_claim_links_active_relation",
+            "tenant_id", "case_id", "claim_id", "evidence_id", "relation_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
     )
 
 
@@ -1022,6 +1622,7 @@ class SourceVersion(Base):
     __table_args__ = (
         Index("ix_source_versions_record", "source_record_id"),
         UniqueConstraint("source_record_id", "content_hash", name="uq_source_versions_record_hash"),
+        UniqueConstraint("source_record_id", "id", name="uq_source_versions_record_id"),
     )
 
 
@@ -1047,6 +1648,7 @@ class SourceParagraph(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (
         Index("ix_source_paragraphs_version", "source_version_id", "paragraph_index"),
+        UniqueConstraint("source_version_id", "id", name="uq_source_paragraphs_version_id"),
     )
 
 

@@ -107,7 +107,6 @@ def get_auth_mode() -> str: return get_settings().auth_mode or "local"
 
 _UNAUTHORIZED = "Authentication session is no longer valid"
 
-
 async def resolve_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -129,7 +128,6 @@ async def resolve_current_user(
     role = payload.get("role")
     session_id = payload.get("session_id")
     token_version = payload.get("token_version")
-
     if not sub or not isinstance(sub, str) or not sub.strip():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_UNAUTHORIZED)
     if not tenant_id or not isinstance(tenant_id, str) or not tenant_id.strip():
