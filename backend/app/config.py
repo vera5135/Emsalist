@@ -45,7 +45,7 @@ class Settings(BaseModel):
     deepseek_reasoning_effort: str = "high"
     deepseek_timeout_seconds: int = 60
     deepseek_max_retries: int = 2
-    deepseek_max_tokens: int = 4096
+    deepseek_max_tokens: int = 8192
     # ── P2.7 Hybrid Search ───────────────────────────────────────
     search_semantic_enabled: bool = False
     search_embedding_model: str = "gemini-embedding-001"
@@ -249,7 +249,7 @@ def get_settings() -> Settings:
         deepseek_reasoning_effort=getenv("DEEPSEEK_REASONING_EFFORT", "high").strip().lower(),
         deepseek_timeout_seconds=int(getenv("DEEPSEEK_TIMEOUT_SECONDS", "60")),
         deepseek_max_retries=int(getenv("DEEPSEEK_MAX_RETRIES", "2")),
-        deepseek_max_tokens=int(getenv("DEEPSEEK_MAX_TOKENS", "4096")),
+        deepseek_max_tokens=int(getenv("DEEPSEEK_MAX_TOKENS", "8192")),
         search_semantic_enabled=getenv("EMSALIST_SEARCH_SEMANTIC_ENABLED", "false").lower() in {"1", "true", "yes"},
         search_embedding_model=getenv("EMSALIST_SEARCH_EMBEDDING_MODEL", "gemini-embedding-001"),
         search_embedding_version=getenv("EMSALIST_SEARCH_EMBEDDING_VERSION", "p2.7-embedding-1"),
