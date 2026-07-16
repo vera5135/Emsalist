@@ -1815,3 +1815,126 @@ class SourceIngestionItem(Base):
         Index("ix_source_ingestion_items_run", "run_id"),
         Index("ix_source_ingestion_items_dedupe", "provider_code", "dedupe_key"),
     )
+
+
+# -- P2.8 Final case-scoped dynamic precedent pools --
+class PrecedentPool(Base):
+    __tablename__ = "precedent_pools"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    initiated_by: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    profile_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    query_strategies_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    provider_code: Mapped[str] = mapped_column(String(30), nullable=False, default="yargitay")
+    candidate_cap: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="running")
+    safe_error_code: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    provider_status: Mapped[str] = mapped_column(String(40), nullable=False, default="")
+    source_ingestion_run_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    profile_summary_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    stats_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    planner_version: Mapped[str] = mapped_column(String(60), nullable=False, default="p2.8-final-planner-1")
+    model_version: Mapped[str] = mapped_column(String(60), nullable=False, default="deterministic_v1")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "case_id", "profile_fingerprint", "provider_code",
+            name="uq_precedent_pools_case_profile_provider",
+        ),
+        CheckConstraint(
+            "status IN ('running','completed','completed_with_errors','degraded_existing_corpus','failed')",
+            name="ck_precedent_pools_status",
+        ),
+        Index("ix_precedent_pools_tenant_case", "tenant_id", "case_id", "created_at"),
+        Index("ix_precedent_pools_profile", "profile_fingerprint"),
+    )
+
+
+class PrecedentPoolDecision(Base):
+    __tablename__ = "precedent_pool_decisions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    pool_id: Mapped[str] = mapped_column(String(32), ForeignKey("precedent_pools.id"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    source_record_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_records.id"), nullable=False)
+    source_version_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_versions.id"), nullable=False)
+    selected_source_paragraph_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    retrieval_rank: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    scores_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    selection_state: Mapped[str] = mapped_column(String(30), nullable=False, default="shortlisted")
+    duplicate_of_decision_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    match_reasons_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_record_id", "source_version_id"],
+            ["source_versions.source_record_id", "source_versions.id"],
+            name="fk_pool_decision_exact_source_version",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "pool_id", "source_record_id", "source_version_id",
+            name="uq_pool_decision_source_version",
+        ),
+        CheckConstraint(
+            "selection_state IN ('candidate','shortlisted','accepted','rejected','duplicate')",
+            name="ck_pool_decision_selection_state",
+        ),
+        Index("ix_pool_decisions_pool_rank", "pool_id", "retrieval_rank"),
+        Index("ix_pool_decisions_tenant_case", "tenant_id", "case_id"),
+        Index("ix_pool_decisions_source", "source_record_id", "source_version_id"),
+    )
+
+
+class PrecedentDecisionAnalysis(Base):
+    __tablename__ = "precedent_decision_analyses"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    pool_id: Mapped[str] = mapped_column(String(32), ForeignKey("precedent_pools.id"), nullable=False)
+    pool_decision_id: Mapped[str] = mapped_column(String(32), ForeignKey("precedent_pool_decisions.id"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    source_record_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_records.id"), nullable=False)
+    source_version_id: Mapped[str] = mapped_column(String(32), ForeignKey("source_versions.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="deterministic")
+    model_version: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    prompt_version: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    schema_version: Mapped[str] = mapped_column(String(40), nullable=False, default="p2.8-analysis-v1")
+    source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    output_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    analysis_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    provenance_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="current")
+    stale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_record_id", "source_version_id"],
+            ["source_versions.source_record_id", "source_versions.id"],
+            name="fk_decision_analysis_exact_source_version",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "pool_decision_id", "source_version_id", "source_fingerprint", "output_fingerprint",
+            name="uq_decision_analysis_exact_output",
+        ),
+        CheckConstraint(
+            "status IN ('current','stale','failed')",
+            name="ck_decision_analysis_status",
+        ),
+        Index("ix_decision_analyses_pool", "pool_id", "created_at"),
+        Index("ix_decision_analyses_tenant_case", "tenant_id", "case_id"),
+    )

@@ -15,6 +15,7 @@ from app.models.search_models import (
 )
 from app.services.case_search_profile import case_search_profile_provider
 from app.services.hybrid_search_service import execute_legal_search
+from app.services.precedent_pool_service import complete_pool, start_pool
 from app.services.provider_ingestion_service import RunSummary, run_ingestion
 from app.services.source_providers.base import ProviderError
 
@@ -62,6 +63,7 @@ def _build_search_query(profile: CaseSearchProfileResponse) -> str:
 
 def _run_contract(query: str, budget: int, summary: RunSummary) -> DynamicPrecedentIngestionRun:
     return DynamicPrecedentIngestionRun(
+        run_id=summary.run_id,
         query=query,
         budget=budget,
         status=summary.status,
@@ -104,6 +106,16 @@ async def build_dynamic_precedent_pool(
 
     queries = profile.yargitay_queries[: request.max_queries]
     budgets = allocate_candidate_budget(request.max_candidates, len(queries))
+    pool = None
+    if isinstance(db, AsyncSession):
+        pool = await start_pool(
+            db,
+            ctx=security_context,
+            request=request,
+            profile=profile,
+            queries=queries,
+            budgets=budgets,
+        )
     runs: list[DynamicPrecedentIngestionRun] = []
     provider_error = False
 
@@ -163,7 +175,19 @@ async def build_dynamic_precedent_pool(
     else:
         provider_status = "completed"
 
+    if pool is not None:
+        await complete_pool(
+            db,
+            pool=pool,
+            ctx=security_context,
+            provider_status=provider_status,
+            runs=runs,
+            shortlist=shortlist.results,
+        )
+        await db.commit()
+
     return DynamicPrecedentPoolResponse(
+        pool_id=pool.id if pool is not None else None,
         profile=profile,
         provider_status=provider_status,
         candidate_cap=request.max_candidates,

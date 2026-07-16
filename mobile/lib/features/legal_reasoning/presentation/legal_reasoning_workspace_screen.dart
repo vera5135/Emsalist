@@ -20,6 +20,7 @@ class LegalReasoningWorkspaceScreen extends ConsumerStatefulWidget {
 class _LegalReasoningWorkspaceScreenState
     extends ConsumerState<LegalReasoningWorkspaceScreen> {
   bool _rebuilding = false;
+  bool _findingPrecedents = false;
 
   Future<void> _rebuild() async {
     setState(() => _rebuilding = true);
@@ -35,6 +36,23 @@ class _LegalReasoningWorkspaceScreenState
       }
     } finally {
       if (mounted) setState(() => _rebuilding = false);
+    }
+  }
+
+  Future<void> _findPrecedents(LegalReasoningWorkspace workspace) async {
+    setState(() => _findingPrecedents = true);
+    try {
+      await ref.read(legalReasoningRepositoryProvider).findPrecedents(workspace);
+      ref.invalidate(legalReasoningWorkspaceProvider(widget.caseId));
+      await ref.read(legalReasoningWorkspaceProvider(widget.caseId).future);
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _findingPrecedents = false);
     }
   }
 
@@ -86,16 +104,26 @@ class _LegalReasoningWorkspaceScreenState
                   ),
                 ],
               )
-            : _WorkspaceBody(workspace: workspace),
+            : _WorkspaceBody(
+                workspace: workspace,
+                findingPrecedents: _findingPrecedents,
+                onFindPrecedents: () => _findPrecedents(workspace),
+              ),
       ),
     );
   }
 }
 
 class _WorkspaceBody extends StatelessWidget {
-  const _WorkspaceBody({required this.workspace});
+  const _WorkspaceBody({
+    required this.workspace,
+    required this.findingPrecedents,
+    required this.onFindPrecedents,
+  });
 
   final LegalReasoningWorkspace workspace;
+  final bool findingPrecedents;
+  final VoidCallback onFindPrecedents;
 
   @override
   Widget build(BuildContext context) {
@@ -112,6 +140,11 @@ class _WorkspaceBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppConstants.spacingMd),
       children: <Widget>[
+        _PrecedentPoolSection(
+          workspace: workspace,
+          loading: findingPrecedents,
+          onFind: onFindPrecedents,
+        ),
         if (workspace.stale)
           const Card(
             child: ListTile(
@@ -147,6 +180,217 @@ class _WorkspaceBody extends StatelessWidget {
     );
   }
 }
+
+class _PrecedentPoolSection extends StatelessWidget {
+  const _PrecedentPoolSection({
+    required this.workspace,
+    required this.loading,
+    required this.onFind,
+  });
+
+  final LegalReasoningWorkspace workspace;
+  final bool loading;
+  final VoidCallback onFind;
+
+  @override
+  Widget build(BuildContext context) {
+    final PrecedentPoolWorkspace? pool = workspace.precedentPool;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Expanded(
+                  child: Text(
+                    'Emsal havuzu',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: loading ? null : onFind,
+                  icon: loading
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.search_outlined),
+                  label: const Text('Dosyaya göre emsal bul'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (pool == null)
+              const Text('Bu dosya için henüz dinamik emsal havuzu yok.'),
+            if (pool != null) ...<Widget>[
+              _ProfileSummary(pool.pool.profileSummary),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  Chip(label: Text(_providerStatus(pool.pool.providerStatus))),
+                  Chip(label: Text('Bulunan: ${pool.pool.totalDiscovered}')),
+                  Chip(label: Text('İşlenen: ${pool.pool.totalIngested}')),
+                  Chip(label: Text('Mükerrer: ${pool.pool.totalDuplicate}')),
+                  Chip(label: Text('Hata: ${pool.pool.totalFailed}')),
+                ],
+              ),
+              if (pool.pool.degraded)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Canlı sağlayıcı tamamlanamadı; yalnızca mevcut resmi korpus arandı.',
+                  ),
+                ),
+              if (pool.pool.partial)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text('Bazı sağlayıcı istekleri başarısız oldu; mevcut sonuçlarla devam edildi.'),
+                ),
+              if (pool.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Text('Kısa listeye alınan karar bulunamadı.'),
+                )
+              else
+                ...pool.decisions.map(
+                  (PrecedentDecision decision) => _PrecedentDecisionTile(
+                    decision: decision,
+                    analysis: _analysisFor(pool.analyses, decision.id),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSummary extends StatelessWidget {
+  const _ProfileSummary(this.summary);
+
+  final Map<String, dynamic> summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final String area = summary['legal_area'] as String? ?? '';
+    final String dispute = summary['dispute_type'] as String? ?? '';
+    if (area.isEmpty && dispute.isEmpty) return const SizedBox.shrink();
+    return Text([area, dispute].where((String value) => value.isNotEmpty).join(' · '));
+  }
+}
+
+class _PrecedentDecisionTile extends StatelessWidget {
+  const _PrecedentDecisionTile({required this.decision, required this.analysis});
+
+  final PrecedentDecision decision;
+  final PrecedentAnalysis? analysis;
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, dynamic> data = analysis?.analysis ?? const <String, dynamic>{};
+    return ExpansionTile(
+      leading: const Icon(Icons.verified_outlined),
+      title: Text(
+        '${decision.chamber.isEmpty ? decision.court : decision.chamber} '
+        'E.${decision.caseNumber} K.${decision.decisionNumber}',
+      ),
+      subtitle: Text(
+        '${decision.decisionDate} · Skor ${(decision.relevanceScore * 100).round()}',
+      ),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      children: <Widget>[
+        if (decision.relevantParagraph.isNotEmpty)
+          _FieldBlock(title: 'İlgili paragraf', text: decision.relevantParagraph),
+        if (decision.matchReasons.isNotEmpty)
+          _FieldBlock(title: 'Açıklama', text: decision.matchReasons.join('\n')),
+        _ListBlock(title: 'Benzerlikler', values: data['similarities_to_case']),
+        _ListBlock(title: 'Farklar', values: data['material_differences']),
+        _FieldBlock(title: 'Lehe kullanım', text: data['favorable_use'] as String? ?? ''),
+        _FieldBlock(title: 'Aleyhe kullanım', text: data['adverse_opposing_use'] as String? ?? ''),
+        _ListBlock(title: 'Eksik olgular', values: data['missing_information']),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: decision.officialUrl.isEmpty
+                ? null
+                : () => showDialog<void>(
+                      context: context,
+                      builder: (BuildContext context) => AlertDialog(
+                        title: const Text('Resmi kaynak'),
+                        content: SelectableText(decision.officialUrl),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Kapat'),
+                          ),
+                        ],
+                      ),
+                    ),
+            icon: const Icon(Icons.open_in_new_outlined),
+            label: const Text('Resmi kaynağı aç'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FieldBlock extends StatelessWidget {
+  const _FieldBlock({required this.title, required this.text});
+
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.trim().isEmpty) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text('$title\n$text'),
+      ),
+    );
+  }
+}
+
+class _ListBlock extends StatelessWidget {
+  const _ListBlock({required this.title, required this.values});
+
+  final String title;
+  final Object? values;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<dynamic> items = values is List<dynamic>
+        ? values as List<dynamic>
+        : const <dynamic>[];
+    if (items.isEmpty) return const SizedBox.shrink();
+    return _FieldBlock(
+      title: title,
+      text: items.map((dynamic value) => value.toString()).join('\n'),
+    );
+  }
+}
+
+PrecedentAnalysis? _analysisFor(List<PrecedentAnalysis> analyses, String id) {
+  for (final PrecedentAnalysis analysis in analyses) {
+    if (analysis.poolDecisionId == id) return analysis;
+  }
+  return null;
+}
+
+String _providerStatus(String value) => switch (value) {
+  'completed' => 'Canlı sağlayıcı tamamlandı',
+  'completed_with_errors' => 'Kısmi başarı',
+  'degraded_existing_corpus' => 'Mevcut korpus',
+  _ => 'Hazırlanıyor',
+};
 
 class _IssueCard extends ConsumerWidget {
   const _IssueCard({

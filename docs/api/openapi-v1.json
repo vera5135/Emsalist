@@ -71,6 +71,25 @@
         "title": "AIRunSummary",
         "type": "object"
       },
+      "AnalyzePrecedentPoolRequest": {
+        "properties": {
+          "decision_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 15,
+            "title": "Decision Ids",
+            "type": "array"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "AnalyzePrecedentPoolRequest",
+        "type": "object"
+      },
       "AppleAuthenticatedResponse": {
         "properties": {
           "access_token": {
@@ -3141,6 +3160,11 @@
             "title": "Query",
             "type": "string"
           },
+          "run_id": {
+            "default": "",
+            "title": "Run Id",
+            "type": "string"
+          },
           "safe_error_code": {
             "default": "",
             "title": "Safe Error Code",
@@ -3230,6 +3254,17 @@
             },
             "title": "Ingestion Runs",
             "type": "array"
+          },
+          "pool_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pool Id"
           },
           "profile": {
             "$ref": "#/components/schemas/CaseSearchProfileResponse"
@@ -6830,6 +6865,110 @@
         "title": "PrecedentAnalysis",
         "type": "object"
       },
+      "PrecedentAnalysisListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedentAnalysisResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "title": "PrecedentAnalysisListResponse",
+        "type": "object"
+      },
+      "PrecedentAnalysisResponse": {
+        "properties": {
+          "analysis": {
+            "additionalProperties": true,
+            "title": "Analysis",
+            "type": "object"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "output_fingerprint": {
+            "title": "Output Fingerprint",
+            "type": "string"
+          },
+          "pool_decision_id": {
+            "title": "Pool Decision Id",
+            "type": "string"
+          },
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provenance": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Provenance",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source_fingerprint": {
+            "title": "Source Fingerprint",
+            "type": "string"
+          },
+          "source_record_id": {
+            "title": "Source Record Id",
+            "type": "string"
+          },
+          "source_version_id": {
+            "title": "Source Version Id",
+            "type": "string"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pool_id",
+          "pool_decision_id",
+          "source_record_id",
+          "source_version_id",
+          "provider",
+          "model_version",
+          "prompt_version",
+          "schema_version",
+          "source_fingerprint",
+          "output_fingerprint",
+          "status",
+          "stale",
+          "created_at"
+        ],
+        "title": "PrecedentAnalysisResponse",
+        "type": "object"
+      },
       "PrecedentAuditRequest": {
         "properties": {
           "case_enrichment": {
@@ -7000,6 +7139,307 @@
           }
         },
         "title": "PrecedentAuthorityResponse",
+        "type": "object"
+      },
+      "PrecedentPoolDecisionResponse": {
+        "properties": {
+          "case_number": {
+            "default": "",
+            "title": "Case Number",
+            "type": "string"
+          },
+          "chamber": {
+            "default": "",
+            "title": "Chamber",
+            "type": "string"
+          },
+          "court": {
+            "default": "",
+            "title": "Court",
+            "type": "string"
+          },
+          "decision_date": {
+            "default": "",
+            "title": "Decision Date",
+            "type": "string"
+          },
+          "decision_number": {
+            "default": "",
+            "title": "Decision Number",
+            "type": "string"
+          },
+          "duplicate_of_decision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Of Decision Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "match_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Match Reasons",
+            "type": "array"
+          },
+          "official_url": {
+            "default": "",
+            "title": "Official Url",
+            "type": "string"
+          },
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "relevant_paragraph": {
+            "default": "",
+            "title": "Relevant Paragraph",
+            "type": "string"
+          },
+          "retrieval_rank": {
+            "title": "Retrieval Rank",
+            "type": "integer"
+          },
+          "scores": {
+            "additionalProperties": true,
+            "title": "Scores",
+            "type": "object"
+          },
+          "selected_source_paragraph_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Source Paragraph Ids",
+            "type": "array"
+          },
+          "selection_state": {
+            "title": "Selection State",
+            "type": "string"
+          },
+          "source_record_id": {
+            "title": "Source Record Id",
+            "type": "string"
+          },
+          "source_version_id": {
+            "title": "Source Version Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pool_id",
+          "source_record_id",
+          "source_version_id",
+          "retrieval_rank",
+          "selection_state"
+        ],
+        "title": "PrecedentPoolDecisionResponse",
+        "type": "object"
+      },
+      "PrecedentPoolDetail": {
+        "properties": {
+          "candidate_cap": {
+            "title": "Candidate Cap",
+            "type": "integer"
+          },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model_version": {
+            "default": "",
+            "title": "Model Version",
+            "type": "string"
+          },
+          "planner_version": {
+            "default": "",
+            "title": "Planner Version",
+            "type": "string"
+          },
+          "profile_summary": {
+            "additionalProperties": true,
+            "title": "Profile Summary",
+            "type": "object"
+          },
+          "provider_code": {
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "provider_status": {
+            "title": "Provider Status",
+            "type": "string"
+          },
+          "query_strategies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Query Strategies",
+            "type": "array"
+          },
+          "safe_error_code": {
+            "default": "",
+            "title": "Safe Error Code",
+            "type": "string"
+          },
+          "source_ingestion_run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ingestion Run Ids",
+            "type": "array"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_discovered": {
+            "default": 0,
+            "title": "Total Discovered",
+            "type": "integer"
+          },
+          "total_duplicate": {
+            "default": 0,
+            "title": "Total Duplicate",
+            "type": "integer"
+          },
+          "total_failed": {
+            "default": 0,
+            "title": "Total Failed",
+            "type": "integer"
+          },
+          "total_ingested": {
+            "default": 0,
+            "title": "Total Ingested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "provider_code",
+          "provider_status",
+          "status",
+          "candidate_cap",
+          "started_at"
+        ],
+        "title": "PrecedentPoolDetail",
+        "type": "object"
+      },
+      "PrecedentPoolSummary": {
+        "properties": {
+          "candidate_cap": {
+            "title": "Candidate Cap",
+            "type": "integer"
+          },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "profile_summary": {
+            "additionalProperties": true,
+            "title": "Profile Summary",
+            "type": "object"
+          },
+          "provider_code": {
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "provider_status": {
+            "title": "Provider Status",
+            "type": "string"
+          },
+          "safe_error_code": {
+            "default": "",
+            "title": "Safe Error Code",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_discovered": {
+            "default": 0,
+            "title": "Total Discovered",
+            "type": "integer"
+          },
+          "total_duplicate": {
+            "default": 0,
+            "title": "Total Duplicate",
+            "type": "integer"
+          },
+          "total_failed": {
+            "default": 0,
+            "title": "Total Failed",
+            "type": "integer"
+          },
+          "total_ingested": {
+            "default": 0,
+            "title": "Total Ingested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "provider_code",
+          "provider_status",
+          "status",
+          "candidate_cap",
+          "started_at"
+        ],
+        "title": "PrecedentPoolSummary",
         "type": "object"
       },
       "PrecedentSelectRequest": {
@@ -13984,6 +14424,57 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/precedent-pools": {
+      "get": {
+        "operationId": "list_case_precedent_pools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrecedentPoolSummary"
+                  },
+                  "title": "Response List Case Precedent Pools",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Case Precedent Pools",
+        "tags": [
+          "Precedent Pools"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/reasoning-runs": {
       "get": {
         "operationId": "list_case_reasoning_runs",
@@ -17677,6 +18168,208 @@
         "summary": "Build Petition Strategy",
         "tags": [
           "Dilek\u00e7e"
+        ]
+      }
+    },
+    "/api/v1/precedent-pools/{pool_id}": {
+      "get": {
+        "operationId": "get_precedent_pool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecedentPoolDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Precedent Pool",
+        "tags": [
+          "Precedent Pools"
+        ]
+      }
+    },
+    "/api/v1/precedent-pools/{pool_id}/analyses": {
+      "get": {
+        "operationId": "list_precedent_pool_analyses",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecedentAnalysisListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Precedent Pool Analyses",
+        "tags": [
+          "Precedent Pools"
+        ]
+      }
+    },
+    "/api/v1/precedent-pools/{pool_id}/analyze": {
+      "post": {
+        "operationId": "analyze_precedent_pool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzePrecedentPoolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecedentAnalysisListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Analyze Precedent Pool",
+        "tags": [
+          "Precedent Pools"
+        ]
+      }
+    },
+    "/api/v1/precedent-pools/{pool_id}/decisions": {
+      "get": {
+        "operationId": "list_precedent_pool_decisions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrecedentPoolDecisionResponse"
+                  },
+                  "title": "Response List Precedent Pool Decisions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Precedent Pool Decisions",
+        "tags": [
+          "Precedent Pools"
         ]
       }
     },

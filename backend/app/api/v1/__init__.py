@@ -64,6 +64,7 @@ from app.routes.source_routes import review_router as _source_review_router
 from app.routes.provider_ingestion_routes import provider_router as _provider_router
 from app.routes.provider_ingestion_routes import run_router as _provider_run_router
 from app.routes.legal_reasoning_routes import router as _legal_reasoning_router
+from app.routes.precedent_pool_routes import router as _precedent_pool_router
 
 # Legacy P1 compatibility APIs. The overlapping case/document routers are
 # explicitly marked deprecated at router level; they must not be used by new
@@ -103,6 +104,7 @@ api_v1_router.include_router(_source_review_router, include_in_schema=True)
 api_v1_router.include_router(_provider_router, include_in_schema=True)
 api_v1_router.include_router(_provider_run_router, include_in_schema=True)
 api_v1_router.include_router(_legal_reasoning_router, include_in_schema=True)
+api_v1_router.include_router(_precedent_pool_router, include_in_schema=True)
 
 @api_v1_router.get(
     "/meta/capabilities",

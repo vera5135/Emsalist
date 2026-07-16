@@ -99,6 +99,7 @@ class LegalSearchResponse(BaseModel):
 
 
 class DynamicPrecedentIngestionRun(BaseModel):
+    run_id: str = ""
     query: str
     budget: int = Field(ge=1, le=50)
     status: str
@@ -120,6 +121,7 @@ DynamicPoolStatus = Literal[
 
 
 class DynamicPrecedentPoolResponse(BaseModel):
+    pool_id: str | None = None
     profile: CaseSearchProfileResponse
     provider_code: str = "yargitay"
     provider_status: DynamicPoolStatus
@@ -130,6 +132,79 @@ class DynamicPrecedentPoolResponse(BaseModel):
     total_duplicate: int = 0
     total_failed: int = 0
     shortlist: LegalSearchResponse
+
+
+class PrecedentPoolSummary(BaseModel):
+    id: str
+    case_id: str
+    provider_code: str
+    provider_status: str
+    status: str
+    candidate_cap: int
+    total_discovered: int = 0
+    total_ingested: int = 0
+    total_duplicate: int = 0
+    total_failed: int = 0
+    safe_error_code: str = ""
+    profile_summary: dict = Field(default_factory=dict)
+    started_at: str
+    completed_at: str | None = None
+
+
+class PrecedentPoolDetail(PrecedentPoolSummary):
+    query_strategies: list[dict] = Field(default_factory=list)
+    source_ingestion_run_ids: list[str] = Field(default_factory=list)
+    planner_version: str = ""
+    model_version: str = ""
+
+
+class PrecedentPoolDecisionResponse(BaseModel):
+    id: str
+    pool_id: str
+    source_record_id: str
+    source_version_id: str
+    selected_source_paragraph_ids: list[str] = Field(default_factory=list)
+    retrieval_rank: int
+    scores: dict = Field(default_factory=dict)
+    selection_state: str
+    duplicate_of_decision_id: str | None = None
+    match_reasons: list[str] = Field(default_factory=list)
+    title: str = ""
+    court: str = ""
+    chamber: str = ""
+    case_number: str = ""
+    decision_number: str = ""
+    decision_date: str = ""
+    official_url: str = ""
+    relevant_paragraph: str = ""
+
+
+class AnalyzePrecedentPoolRequest(BaseModel):
+    decision_ids: list[str] = Field(default_factory=list, max_length=15)
+    force: bool = False
+
+
+class PrecedentAnalysisResponse(BaseModel):
+    id: str
+    pool_id: str
+    pool_decision_id: str
+    source_record_id: str
+    source_version_id: str
+    provider: str
+    model_version: str
+    prompt_version: str
+    schema_version: str
+    source_fingerprint: str
+    output_fingerprint: str
+    status: str
+    stale: bool
+    analysis: dict = Field(default_factory=dict)
+    provenance: list[dict] = Field(default_factory=list)
+    created_at: str
+
+
+class PrecedentAnalysisListResponse(BaseModel):
+    items: list[PrecedentAnalysisResponse] = Field(default_factory=list)
 
 
 # ── Similar search ────────────────────────────────────────────────────────────

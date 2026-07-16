@@ -44,6 +44,7 @@ class LegalReasoningWorkspace {
     required this.missingInformation,
     required this.unsupportedClaims,
     required this.stale,
+    this.precedentPool,
   });
 
   final String caseId;
@@ -56,8 +57,24 @@ class LegalReasoningWorkspace {
   final List<Map<String, dynamic>> missingInformation;
   final List<Map<String, dynamic>> unsupportedClaims;
   final bool stale;
+  final PrecedentPoolWorkspace? precedentPool;
 
   bool get isEmpty => issues.isEmpty;
+
+  LegalReasoningWorkspace withPrecedentPool(PrecedentPoolWorkspace? pool) =>
+      LegalReasoningWorkspace(
+        caseId: caseId,
+        issues: issues,
+        burdens: burdens,
+        counterarguments: counterarguments,
+        sourceLinks: sourceLinks,
+        evidenceLinks: evidenceLinks,
+        factLinks: factLinks,
+        missingInformation: missingInformation,
+        unsupportedClaims: unsupportedClaims,
+        stale: stale,
+        precedentPool: pool,
+      );
 
   factory LegalReasoningWorkspace.fromJson(
     Map<String, dynamic> json, {
@@ -82,4 +99,140 @@ class LegalReasoningWorkspace {
       unsupportedClaims: maps('unsupported_claims'),
     );
   }
+}
+
+class PrecedentPoolWorkspace {
+  const PrecedentPoolWorkspace({
+    required this.pool,
+    required this.decisions,
+    required this.analyses,
+  });
+
+  final PrecedentPoolSummary pool;
+  final List<PrecedentDecision> decisions;
+  final List<PrecedentAnalysis> analyses;
+
+  bool get isEmpty => decisions.isEmpty;
+}
+
+class PrecedentPoolSummary {
+  const PrecedentPoolSummary({
+    required this.id,
+    required this.providerStatus,
+    required this.status,
+    required this.candidateCap,
+    required this.totalDiscovered,
+    required this.totalIngested,
+    required this.totalDuplicate,
+    required this.totalFailed,
+    required this.profileSummary,
+    this.safeErrorCode = '',
+  });
+
+  final String id;
+  final String providerStatus;
+  final String status;
+  final int candidateCap;
+  final int totalDiscovered;
+  final int totalIngested;
+  final int totalDuplicate;
+  final int totalFailed;
+  final String safeErrorCode;
+  final Map<String, dynamic> profileSummary;
+
+  bool get degraded => providerStatus == 'degraded_existing_corpus';
+  bool get partial => providerStatus == 'completed_with_errors';
+
+  factory PrecedentPoolSummary.fromJson(Map<String, dynamic> json) =>
+      PrecedentPoolSummary(
+        id: json['id'] as String? ?? json['pool_id'] as String? ?? '',
+        providerStatus: json['provider_status'] as String? ?? '',
+        status: json['status'] as String? ?? '',
+        candidateCap: json['candidate_cap'] as int? ?? 0,
+        totalDiscovered: json['total_discovered'] as int? ?? 0,
+        totalIngested: json['total_ingested'] as int? ?? 0,
+        totalDuplicate: json['total_duplicate'] as int? ?? 0,
+        totalFailed: json['total_failed'] as int? ?? 0,
+        safeErrorCode: json['safe_error_code'] as String? ?? '',
+        profileSummary: Map<String, dynamic>.from(
+          json['profile_summary'] as Map? ?? const <String, dynamic>{},
+        ),
+      );
+}
+
+class PrecedentDecision {
+  const PrecedentDecision({
+    required this.id,
+    required this.sourceRecordId,
+    required this.sourceVersionId,
+    required this.retrievalRank,
+    required this.scores,
+    required this.title,
+    required this.court,
+    required this.chamber,
+    required this.caseNumber,
+    required this.decisionNumber,
+    required this.decisionDate,
+    required this.officialUrl,
+    required this.relevantParagraph,
+    required this.matchReasons,
+  });
+
+  final String id;
+  final String sourceRecordId;
+  final String sourceVersionId;
+  final int retrievalRank;
+  final Map<String, dynamic> scores;
+  final String title;
+  final String court;
+  final String chamber;
+  final String caseNumber;
+  final String decisionNumber;
+  final String decisionDate;
+  final String officialUrl;
+  final String relevantParagraph;
+  final List<String> matchReasons;
+
+  double get relevanceScore =>
+      (scores['final_score'] as num?)?.toDouble() ?? 0.0;
+
+  factory PrecedentDecision.fromJson(Map<String, dynamic> json) =>
+      PrecedentDecision(
+        id: json['id'] as String? ?? '',
+        sourceRecordId: json['source_record_id'] as String? ?? '',
+        sourceVersionId: json['source_version_id'] as String? ?? '',
+        retrievalRank: json['retrieval_rank'] as int? ?? 0,
+        scores: Map<String, dynamic>.from(
+          json['scores'] as Map? ?? const <String, dynamic>{},
+        ),
+        title: json['title'] as String? ?? '',
+        court: json['court'] as String? ?? '',
+        chamber: json['chamber'] as String? ?? '',
+        caseNumber: json['case_number'] as String? ?? '',
+        decisionNumber: json['decision_number'] as String? ?? '',
+        decisionDate: json['decision_date'] as String? ?? '',
+        officialUrl: json['official_url'] as String? ?? '',
+        relevantParagraph: json['relevant_paragraph'] as String? ?? '',
+        matchReasons: (json['match_reasons'] as List<dynamic>? ?? const [])
+            .map((dynamic value) => value.toString())
+            .toList(growable: false),
+      );
+}
+
+class PrecedentAnalysis {
+  const PrecedentAnalysis({
+    required this.poolDecisionId,
+    required this.analysis,
+  });
+
+  final String poolDecisionId;
+  final Map<String, dynamic> analysis;
+
+  factory PrecedentAnalysis.fromJson(Map<String, dynamic> json) =>
+      PrecedentAnalysis(
+        poolDecisionId: json['pool_decision_id'] as String? ?? '',
+        analysis: Map<String, dynamic>.from(
+          json['analysis'] as Map? ?? const <String, dynamic>{},
+        ),
+      );
 }
