@@ -42,7 +42,9 @@ class _LegalReasoningWorkspaceScreenState
   Future<void> _findPrecedents(LegalReasoningWorkspace workspace) async {
     setState(() => _findingPrecedents = true);
     try {
-      await ref.read(legalReasoningRepositoryProvider).findPrecedents(workspace);
+      await ref
+          .read(legalReasoningRepositoryProvider)
+          .findPrecedents(workspace);
       ref.invalidate(legalReasoningWorkspaceProvider(widget.caseId));
       await ref.read(legalReasoningWorkspaceProvider(widget.caseId).future);
     } on ApiException catch (error) {
@@ -248,7 +250,9 @@ class _PrecedentPoolSection extends StatelessWidget {
               if (pool.pool.partial)
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
-                  child: Text('Bazı sağlayıcı istekleri başarısız oldu; mevcut sonuçlarla devam edildi.'),
+                  child: Text(
+                    'Bazı sağlayıcı istekleri başarısız oldu; mevcut sonuçlarla devam edildi.',
+                  ),
                 ),
               if (pool.isEmpty)
                 const Padding(
@@ -280,19 +284,25 @@ class _ProfileSummary extends StatelessWidget {
     final String area = summary['legal_area'] as String? ?? '';
     final String dispute = summary['dispute_type'] as String? ?? '';
     if (area.isEmpty && dispute.isEmpty) return const SizedBox.shrink();
-    return Text([area, dispute].where((String value) => value.isNotEmpty).join(' · '));
+    return Text(
+      [area, dispute].where((String value) => value.isNotEmpty).join(' · '),
+    );
   }
 }
 
 class _PrecedentDecisionTile extends StatelessWidget {
-  const _PrecedentDecisionTile({required this.decision, required this.analysis});
+  const _PrecedentDecisionTile({
+    required this.decision,
+    required this.analysis,
+  });
 
   final PrecedentDecision decision;
   final PrecedentAnalysis? analysis;
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, dynamic> data = analysis?.analysis ?? const <String, dynamic>{};
+    final Map<String, dynamic> data =
+        analysis?.analysis ?? const <String, dynamic>{};
     return ExpansionTile(
       leading: const Icon(Icons.verified_outlined),
       title: Text(
@@ -305,13 +315,25 @@ class _PrecedentDecisionTile extends StatelessWidget {
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: <Widget>[
         if (decision.relevantParagraph.isNotEmpty)
-          _FieldBlock(title: 'İlgili paragraf', text: decision.relevantParagraph),
+          _FieldBlock(
+            title: 'İlgili paragraf',
+            text: decision.relevantParagraph,
+          ),
         if (decision.matchReasons.isNotEmpty)
-          _FieldBlock(title: 'Açıklama', text: decision.matchReasons.join('\n')),
+          _FieldBlock(
+            title: 'Açıklama',
+            text: decision.matchReasons.join('\n'),
+          ),
         _ListBlock(title: 'Benzerlikler', values: data['similarities_to_case']),
         _ListBlock(title: 'Farklar', values: data['material_differences']),
-        _FieldBlock(title: 'Lehe kullanım', text: data['favorable_use'] as String? ?? ''),
-        _FieldBlock(title: 'Aleyhe kullanım', text: data['adverse_opposing_use'] as String? ?? ''),
+        _FieldBlock(
+          title: 'Lehe kullanım',
+          text: data['favorable_use'] as String? ?? '',
+        ),
+        _FieldBlock(
+          title: 'Aleyhe kullanım',
+          text: data['adverse_opposing_use'] as String? ?? '',
+        ),
         _ListBlock(title: 'Eksik olgular', values: data['missing_information']),
         Align(
           alignment: Alignment.centerLeft,
@@ -319,18 +341,18 @@ class _PrecedentDecisionTile extends StatelessWidget {
             onPressed: decision.officialUrl.isEmpty
                 ? null
                 : () => showDialog<void>(
-                      context: context,
-                      builder: (BuildContext context) => AlertDialog(
-                        title: const Text('Resmi kaynak'),
-                        content: SelectableText(decision.officialUrl),
-                        actions: <Widget>[
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Kapat'),
-                          ),
-                        ],
-                      ),
+                    context: context,
+                    builder: (BuildContext context) => AlertDialog(
+                      title: const Text('Resmi kaynak'),
+                      content: SelectableText(decision.officialUrl),
+                      actions: <Widget>[
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Kapat'),
+                        ),
+                      ],
                     ),
+                  ),
             icon: const Icon(Icons.open_in_new_outlined),
             label: const Text('Resmi kaynağı aç'),
           ),

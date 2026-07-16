@@ -98,8 +98,7 @@ class LegalReasoningRepository {
           },
         );
     final String? poolId =
-        response['pool_id'] as String? ??
-        (response['id'] as String?);
+        response['pool_id'] as String? ?? (response['id'] as String?);
     if (poolId != null && poolId.isNotEmpty) {
       await _client.postJson<Map<String, dynamic>>(
         '/api/v1/precedent-pools/$poolId/analyze',
@@ -109,17 +108,20 @@ class LegalReasoningRepository {
   }
 
   String _caseText(LegalReasoningWorkspace workspace) {
-    final List<String> lines = <String>[
-      for (final LegalIssueSummary issue in workspace.issues)
-        '${issue.title}. ${issue.description}',
-      for (final Map<String, dynamic> item in workspace.missingInformation)
-        'Eksik bilgi: ${item['label'] ?? ''}',
-      for (final Map<String, dynamic> item in workspace.unsupportedClaims)
-        'Desteksiz iddia: ${item['title'] ?? ''}',
-    ]
-        .map((String value) => value.trim())
-        .where((String value) => value.isNotEmpty)
-        .toList(growable: false);
+    final List<String> lines =
+        <String>[
+              for (final LegalIssueSummary issue in workspace.issues)
+                '${issue.title}. ${issue.description}',
+              for (final Map<String, dynamic> item
+                  in workspace.missingInformation)
+                'Eksik bilgi: ${item['label'] ?? ''}',
+              for (final Map<String, dynamic> item
+                  in workspace.unsupportedClaims)
+                'Desteksiz iddia: ${item['title'] ?? ''}',
+            ]
+            .map((String value) => value.trim())
+            .where((String value) => value.isNotEmpty)
+            .toList(growable: false);
     final String text = lines.join('\n');
     if (text.length >= 20) return text;
     return 'Dosya hukuki uyuşmazlığı için emsal Yargıtay kararları aranacak.';
