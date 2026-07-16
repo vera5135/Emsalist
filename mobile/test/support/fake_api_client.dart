@@ -19,6 +19,7 @@ class FakeApiClient implements ApiClient {
   final List<String> getPaths = <String>[];
   final List<String> postPaths = <String>[];
   final List<Object?> postBodies = <Object?>[];
+  final List<Duration?> postReceiveTimeouts = <Duration?>[];
   final List<String> patchPaths = <String>[];
   final List<Object?> patchBodies = <Object?>[];
 
@@ -97,9 +98,11 @@ class FakeApiClient implements ApiClient {
     Object? body,
     Map<String, dynamic>? queryParameters,
     Object? cancelToken,
+    Duration? receiveTimeout,
   }) async {
     postPaths.add(path);
     postBodies.add(body);
+    postReceiveTimeouts.add(receiveTimeout);
     final Object? error = _postErrors[path];
     if (error != null) {
       throw error;

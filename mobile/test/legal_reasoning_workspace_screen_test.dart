@@ -1,6 +1,7 @@
 import 'package:emsalist_mobile/core/network/api_exception.dart';
 import 'package:emsalist_mobile/features/legal_reasoning/application/legal_reasoning_providers.dart';
 import 'package:emsalist_mobile/features/legal_reasoning/data/legal_reasoning_repository.dart';
+import 'package:emsalist_mobile/features/legal_reasoning/domain/legal_reasoning_workspace.dart';
 import 'package:emsalist_mobile/features/legal_reasoning/presentation/legal_reasoning_workspace_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,8 @@ const String _caseId = 'case-1';
 const String _issuesPath = '/api/v1/cases/$_caseId/legal-issues';
 const String _graphPath = '/api/v1/legal-issues/root/graph';
 const String _rebuildPath = '/api/v1/cases/$_caseId/legal-issues/rebuild';
+const String _dynamicPoolPath = '/api/v1/search/dynamic-pool';
+const String _analyzePoolPath = '/api/v1/precedent-pools/pool-1/analyze';
 
 Widget _host(FakeApiClient client) => ProviderScope(
   overrides: <Override>[
@@ -79,6 +82,45 @@ Map<String, dynamic> _graph({bool stale = false}) => <String, dynamic>{
 };
 
 void main() {
+  test('uses a long timeout only for dynamic pool requests', () async {
+    final FakeApiClient client = FakeApiClient()
+      ..whenPost(_dynamicPoolPath, <String, dynamic>{'pool_id': 'pool-1'})
+      ..whenPost(_analyzePoolPath, <String, dynamic>{'status': 'completed'});
+    final LegalReasoningRepository repository = LegalReasoningRepository(
+      client,
+    );
+
+    await repository.findPrecedents(
+      const LegalReasoningWorkspace(
+        caseId: _caseId,
+        issues: <LegalIssueSummary>[
+          LegalIssueSummary(
+            id: 'root',
+            title: 'Ayıplı araç sorumluluğu',
+            description: 'İkinci el araçta gizli motor arızası.',
+            status: 'identified',
+            supportState: 'partial',
+            version: 1,
+          ),
+        ],
+        burdens: <Map<String, dynamic>>[],
+        counterarguments: <Map<String, dynamic>>[],
+        sourceLinks: <Map<String, dynamic>>[],
+        evidenceLinks: <Map<String, dynamic>>[],
+        factLinks: <Map<String, dynamic>>[],
+        missingInformation: <Map<String, dynamic>>[],
+        unsupportedClaims: <Map<String, dynamic>>[],
+        stale: false,
+      ),
+    );
+
+    expect(client.postPaths, <String>[_dynamicPoolPath, _analyzePoolPath]);
+    expect(client.postReceiveTimeouts, <Duration?>[
+      const Duration(minutes: 10),
+      const Duration(minutes: 2),
+    ]);
+  });
+
   testWidgets(
     'shows hierarchy, support, counterargument, burden and source provenance',
     (WidgetTester tester) async {

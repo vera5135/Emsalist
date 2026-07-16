@@ -11,6 +11,7 @@ from sqlalchemy import delete, select
 
 from app.db.models import (
     BurdenOfProof, Case, CaseFact, Counterargument,
+    CaseMember,
     LegalIssue, LegalIssueFactLink, LegalIssueSourceLink,
     LegalReasoningRun, MemoryRevision, SourceParagraph,
     SourceRecord, SourceVersion,
@@ -179,6 +180,9 @@ async def lifecycle_deps():
                 await session.execute(
                     delete(model).where(model.case_id == case_id)
                 )
+            await session.execute(
+                delete(CaseMember).where(CaseMember.case_id == case_id)
+            )
             await session.execute(
                 delete(Case).where(Case.id == case_id)
             )

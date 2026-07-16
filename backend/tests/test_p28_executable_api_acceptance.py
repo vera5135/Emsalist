@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 
 from app.db.models import (
     BurdenOfProof, Case, CaseFact, Claim, Counterargument, Evidence,
+    CaseMember,
     EvidenceClaimLink, EvidenceSufficiencyAssessment, LegalIssue,
     LegalIssueFactLink, LegalIssueSourceLink, LegalReasoningRun,
     MemoryRevision,
@@ -76,6 +77,7 @@ async def injected_reasoning_dependencies():
                 Evidence, Claim, CaseFact,
             ):
                 await session.execute(delete(model).where(model.case_id == case_id))
+            await session.execute(delete(CaseMember).where(CaseMember.case_id == case_id))
             await session.execute(delete(Case).where(Case.id == case_id))
         await session.commit()
     _created_cases.clear()

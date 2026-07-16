@@ -35,6 +35,7 @@ class _FakeApiClient implements ApiClient {
     Object? body,
     Map<String, dynamic>? queryParameters,
     Object? cancelToken,
+    Duration? receiveTimeout,
   }) async {
     requestedPaths.add(path);
     if (error != null) {

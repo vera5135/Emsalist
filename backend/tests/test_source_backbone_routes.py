@@ -10,6 +10,7 @@ from app.db.models import (
     AuditEvent,
     AuthSession,
     Case,
+    CaseMember,
     SourceParagraph,
     SourceRecord,
     SourceRelationship,
@@ -52,6 +53,7 @@ async def db_setup():
         await session.execute(delete(SourceRelationship))
         await session.execute(delete(SourceVersion))
         await session.execute(delete(SourceRecord))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(tenants)))
         await session.execute(delete(Case).where(Case.tenant_id.in_(tenants)))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(tenants)))
         await session.execute(delete(AuthSession).where(AuthSession.user_id.in_(user_ids)))

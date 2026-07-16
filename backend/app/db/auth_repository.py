@@ -163,6 +163,30 @@ class CaseMemberRepository:
         return m
 
     @staticmethod
+    async def ensure_member(
+        db: AsyncSession,
+        case_id: str,
+        tenant_id: str,
+        user_id: str,
+        role: str = "viewer",
+    ) -> CaseMember:
+        existing = await CaseMemberRepository.get_active_membership(
+            db,
+            tenant_id,
+            case_id,
+            user_id,
+        )
+        if existing is not None:
+            return existing
+        return await CaseMemberRepository.add_member(
+            db,
+            case_id,
+            tenant_id,
+            user_id,
+            role,
+        )
+
+    @staticmethod
     async def revoke_member(db: AsyncSession, member: CaseMember) -> None:
         member.revoked_at = datetime.now(UTC)
         await db.flush()

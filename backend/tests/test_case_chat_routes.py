@@ -9,16 +9,18 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.db.models import (
     AuditEvent,
     Case,
+    CaseMember,
     Conversation,
     Message,
     Tenant,
     User,
 )
+from app.db.auth_repository import CaseMemberRepository
 from app.db.session import get_sessionmaker
 from app.main import app
 
@@ -33,6 +35,7 @@ async def db_setup():
         # Clean any residue then seed local tenant/user + a foreign tenant/user.
         await session.execute(delete(Message).where(Message.tenant_id.in_(["local", OTHER_TENANT])))
         await session.execute(delete(Conversation).where(Conversation.tenant_id.in_(["local", OTHER_TENANT])))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(["local", OTHER_TENANT])))
         await session.execute(delete(Case).where(Case.tenant_id.in_(["local", OTHER_TENANT])))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(["local", OTHER_TENANT])))
         await session.execute(delete(User).where(User.id.in_(["local-user", OTHER_USER])))
@@ -47,6 +50,7 @@ async def db_setup():
     async with maker() as session:
         await session.execute(delete(Message).where(Message.tenant_id.in_(["local", OTHER_TENANT])))
         await session.execute(delete(Conversation).where(Conversation.tenant_id.in_(["local", OTHER_TENANT])))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(["local", OTHER_TENANT])))
         await session.execute(delete(Case).where(Case.tenant_id.in_(["local", OTHER_TENANT])))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(["local", OTHER_TENANT])))
         await session.execute(delete(User).where(User.id.in_(["local-user", OTHER_USER])))
@@ -88,6 +92,58 @@ async def test_create_and_get_case(client: AsyncClient):
     g = await client.get(f"/api/v1/cases/{case_id}")
     assert g.status_code == 200
     assert g.json()["id"] == case_id
+
+
+@pytest.mark.asyncio
+async def test_create_case_creates_owner_membership(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    r = await client.post(
+        "/api/v1/cases",
+        json={"title": "Membership", "legal_topic": "Tüketici"},
+    )
+    assert r.status_code == 201
+    case_id = r.json()["id"]
+
+    maker = get_sessionmaker()
+    async with maker() as session:
+        rows = (
+            await session.execute(
+                select(CaseMember).where(
+                    CaseMember.tenant_id == "local",
+                    CaseMember.user_id == "local-user",
+                    CaseMember.case_id == case_id,
+                )
+            )
+        ).scalars().all()
+
+    assert len(rows) == 1
+    member = rows[0]
+    assert member.membership_role == "owner"
+    assert member.revoked_at is None
+
+    async def fail_membership(*args, **kwargs):
+        raise RuntimeError("membership failed")
+
+    monkeypatch.setattr(CaseMemberRepository, "ensure_member", fail_membership)
+    with pytest.raises(RuntimeError, match="membership failed"):
+        await client.post(
+            "/api/v1/cases",
+            json={"title": "Membership Rollback", "legal_topic": "Tüketici"},
+        )
+
+    async with maker() as session:
+        rolled_back = (
+            await session.execute(
+                select(Case).where(
+                    Case.tenant_id == "local",
+                    Case.owner_user_id == "local-user",
+                    Case.title == "Membership Rollback",
+                )
+            )
+        ).scalar_one_or_none()
+    assert rolled_back is None
 
 
 @pytest.mark.asyncio
