@@ -101,7 +101,7 @@ async def create_case(
     ctx: SecurityContext = Depends(resolve_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> CaseResponse:
-    from app.db.auth_repository import AuthAuditRepository
+    from app.db.auth_repository import AuthAuditRepository, CaseMemberRepository
 
     case = await CaseRepository.create(
         db,
@@ -110,6 +110,13 @@ async def create_case(
         title=(body.title or "").strip(),
         legal_topic=body.legal_topic.strip(),
         event_text=body.initial_narrative.strip(),
+    )
+    await CaseMemberRepository.ensure_member(
+        db,
+        case_id=case.id,
+        tenant_id=ctx.tenant_id,
+        user_id=ctx.actor_id,
+        role="owner",
     )
     await AuthAuditRepository.write_event(
         db, ctx.tenant_id, ctx.actor_id, case.id, "case_created", "success",

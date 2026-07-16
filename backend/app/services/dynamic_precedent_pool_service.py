@@ -1,6 +1,7 @@
 """P2 Core — bounded case-profile, official ingestion and shortlist orchestration."""
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,7 @@ from app.services.case_search_profile import case_search_profile_provider
 from app.services.hybrid_search_service import execute_legal_search
 from app.services.precedent_pool_service import complete_pool, start_pool
 from app.services.provider_ingestion_service import RunSummary, run_ingestion
+from app.services.source_fetcher import create_live_transport
 from app.services.source_providers.base import ProviderError
 
 _PROVIDER_CODE = "yargitay"
@@ -27,6 +29,7 @@ _STOP_ERROR_CODES = frozenset({
     "structure_changed",
     "transport_unavailable",
 })
+logger = logging.getLogger(__name__)
 
 
 IngestionRunner = Callable[..., Awaitable[RunSummary]]
@@ -118,37 +121,49 @@ async def build_dynamic_precedent_pool(
         )
     runs: list[DynamicPrecedentIngestionRun] = []
     provider_error = False
+    provider_transport = transport
+    close_provider_transport = False
+    if provider_transport is None:
+        provider_transport = create_live_transport()
+        close_provider_transport = provider_transport is not None
 
-    for query, budget in zip(queries, budgets):
-        try:
-            summary = await ingestion_runner(
-                db,
-                provider_code=_PROVIDER_CODE,
-                run_type="fetch_and_ingest",
-                query=query,
-                max_items=budget,
-                transport=transport,
-                created_by=getattr(security_context, "actor_id", None),
-                sleeper=sleeper,
-            )
-        except ProviderError as exc:
-            provider_error = True
-            runs.append(
-                DynamicPrecedentIngestionRun(
+    try:
+        for query, budget in zip(queries, budgets):
+            try:
+                summary = await ingestion_runner(
+                    db,
+                    provider_code=_PROVIDER_CODE,
+                    run_type="fetch_and_ingest",
                     query=query,
-                    budget=budget,
-                    status="failed",
-                    failed=1,
-                    safe_error_code=exc.code,
+                    max_items=budget,
+                    transport=provider_transport,
+                    created_by=getattr(security_context, "actor_id", None),
+                    sleeper=sleeper,
                 )
-            )
-            break
+            except ProviderError as exc:
+                provider_error = True
+                runs.append(
+                    DynamicPrecedentIngestionRun(
+                        query=query,
+                        budget=budget,
+                        status="failed",
+                        failed=1,
+                        safe_error_code=exc.code,
+                    )
+                )
+                break
 
-        run = _run_contract(query, budget, summary)
-        runs.append(run)
-        if run.safe_error_code in _STOP_ERROR_CODES:
-            provider_error = True
-            break
+            run = _run_contract(query, budget, summary)
+            runs.append(run)
+            if run.safe_error_code in _STOP_ERROR_CODES:
+                provider_error = True
+                break
+    finally:
+        if close_provider_transport:
+            try:
+                provider_transport.close()
+            except Exception:
+                logger.warning("dynamic_pool_transport_close_failed", exc_info=True)
 
     shortlist = await search_executor(
         db,

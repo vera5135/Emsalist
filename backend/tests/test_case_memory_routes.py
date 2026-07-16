@@ -15,6 +15,7 @@ from app.db.models import (
     AuditEvent,
     Case,
     CaseFact,
+    CaseMember,
     Contradiction,
     Deadline,
     Defense,
@@ -39,6 +40,7 @@ async def db_setup():
     async with maker() as session:
         for model in (CaseFact, TimelineEvent, MissingInformation, Contradiction, Risk, Evidence, Deadline, Defense):
             await session.execute(delete(model).where(model.tenant_id.in_(tenants)))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(tenants)))
         await session.execute(delete(Case).where(Case.tenant_id.in_(tenants)))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(tenants)))
         await session.execute(delete(User).where(User.id.in_(["local-user", OTHER_USER])))
@@ -53,6 +55,7 @@ async def db_setup():
     async with maker() as session:
         for model in (CaseFact, TimelineEvent, MissingInformation, Contradiction, Risk, Evidence, Deadline, Defense):
             await session.execute(delete(model).where(model.tenant_id.in_(tenants)))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(tenants)))
         await session.execute(delete(Case).where(Case.tenant_id.in_(tenants)))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(tenants)))
         await session.execute(delete(User).where(User.id.in_(["local-user", OTHER_USER])))

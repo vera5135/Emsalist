@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -55,6 +56,14 @@ def _summary(*, ingested=0, duplicate=0, failed=0, error=""):
         failed=failed,
         last_safe_error_code=error,
     )
+
+
+class _ClosableTransport:
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
 
 def test_candidate_budget_never_exceeds_hard_cap():
@@ -149,6 +158,41 @@ async def test_provider_failure_degrades_to_existing_verified_corpus():
     assert result.total_failed == 1
     assert result.ingestion_runs[0].safe_error_code == "transport_unavailable"
     assert result.shortlist.total == 4
+
+
+@pytest.mark.asyncio
+async def test_live_dynamic_pool_creates_and_closes_transport():
+    transport = _ClosableTransport()
+    ingestion_calls = []
+
+    async def fake_ingestion(db, **kwargs):
+        ingestion_calls.append(kwargs)
+        return _summary(ingested=1)
+
+    async def empty_search(db, request, security_context):
+        return LegalSearchResponse(total=0, index_version="idx")
+
+    with patch(
+        "app.services.dynamic_precedent_pool_service.create_live_transport",
+        return_value=transport,
+    ) as create_transport:
+        await build_dynamic_precedent_pool(
+            object(),
+            DynamicPrecedentPoolRequest(
+                case_text="İkinci el araç satışında gizli ayıp ve motor arızası.",
+                max_queries=3,
+                max_candidates=10,
+            ),
+            SimpleNamespace(actor_id="user-1", tenant_id="tenant-1"),
+            profile_provider=_ProfileProvider(),
+            ingestion_runner=fake_ingestion,
+            search_executor=empty_search,
+        )
+
+    create_transport.assert_called_once_with()
+    assert ingestion_calls
+    assert all(call["transport"] is transport for call in ingestion_calls)
+    assert transport.closed is True
 
 
 @pytest.mark.asyncio

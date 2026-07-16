@@ -27,6 +27,7 @@ from app.db.models import (  # noqa: E402
     AuditEvent,
     Case,
     CaseFact,
+    CaseMember,
     Contradiction,
     Document,
     DocumentExtraction,
@@ -83,6 +84,7 @@ async def db_setup():
     async with maker() as session:
         for model in (DocumentExtraction, DocumentPage, Document, CaseFact, Contradiction):
             await session.execute(delete(model).where(model.tenant_id.in_(tenants)))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(tenants)))
         await session.execute(delete(Case).where(Case.tenant_id.in_(tenants)))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(tenants)))
         await session.execute(delete(User).where(User.id.in_(["local-user", OTHER_USER])))
@@ -97,6 +99,7 @@ async def db_setup():
     async with maker() as session:
         for model in (DocumentExtraction, DocumentPage, Document, CaseFact, Contradiction):
             await session.execute(delete(model).where(model.tenant_id.in_(tenants)))
+        await session.execute(delete(CaseMember).where(CaseMember.tenant_id.in_(tenants)))
         await session.execute(delete(Case).where(Case.tenant_id.in_(tenants)))
         await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id.in_(tenants)))
         await session.execute(delete(User).where(User.id.in_(["local-user", OTHER_USER])))

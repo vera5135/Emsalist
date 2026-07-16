@@ -77,6 +77,7 @@ class DioApiClient implements ApiClient {
     Object? body,
     Map<String, dynamic>? queryParameters,
     Object? cancelToken,
+    Duration? receiveTimeout,
   }) async {
     try {
       final Response<dynamic> response = await _dio.post<dynamic>(
@@ -84,6 +85,9 @@ class DioApiClient implements ApiClient {
         data: body,
         queryParameters: queryParameters,
         cancelToken: cancelToken is CancelToken ? cancelToken : null,
+        options: receiveTimeout == null
+            ? null
+            : Options(receiveTimeout: receiveTimeout),
       );
       final dynamic data = response.data;
       if (data is T) {
