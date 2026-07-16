@@ -357,6 +357,7 @@ def create_configured_legal_reasoning_provider() -> LegalReasoningProvider:
             reasoning_effort=settings.deepseek_reasoning_effort,
             timeout_seconds=settings.deepseek_timeout_seconds,
             max_retries=settings.deepseek_max_retries,
+            max_tokens=settings.deepseek_max_tokens,
         )
     return UnavailableLegalReasoningProvider()
 

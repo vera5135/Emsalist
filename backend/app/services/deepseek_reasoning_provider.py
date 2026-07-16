@@ -30,6 +30,7 @@ class DeepSeekReasoningProvider:
         reasoning_effort: str = "high",
         timeout_seconds: int = 60,
         max_retries: int = 2,
+        max_tokens: int = 4096,
         http_client: httpx.AsyncClient | None = None,
         sleeper: Callable[[float], Awaitable[None]] | None = None,
     ):
@@ -39,6 +40,7 @@ class DeepSeekReasoningProvider:
         self._reasoning_effort = reasoning_effort if reasoning_effort in {"high", "max"} else "high"
         self._timeout_seconds = max(1, int(timeout_seconds))
         self._max_retries = max(0, int(max_retries))
+        self._max_tokens = max(1, int(max_tokens))
         self._http_client = http_client
         self._sleeper = sleeper or asyncio.sleep
         self.last_metrics: dict[str, Any] = {}
@@ -84,8 +86,10 @@ class DeepSeekReasoningProvider:
                 {"role": "user", "content": json.dumps(_prompt_payload(payload), ensure_ascii=False)},
             ],
             "response_format": {"type": "json_object"},
-            "thinking": "enabled",
+            "thinking": {"type": "enabled"},
             "reasoning_effort": self._reasoning_effort,
+            "stream": False,
+            "max_tokens": self._max_tokens,
         }
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
         owns_client = self._http_client is None
@@ -118,7 +122,31 @@ class DeepSeekReasoningProvider:
 
 _SYSTEM_PROMPT = (
     "Return only JSON. Do not include chain-of-thought, hidden reasoning, markdown, "
-    "or raw legal text. Use only provided source identifiers and metadata."
+    "or raw legal text. Use only provided source identifiers and metadata. "
+    "Expected JSON shape example: {"
+    "\"fact_summary\":[\"short fact summary\"],"
+    "\"chronology\":[\"event summary\"],"
+    "\"legal_issues\":[{\"issue_code\":\"issue_code\",\"title\":\"title\","
+    "\"description\":\"description\",\"status\":\"needs_review\","
+    "\"paragraph_references\":[{\"source_record_id\":\"sr\",\"source_version_id\":\"sv\","
+    "\"source_paragraph_id\":\"sp\"}]}],"
+    "\"claims\":[\"claim\"],\"defenses\":[\"defense\"],"
+    "\"burdens_of_proof\":[\"burden\"],\"evidence_gaps\":[\"gap\"],"
+    "\"precedent_similarities\":[{\"text\":\"similarity\","
+    "\"paragraph_references\":[{\"source_record_id\":\"sr\",\"source_version_id\":\"sv\","
+    "\"source_paragraph_id\":\"sp\"}]}],"
+    "\"precedent_differences\":[{\"text\":\"difference\","
+    "\"paragraph_references\":[{\"source_record_id\":\"sr\",\"source_version_id\":\"sv\","
+    "\"source_paragraph_id\":\"sp\"}]}],"
+    "\"favorable_use\":[{\"text\":\"favorable use\","
+    "\"paragraph_references\":[{\"source_record_id\":\"sr\",\"source_version_id\":\"sv\","
+    "\"source_paragraph_id\":\"sp\"}]}],"
+    "\"adverse_use\":[{\"text\":\"adverse use\","
+    "\"paragraph_references\":[{\"source_record_id\":\"sr\",\"source_version_id\":\"sv\","
+    "\"source_paragraph_id\":\"sp\"}]}],"
+    "\"risks\":[\"risk\"],\"missing_facts\":[\"missing fact\"],"
+    "\"paragraph_references\":[{\"source_record_id\":\"sr\",\"source_version_id\":\"sv\","
+    "\"source_paragraph_id\":\"sp\"}],\"confidence\":0.0,\"needs_review\":true}"
 )
 
 _REQUIRED_TOP_LEVEL = {
@@ -158,11 +186,22 @@ def _prompt_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _extract_candidate(response_json: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
-        content = response_json["choices"][0]["message"]["content"]
+        choice = response_json["choices"][0]
+        finish_reason = choice["finish_reason"]
+        message = choice["message"]
+        content = message["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise DeepSeekReasoningError("deepseek_invalid_response") from exc
-    if not isinstance(content, str):
+    if finish_reason == "length":
+        raise DeepSeekReasoningError("deepseek_output_truncated")
+    if finish_reason == "content_filter":
+        raise DeepSeekReasoningError("deepseek_content_filtered")
+    if finish_reason == "insufficient_system_resource":
+        raise DeepSeekReasoningError("deepseek_resource_unavailable")
+    if finish_reason != "stop":
         raise DeepSeekReasoningError("deepseek_invalid_response")
+    if not isinstance(content, str) or not content.strip():
+        raise DeepSeekReasoningError("deepseek_empty_response")
     try:
         candidate = json.loads(content)
     except ValueError as exc:

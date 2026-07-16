@@ -81,9 +81,9 @@ def _structured(**overrides):
     return value
 
 
-def _chat_response(content, usage=None):
+def _chat_response(content, usage=None, finish_reason="stop"):
     return {
-        "choices": [{"message": {"content": content}}],
+        "choices": [{"finish_reason": finish_reason, "message": {"content": content}}],
         "usage": usage or {"prompt_tokens": 12, "completion_tokens": 34},
     }
 
@@ -138,7 +138,10 @@ async def test_valid_structured_response_records_metrics_and_provenance():
     body = json.loads(requests[0].content)
     assert body["response_format"] == {"type": "json_object"}
     assert body["model"] == "deepseek-v4-pro"
+    assert body["thinking"] == {"type": "enabled"}
     assert body["reasoning_effort"] == "high"
+    assert body["stream"] is False
+    assert body["max_tokens"] > 0
 
 
 @pytest.mark.asyncio
@@ -156,6 +159,46 @@ async def test_invalid_json_and_schema_fail_closed():
     )
     with pytest.raises(DeepSeekReasoningError, match="deepseek_invalid_schema"):
         await invalid_schema.analyze(_payload())
+
+
+@pytest.mark.asyncio
+async def test_finish_reason_failures_are_safe_codes():
+    truncated = DeepSeekReasoningProvider(
+        api_key="x",
+        http_client=_client(lambda _request: httpx.Response(
+            200,
+            json=_chat_response(json.dumps(_structured()), finish_reason="length"),
+        )),
+    )
+    with pytest.raises(DeepSeekReasoningError, match="deepseek_output_truncated"):
+        await truncated.analyze(_payload())
+
+    filtered = DeepSeekReasoningProvider(
+        api_key="x",
+        http_client=_client(lambda _request: httpx.Response(
+            200,
+            json=_chat_response(json.dumps(_structured()), finish_reason="content_filter"),
+        )),
+    )
+    with pytest.raises(DeepSeekReasoningError, match="deepseek_content_filtered"):
+        await filtered.analyze(_payload())
+
+
+@pytest.mark.asyncio
+async def test_empty_content_fails_closed():
+    empty = DeepSeekReasoningProvider(
+        api_key="x",
+        http_client=_client(lambda _request: httpx.Response(200, json=_chat_response(""))),
+    )
+    with pytest.raises(DeepSeekReasoningError, match="deepseek_empty_response"):
+        await empty.analyze(_payload())
+
+    null_content = DeepSeekReasoningProvider(
+        api_key="x",
+        http_client=_client(lambda _request: httpx.Response(200, json=_chat_response(None))),
+    )
+    with pytest.raises(DeepSeekReasoningError, match="deepseek_empty_response"):
+        await null_content.analyze(_payload())
 
 
 @pytest.mark.asyncio
