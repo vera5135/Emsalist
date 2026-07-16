@@ -1,0 +1,64 @@
+name: P2 Core Generate Contract
+
+on:
+  push:
+    branches: [feat/p2-core-value-dynamic-precedent-pool]
+
+permissions:
+  contents: read
+
+jobs:
+  generate-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements-test.txt
+
+      - name: Apply candidate role fix and generate runtime OpenAPI
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("backend/app/services/case_search_profile.py")
+          text = path.read_text(encoding="utf-8")
+          old = '(("alıcı", "müvekkil satın aldı", "satın aldım"), "Alıcı"),'
+          new = '(("alıcı", "müvekkil satın aldı", "satın aldım", "satın aldı"), "Alıcı"),'
+          if old not in text:
+              raise SystemExit("expected role mapping not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
+          cd backend
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from app.main import app
+
+          target = Path("../docs/api/openapi-v1.generated.json")
+          target.write_text(
+              json.dumps(app.openapi(), sort_keys=True, indent=2),
+              encoding="utf-8",
+          )
+          print(target)
+          PY
+
+          python -m pytest tests/test_case_search_profile.py -q
+
+      - name: Upload generated contract
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-core-generated-contract
+          path: |
+            backend/app/services/case_search_profile.py
+            docs/api/openapi-v1.generated.json
+          if-no-files-found: error
+          retention-days: 2
