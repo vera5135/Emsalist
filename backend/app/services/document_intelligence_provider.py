@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import time
 from collections.abc import Awaitable, Callable
@@ -27,6 +28,50 @@ _TRANSIENT_ERROR_CODES = {
     "gemini_server_error",
     "gemini_connection_error",
 }
+
+# Allowlisted sanitized diagnostic stages (never free-form text). A stage names
+# WHERE validation failed; it never carries provider-produced values.
+DIAGNOSTIC_STAGES = frozenset({
+    "candidate_not_object",
+    "finish_reason_not_stop",
+    "content_parts_missing",
+    "candidate_json_not_object",
+    "top_level_keys",
+    "needs_review_type",
+    "document_type_suggestion_type",
+    "pages_not_array",
+    "page_limit",
+    "page_item_not_object",
+    "page_keys",
+    "page_number_type",
+    "duplicate_page_number",
+    "text_blocks_not_array",
+    "block_item_not_object",
+    "block_keys",
+    "block_text_type",
+    "extractions_not_array",
+    "extraction_item_not_object",
+    "extraction_keys",
+    "extraction_type_enum",
+    "field_key_enum",
+    "normalized_value_type",
+    "source_quote_type",
+    "extraction_page_number_type",
+    "provenance_page_missing",
+})
+
+# Allowlisted Gemini finishReason values; anything else is reported as
+# "UNLISTED" so raw provider text can never leak through diagnostics.
+_KNOWN_FINISH_REASONS = frozenset({
+    "STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "PROHIBITED_CONTENT",
+    "BLOCKLIST", "SPII", "OTHER", "LANGUAGE", "MALFORMED_FUNCTION_CALL",
+    "IMAGE_SAFETY", "UNEXPECTED_TOOL_CALL", "FINISH_REASON_UNSPECIFIED",
+})
+
+_FILTERED_FINISH_REASONS = frozenset({
+    "SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII",
+    "IMAGE_SAFETY",
+})
 
 # Canonical P2.5 extraction vocabulary (deterministic extractor parity).
 # extraction_type -> default field_key
@@ -63,11 +108,46 @@ _EXTRACTION_OPTIONAL_KEYS = {"field_key", "value"}
 
 
 class DocumentIntelligenceError(RuntimeError):
-    """Fail-closed provider error carrying only a sanitized code."""
+    """Fail-closed provider error carrying only a sanitized code.
 
-    def __init__(self, code: str):
+    ``diagnostic_stage`` is one of :data:`DIAGNOSTIC_STAGES` (or empty) and
+    ``diagnostics`` holds only sanitized shape metrics (counts, runtime type
+    names, allowlisted enums and key-set fingerprints) — never raw provider
+    values, key names produced by the model, quotes or document content.
+    """
+
+    def __init__(self, code: str, *, diagnostic_stage: str = "",
+                 diagnostics: dict[str, Any] | None = None):
         self.code = code
+        self.diagnostic_stage = diagnostic_stage if diagnostic_stage in DIAGNOSTIC_STAGES else ""
+        self.diagnostics = dict(diagnostics or {})
         super().__init__(code)
+
+
+def _runtime_type_name(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return "other"
+
+
+def _key_set_fingerprint(keys: set[str]) -> str:
+    """Short SHA-256 fingerprint of a sorted key set (never the names)."""
+    if not keys:
+        return ""
+    digest = hashlib.sha256("\n".join(sorted(keys)).encode("utf-8")).hexdigest()
+    return digest[:12]
 
 
 @dataclass(frozen=True)
@@ -131,11 +211,91 @@ _SYSTEM_PROMPT = (
     "Allowed extraction_type values: date, money, plate, vin, case_number (nothing else). "
     "field_key must be date, amount, vehicle_plate, vehicle_vin, case_number or "
     "decision_number and must match the extraction_type. "
+    "Findings that do not fit an allowed extraction_type must be omitted entirely. "
     "source_quote must be copied VERBATIM from the page text you transcribed; never "
     "invent dates, amounts, case numbers, parties or paragraphs that are not visibly "
     "present. Every extraction must have verification_status \"detected\". "
     "If the document is unreadable return empty pages and needs_review true."
 )
+
+
+def build_document_intelligence_response_schema(max_pages: int) -> dict[str, Any]:
+    """Official structured-output JSON Schema for the Gemini response.
+
+    Enforces the exact response shape at generation time (enums, required
+    keys, ``additionalProperties: false`` and the page cap). Semantic
+    cross-field checks (extraction_type <-> field_key match, provenance,
+    verbatim quotes) intentionally stay in the normalizer.
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "document_type_suggestion": {"type": "string"},
+            "pages": {
+                "type": "array",
+                "maxItems": max(1, int(max_pages)),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "page_number": {"type": "integer", "minimum": 1},
+                        "text_blocks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "text": {"type": "string"},
+                                    "bounding_box": {
+                                        "type": ["array", "null"],
+                                        "items": {"type": "number"},
+                                    },
+                                    "confidence": {
+                                        "type": "number", "minimum": 0, "maximum": 1,
+                                    },
+                                },
+                                "required": ["text"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["page_number", "text_blocks"],
+                    "additionalProperties": False,
+                },
+            },
+            "extractions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "extraction_type": {
+                            "type": "string",
+                            "enum": ["date", "money", "plate", "vin", "case_number"],
+                        },
+                        "field_key": {
+                            "type": "string",
+                            "enum": [
+                                "date", "amount", "vehicle_plate", "vehicle_vin",
+                                "case_number", "decision_number",
+                            ],
+                        },
+                        "value": {"type": "string"},
+                        "normalized_value": {"type": "string"},
+                        "page_number": {"type": "integer", "minimum": 1},
+                        "source_quote": {"type": "string"},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                        "verification_status": {"type": "string", "enum": ["detected"]},
+                    },
+                    "required": [
+                        "extraction_type", "normalized_value", "page_number",
+                        "source_quote", "confidence", "verification_status",
+                    ],
+                    "additionalProperties": False,
+                },
+            },
+            "needs_review": {"type": "boolean"},
+        },
+        "required": ["document_type_suggestion", "pages", "extractions", "needs_review"],
+        "additionalProperties": False,
+    }
 
 
 class GeminiDocumentIntelligenceProvider:
@@ -167,6 +327,7 @@ class GeminiDocumentIntelligenceProvider:
         self._enabled = bool(enabled)
         self._http_client = http_client
         self._sleeper = sleeper or asyncio.sleep
+        self._last_http_status = 0
         self.last_metrics: dict[str, Any] = {}
 
     async def analyze(self, request: DocumentAnalysisInput) -> dict[str, Any]:
@@ -198,10 +359,19 @@ class GeminiDocumentIntelligenceProvider:
             raise DocumentIntelligenceError("gemini_connection_error")
 
         try:
-            candidate, usage = _extract_candidate(response_json)
+            candidate, meta = _extract_candidate(response_json)
+            usage = meta["usage"]
+            transport_diag = meta["diagnostics"]
+        except DocumentIntelligenceError as exc:
+            self._record_metrics(started, attempts, status="error", error_code=exc.code,
+                                 diagnostic_stage=exc.diagnostic_stage)
+            raise
+        try:
             normalized = normalize_document_intelligence(candidate, max_pages=self._max_pages_per_run)
         except DocumentIntelligenceError as exc:
-            self._record_metrics(started, attempts, status="error", error_code=exc.code)
+            exc.diagnostics = {**transport_diag, **exc.diagnostics}
+            self._record_metrics(started, attempts, status="error", error_code=exc.code,
+                                 usage=usage, diagnostic_stage=exc.diagnostic_stage)
             raise
         self._record_metrics(
             started, attempts, status="succeeded", error_code="",
@@ -228,6 +398,9 @@ class GeminiDocumentIntelligenceProvider:
             }],
             "generationConfig": {
                 "responseMimeType": "application/json",
+                "responseJsonSchema": build_document_intelligence_response_schema(
+                    self._max_pages_per_run
+                ),
                 "temperature": 0,
             },
         }
@@ -247,6 +420,7 @@ class GeminiDocumentIntelligenceProvider:
         finally:
             if owns_client:
                 await client.aclose()
+        self._last_http_status = response.status_code
         if response.status_code == 429:
             raise DocumentIntelligenceError("gemini_rate_limited")
         if response.status_code >= 500:
@@ -261,6 +435,7 @@ class GeminiDocumentIntelligenceProvider:
     def _record_metrics(
         self, started: float, attempts: int, *, status: str, error_code: str,
         usage: dict[str, Any] | None = None, page_count: int = 0,
+        diagnostic_stage: str = "",
     ) -> None:
         usage = usage or {}
         self.last_metrics = {
@@ -268,6 +443,8 @@ class GeminiDocumentIntelligenceProvider:
             "model": self.model_version,
             "status": status,
             "safe_error_code": error_code,
+            "diagnostic_stage": diagnostic_stage if diagnostic_stage in DIAGNOSTIC_STAGES else "",
+            "http_status": getattr(self, "_last_http_status", 0),
             "request_count": attempts,
             "latency_ms": int((time.perf_counter() - started) * 1000),
             "page_count": page_count,
@@ -284,35 +461,54 @@ def _safe_int(value: Any) -> int:
 
 
 def _extract_candidate(response_json: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    usage_raw = response_json.get("usageMetadata", {})
+    usage = usage_raw if isinstance(usage_raw, dict) else {}
+    diag: dict[str, Any] = {
+        "candidate_count": len(response_json.get("candidates") or [])
+        if isinstance(response_json.get("candidates"), list) else 0,
+        "prompt_tokens": _safe_int(usage.get("promptTokenCount")),
+        "completion_tokens": _safe_int(usage.get("candidatesTokenCount")),
+        "total_tokens": _safe_int(usage.get("totalTokenCount")),
+    }
     candidates = response_json.get("candidates")
     if not isinstance(candidates, list) or not candidates:
-        raise DocumentIntelligenceError("gemini_empty_response")
+        raise DocumentIntelligenceError("gemini_empty_response", diagnostics=diag)
     first = candidates[0]
     if not isinstance(first, dict):
-        raise DocumentIntelligenceError("gemini_invalid_schema")
+        raise DocumentIntelligenceError(
+            "gemini_invalid_schema", diagnostic_stage="candidate_not_object", diagnostics=diag)
     finish_reason = str(first.get("finishReason", "STOP")).upper()
+    diag["finish_reason"] = finish_reason if finish_reason in _KNOWN_FINISH_REASONS else "UNLISTED"
     if finish_reason == "MAX_TOKENS":
-        raise DocumentIntelligenceError("gemini_output_truncated")
-    if finish_reason in {"SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"}:
-        raise DocumentIntelligenceError("gemini_content_filtered")
+        raise DocumentIntelligenceError(
+            "gemini_output_truncated", diagnostic_stage="finish_reason_not_stop", diagnostics=diag)
+    if finish_reason in _FILTERED_FINISH_REASONS:
+        raise DocumentIntelligenceError(
+            "gemini_content_filtered", diagnostic_stage="finish_reason_not_stop", diagnostics=diag)
     if finish_reason != "STOP":
-        raise DocumentIntelligenceError("gemini_invalid_schema")
+        raise DocumentIntelligenceError(
+            "gemini_finish_reason_error", diagnostic_stage="finish_reason_not_stop", diagnostics=diag)
     parts = (first.get("content") or {}).get("parts")
     if not isinstance(parts, list) or not parts:
-        raise DocumentIntelligenceError("gemini_empty_response")
+        raise DocumentIntelligenceError(
+            "gemini_empty_response", diagnostic_stage="content_parts_missing", diagnostics=diag)
+    diag["content_part_count"] = len(parts)
     text = "".join(
         str(part.get("text", "")) for part in parts if isinstance(part, dict)
     ).strip()
     if not text:
-        raise DocumentIntelligenceError("gemini_empty_response")
+        raise DocumentIntelligenceError(
+            "gemini_empty_response", diagnostic_stage="content_parts_missing", diagnostics=diag)
     try:
         candidate = json.loads(text)
     except ValueError as exc:
-        raise DocumentIntelligenceError("gemini_invalid_json") from exc
+        raise DocumentIntelligenceError("gemini_invalid_json", diagnostics=diag) from exc
+    diag["parsed_json_root_type"] = _runtime_type_name(candidate)
     if not isinstance(candidate, dict):
-        raise DocumentIntelligenceError("gemini_invalid_schema")
-    usage = response_json.get("usageMetadata", {})
-    return candidate, usage if isinstance(usage, dict) else {}
+        raise DocumentIntelligenceError(
+            "gemini_invalid_schema", diagnostic_stage="candidate_json_not_object",
+            diagnostics=diag)
+    return candidate, {"usage": usage, "diagnostics": diag}
 
 
 def _normalized_quote(value: str) -> str:
@@ -327,79 +523,125 @@ def normalize_document_intelligence(candidate: dict[str, Any], *, max_pages: int
     - extraction pointing at a page that does not exist -> gemini_provenance_mismatch
     - source_quote not found inside the page text -> extraction dropped, needs_review
     - every kept extraction is forced to verification_status="detected"
+
+    Raised errors carry an allowlisted ``diagnostic_stage`` plus sanitized
+    shape metrics (counts / runtime type names / key-set fingerprints only).
     """
-    if set(candidate) != _RESULT_REQUIRED_KEYS:
-        raise DocumentIntelligenceError("gemini_invalid_schema")
+    diag: dict[str, Any] = {}
+
+    def _fail(stage: str, code: str = "gemini_invalid_schema") -> DocumentIntelligenceError:
+        return DocumentIntelligenceError(code, diagnostic_stage=stage, diagnostics=diag)
+
+    keys = set(candidate)
+    diag["top_level_key_count"] = len(keys)
+    diag["missing_known_top_level_keys"] = sorted(_RESULT_REQUIRED_KEYS - keys)
+    unexpected_top = keys - _RESULT_REQUIRED_KEYS
+    diag["unexpected_top_level_key_count"] = len(unexpected_top)
+    if unexpected_top:
+        diag["unexpected_top_level_keys_fingerprint"] = _key_set_fingerprint(unexpected_top)
+    if keys != _RESULT_REQUIRED_KEYS:
+        raise _fail("top_level_keys")
     if not isinstance(candidate["needs_review"], bool):
-        raise DocumentIntelligenceError("gemini_invalid_schema")
+        raise _fail("needs_review_type")
     suggestion = candidate["document_type_suggestion"]
     if not isinstance(suggestion, str):
-        raise DocumentIntelligenceError("gemini_invalid_schema")
+        raise _fail("document_type_suggestion_type")
 
     pages_raw = candidate["pages"]
     if not isinstance(pages_raw, list):
-        raise DocumentIntelligenceError("gemini_invalid_schema")
+        raise _fail("pages_not_array")
+    diag["page_count"] = len(pages_raw)
     if len(pages_raw) > max_pages:
-        raise DocumentIntelligenceError("gemini_page_limit_exceeded")
+        raise _fail("page_limit", code="gemini_page_limit_exceeded")
     pages: list[dict[str, Any]] = []
     page_text: dict[int, str] = {}
-    for page in pages_raw:
-        if not isinstance(page, dict) or set(page) != _PAGE_REQUIRED_KEYS:
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+    for page_index, page in enumerate(pages_raw):
+        diag["failing_page_index"] = page_index
+        if not isinstance(page, dict):
+            raise _fail("page_item_not_object")
+        page_keys = set(page)
+        diag["page_key_count"] = len(page_keys)
+        diag["missing_known_page_keys"] = sorted(_PAGE_REQUIRED_KEYS - page_keys)
+        unexpected_page = page_keys - _PAGE_REQUIRED_KEYS
+        diag["unexpected_page_key_count"] = len(unexpected_page)
+        if unexpected_page:
+            diag["unexpected_page_keys_fingerprint"] = _key_set_fingerprint(unexpected_page)
+        if page_keys != _PAGE_REQUIRED_KEYS:
+            raise _fail("page_keys")
         number = page["page_number"]
+        diag["page_number_runtime_type"] = _runtime_type_name(number)
         if isinstance(number, bool) or not isinstance(number, int) or number < 1:
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("page_number_type")
         if number in page_text:
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("duplicate_page_number")
         blocks_raw = page["text_blocks"]
         if not isinstance(blocks_raw, list):
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("text_blocks_not_array")
+        diag["block_count"] = len(blocks_raw)
         blocks: list[dict[str, Any]] = []
-        for block in blocks_raw:
-            if not isinstance(block, dict) or not set(block) <= _BLOCK_REQUIRED_KEYS:
-                raise DocumentIntelligenceError("gemini_invalid_schema")
+        for block_index, block in enumerate(blocks_raw):
+            diag["failing_block_index"] = block_index
+            if not isinstance(block, dict):
+                raise _fail("block_item_not_object")
+            diag["block_key_count"] = len(block)
+            if not set(block) <= _BLOCK_REQUIRED_KEYS:
+                raise _fail("block_keys")
             text = block.get("text")
             if not isinstance(text, str):
-                raise DocumentIntelligenceError("gemini_invalid_schema")
+                raise _fail("block_text_type")
             blocks.append({
                 "text": text,
                 "bounding_box": block.get("bounding_box"),
                 "confidence": _safe_confidence(block.get("confidence")),
             })
+        diag.pop("failing_block_index", None)
         pages.append({"page_number": number, "text_blocks": blocks})
         page_text[number] = "\n".join(block["text"] for block in blocks)
+    diag.pop("failing_page_index", None)
     pages.sort(key=lambda item: item["page_number"])
 
     extractions_raw = candidate["extractions"]
     if not isinstance(extractions_raw, list):
-        raise DocumentIntelligenceError("gemini_invalid_schema")
+        raise _fail("extractions_not_array")
+    diag["extraction_count"] = len(extractions_raw)
     needs_review = bool(candidate["needs_review"])
     extractions: list[dict[str, Any]] = []
-    for entry in extractions_raw:
+    for extraction_index, entry in enumerate(extractions_raw):
+        diag["failing_extraction_index"] = extraction_index
         if not isinstance(entry, dict):
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("extraction_item_not_object")
         keys = set(entry)
-        if not _EXTRACTION_REQUIRED_KEYS <= keys or keys - (_EXTRACTION_REQUIRED_KEYS | _EXTRACTION_OPTIONAL_KEYS):
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+        diag["extraction_key_count"] = len(keys)
+        diag["missing_known_extraction_keys"] = sorted(_EXTRACTION_REQUIRED_KEYS - keys)
+        unexpected_extraction = keys - (_EXTRACTION_REQUIRED_KEYS | _EXTRACTION_OPTIONAL_KEYS)
+        diag["unexpected_extraction_key_count"] = len(unexpected_extraction)
+        if unexpected_extraction:
+            diag["unexpected_extraction_keys_fingerprint"] = _key_set_fingerprint(
+                unexpected_extraction)
+        if not _EXTRACTION_REQUIRED_KEYS <= keys or unexpected_extraction:
+            raise _fail("extraction_keys")
         extraction_type = entry["extraction_type"]
+        diag["extraction_type_is_allowed"] = extraction_type in CANONICAL_EXTRACTION_TYPES
         if extraction_type not in CANONICAL_EXTRACTION_TYPES:
             # No free-form categories may be invented.
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("extraction_type_enum")
         field_key = entry.get("field_key") or CANONICAL_EXTRACTION_TYPES[extraction_type]
+        diag["field_key_is_allowed"] = field_key in ALLOWED_FIELD_KEYS[extraction_type]
         if field_key not in ALLOWED_FIELD_KEYS[extraction_type]:
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("field_key_enum")
         normalized_value = entry["normalized_value"]
         source_quote = entry["source_quote"]
         if not isinstance(normalized_value, str) or not normalized_value.strip():
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("normalized_value_type")
         if not isinstance(source_quote, str) or not source_quote.strip():
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("source_quote_type")
         page_number = entry["page_number"]
+        diag["extraction_page_number_runtime_type"] = _runtime_type_name(page_number)
         if isinstance(page_number, bool) or not isinstance(page_number, int):
-            raise DocumentIntelligenceError("gemini_invalid_schema")
+            raise _fail("extraction_page_number_type")
         if page_number not in page_text:
             # Provenance pointing at a page that was never transcribed.
-            raise DocumentIntelligenceError("gemini_provenance_mismatch")
+            raise _fail("provenance_page_missing", code="gemini_provenance_mismatch")
         quote = source_quote.strip()[:MAX_SOURCE_QUOTE_CHARS]
         if _normalized_quote(quote) not in _normalized_quote(page_text[page_number]):
             # Fabricated quote: reject the finding, force user review.
@@ -416,6 +658,7 @@ def normalize_document_intelligence(candidate: dict[str, Any], *, max_pages: int
             "confidence": _safe_confidence(entry["confidence"]),
             "verification_status": "detected",
         })
+    diag.pop("failing_extraction_index", None)
 
     return {
         "document_type_suggestion": suggestion.strip()[:MAX_TYPE_SUGGESTION_CHARS],

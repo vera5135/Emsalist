@@ -256,8 +256,11 @@ async def test_unknown_extraction_category_rejected():
     payload = _ocr_result()
     payload["extractions"][0]["extraction_type"] = "secret_party_opinion"
     provider = _provider(lambda _req: httpx.Response(200, json=_gemini_http_response(payload)))
-    with pytest.raises(DocumentIntelligenceError, match="gemini_invalid_schema"):
+    with pytest.raises(DocumentIntelligenceError, match="gemini_invalid_schema") as err:
         await provider.analyze(_request())
+    assert err.value.diagnostic_stage == "extraction_type_enum"
+    assert err.value.diagnostics["extraction_type_is_allowed"] is False
+    assert "secret_party_opinion" not in json.dumps(err.value.diagnostics)
 
 
 @pytest.mark.asyncio
@@ -318,8 +321,166 @@ async def test_unavailable_provider_fails_closed():
 def test_normalize_rejects_duplicate_or_invalid_pages():
     base = _ocr_result()
     base["pages"].append({"page_number": 1, "text_blocks": []})
-    with pytest.raises(DocumentIntelligenceError, match="gemini_invalid_schema"):
+    with pytest.raises(DocumentIntelligenceError, match="gemini_invalid_schema") as err:
         normalize_document_intelligence(base, max_pages=20)
+    assert err.value.diagnostic_stage == "duplicate_page_number"
+
+
+# ---------------------------------------------------------------------------
+# Structured output schema (P2.8 fix: enforce Gemini structured OCR output)
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_request_body_contains_response_json_schema():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_gemini_http_response(_ocr_result()))
+
+    provider = _provider(handler, max_pages_per_run=20)
+    await provider.analyze(_request())
+    body = json.loads(seen[0].content)
+    config = body["generationConfig"]
+    assert config["responseMimeType"] == "application/json"
+    schema = config["responseJsonSchema"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == {
+        "document_type_suggestion", "pages", "extractions", "needs_review",
+    }
+    pages_schema = schema["properties"]["pages"]
+    assert pages_schema["maxItems"] == 20
+    page_schema = pages_schema["items"]
+    assert page_schema["additionalProperties"] is False
+    assert set(page_schema["required"]) == {"page_number", "text_blocks"}
+    assert page_schema["properties"]["page_number"]["minimum"] == 1
+    block_schema = page_schema["properties"]["text_blocks"]["items"]
+    assert block_schema["additionalProperties"] is False
+    assert block_schema["required"] == ["text"]
+
+
+@pytest.mark.asyncio
+async def test_response_json_schema_extraction_enums_are_canonical():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_gemini_http_response(_ocr_result()))
+
+    provider = _provider(handler)
+    await provider.analyze(_request())
+    schema = json.loads(seen[0].content)["generationConfig"]["responseJsonSchema"]
+    extraction_schema = schema["properties"]["extractions"]["items"]
+    assert extraction_schema["additionalProperties"] is False
+    assert extraction_schema["properties"]["extraction_type"]["enum"] == [
+        "date", "money", "plate", "vin", "case_number",
+    ]
+    assert extraction_schema["properties"]["field_key"]["enum"] == [
+        "date", "amount", "vehicle_plate", "vehicle_vin",
+        "case_number", "decision_number",
+    ]
+    assert extraction_schema["properties"]["verification_status"]["enum"] == ["detected"]
+    assert set(extraction_schema["required"]) == {
+        "extraction_type", "normalized_value", "page_number",
+        "source_quote", "confidence", "verification_status",
+    }
+
+
+@pytest.mark.asyncio
+async def test_two_page_schema_compliant_response_passes():
+    provider = _provider(
+        lambda _req: httpx.Response(200, json=_gemini_http_response(_ocr_result())))
+    result = await provider.analyze(
+        _request(content=b"%PDF-1.7 fake", mime="application/pdf"))
+    assert [p["page_number"] for p in result["pages"]] == [1, 2]
+    assert len(result["extractions"]) == 2
+    assert provider.last_metrics["status"] == "succeeded"
+    assert provider.last_metrics["diagnostic_stage"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Sanitized diagnostic stages (allowlisted; never raw provider values)
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_string_page_number_fails_closed_with_stage():
+    payload = _ocr_result()
+    payload["pages"][0]["page_number"] = "1"
+    provider = _provider(lambda _req: httpx.Response(200, json=_gemini_http_response(payload)))
+    with pytest.raises(DocumentIntelligenceError, match="gemini_invalid_schema") as err:
+        await provider.analyze(_request())
+    assert err.value.diagnostic_stage == "page_number_type"
+    assert err.value.diagnostics["page_number_runtime_type"] == "string"
+    assert err.value.diagnostics["failing_page_index"] == 0
+    assert provider.last_metrics["diagnostic_stage"] == "page_number_type"
+
+
+def test_missing_page_key_reports_page_keys_stage():
+    payload = _ocr_result()
+    del payload["pages"][0]["text_blocks"]
+    with pytest.raises(DocumentIntelligenceError, match="gemini_invalid_schema") as err:
+        normalize_document_intelligence(payload, max_pages=20)
+    assert err.value.diagnostic_stage == "page_keys"
+    assert err.value.diagnostics["missing_known_page_keys"] == ["text_blocks"]
+    assert err.value.diagnostics["unexpected_page_key_count"] == 0
+
+
+def test_unexpected_page_key_counted_but_name_never_recorded():
+    payload = _ocr_result()
+    payload["pages"][0]["gizli_sahte_anahtar"] = "x"
+    with pytest.raises(DocumentIntelligenceError, match="gemini_invalid_schema") as err:
+        normalize_document_intelligence(payload, max_pages=20)
+    assert err.value.diagnostic_stage == "page_keys"
+    assert err.value.diagnostics["unexpected_page_key_count"] == 1
+    assert err.value.diagnostics["unexpected_page_keys_fingerprint"]
+    assert "gizli_sahte_anahtar" not in json.dumps(err.value.diagnostics)
+
+
+def test_missing_extraction_key_reports_extraction_keys_stage():
+    payload = _ocr_result()
+    del payload["extractions"][1]["source_quote"]
+    with pytest.raises(DocumentIntelligenceError, match="gemini_invalid_schema") as err:
+        normalize_document_intelligence(payload, max_pages=20)
+    assert err.value.diagnostic_stage == "extraction_keys"
+    assert err.value.diagnostics["missing_known_extraction_keys"] == ["source_quote"]
+    assert err.value.diagnostics["failing_extraction_index"] == 1
+
+
+@pytest.mark.asyncio
+async def test_finish_reasons_map_to_distinct_safe_codes():
+    def _with_reason(reason: str) -> GeminiDocumentIntelligenceProvider:
+        return _provider(lambda _req: httpx.Response(
+            200, json=_gemini_http_response(_ocr_result(), finish_reason=reason)))
+
+    with pytest.raises(DocumentIntelligenceError, match="gemini_output_truncated") as err:
+        await _with_reason("MAX_TOKENS").analyze(_request())
+    assert err.value.diagnostic_stage == "finish_reason_not_stop"
+    assert err.value.diagnostics["finish_reason"] == "MAX_TOKENS"
+
+    with pytest.raises(DocumentIntelligenceError, match="gemini_content_filtered") as err:
+        await _with_reason("SAFETY").analyze(_request())
+    assert err.value.diagnostics["finish_reason"] == "SAFETY"
+
+    with pytest.raises(DocumentIntelligenceError, match="gemini_finish_reason_error") as err:
+        await _with_reason("OTHER").analyze(_request())
+    assert err.value.diagnostics["finish_reason"] == "OTHER"
+
+    with pytest.raises(DocumentIntelligenceError, match="gemini_finish_reason_error") as err:
+        await _with_reason("SOME RAW PROVIDER TEXT").analyze(_request())
+    assert err.value.diagnostics["finish_reason"] == "UNLISTED"
+    assert "SOME RAW PROVIDER TEXT" not in json.dumps(err.value.diagnostics)
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_never_contain_raw_field_values():
+    payload = _ocr_result()
+    payload["extractions"][0]["extraction_type"] = "gizli_kategori_sentinel"
+    provider = _provider(lambda _req: httpx.Response(200, json=_gemini_http_response(payload)))
+    with pytest.raises(DocumentIntelligenceError) as err:
+        await provider.analyze(_request())
+    dumped = json.dumps(err.value.diagnostics) + json.dumps(provider.last_metrics)
+    assert "gizli_kategori_sentinel" not in dumped
+    assert OCR_PAGE_1 not in dumped and OCR_PAGE_2 not in dumped
+    assert "12.500 TL" not in dumped
+    assert "12500.00" not in dumped
 
 
 # ---------------------------------------------------------------------------
@@ -470,8 +631,16 @@ async def test_scanned_pdf_without_text_layer_falls_back_to_ai(client: AsyncClie
 
 
 @pytest.mark.asyncio
-async def test_image_without_provider_keeps_honest_unsupported(client: AsyncClient):
-    # Default configuration: no document intelligence provider -> no AI call.
+async def test_image_without_provider_keeps_honest_unsupported(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    # No document intelligence provider -> no AI call, honest unsupported.
+    # (Forced explicitly so a developer .env with a real key can never make
+    # this test perform a live Gemini call.)
+    monkeypatch.setattr(
+        pipeline_routes, "_document_intelligence_provider",
+        lambda: UnavailableDocumentIntelligenceProvider(),
+    )
     case_id = await _make_case(client)
     r = await _upload(client, case_id, "foto.png", PNG_BYTES, "image/png")
     assert r.status_code == 201, r.text
