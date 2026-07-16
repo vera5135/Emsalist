@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
-from app.models.case_models import SearchBuildRequest, SearchBuildResponse
+from app.models.case_models import (
+    CaseSearchProfileRequest,
+    CaseSearchProfileResponse,
+    SearchBuildRequest,
+    SearchBuildResponse,
+)
 from app.models.search_models import (
     LegalSearchRequest,
     LegalSearchResponse,
@@ -17,6 +22,7 @@ from app.models.search_models import (
     SimilarSearchResponse,
 )
 from app.services.auth_service import SecurityContext, resolve_current_user
+from app.services.case_search_profile import case_search_profile_provider
 from app.services.hybrid_search_service import (
     execute_legal_search,
     execute_opposing_search,
@@ -32,6 +38,22 @@ router = APIRouter(prefix="/search", tags=["Search"])
 @router.post("/build", response_model=SearchBuildResponse)
 def build_search_queries(request: SearchBuildRequest) -> SearchBuildResponse:
     return search_builder.build(request)
+
+
+@router.post(
+    "/profile",
+    response_model=CaseSearchProfileResponse,
+    operation_id="search_build_case_profile",
+)
+def build_case_search_profile(
+    request: CaseSearchProfileRequest,
+    ctx: SecurityContext = Depends(resolve_current_user),
+) -> CaseSearchProfileResponse:
+    # Authentication is required because the narrative may contain privileged
+    # client information. This first slice is read-only and does not persist the
+    # raw narrative or provider queries.
+    _ = ctx
+    return case_search_profile_provider.build(request)
 
 
 @router.post("/legal", response_model=LegalSearchResponse)
