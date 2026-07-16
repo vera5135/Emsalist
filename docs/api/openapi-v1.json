@@ -239,12 +239,12 @@
       "AuditedPrecedent": {
         "properties": {
           "alignment": {
-            "default": "nötr",
+            "default": "n\u00f6tr",
             "enum": [
               "lehe",
               "aleyhe",
               "riskli",
-              "nötr"
+              "n\u00f6tr"
             ],
             "title": "Alignment",
             "type": "string"
@@ -760,7 +760,7 @@
             "title": "Case Id"
           },
           "case_text": {
-            "description": "Avukat tarafından yazılan olay özeti",
+            "description": "Avukat taraf\u0131ndan yaz\u0131lan olay \u00f6zeti",
             "minLength": 10,
             "title": "Case Text",
             "type": "string"
@@ -1180,6 +1180,201 @@
           "updated_at"
         ],
         "title": "CaseResponse",
+        "type": "object"
+      },
+      "CaseSearchProfileEvent": {
+        "properties": {
+          "certainty": {
+            "default": "explicit",
+            "enum": [
+              "explicit",
+              "inferred"
+            ],
+            "title": "Certainty",
+            "type": "string"
+          },
+          "date_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Text"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "title": "CaseSearchProfileEvent",
+        "type": "object"
+      },
+      "CaseSearchProfileRequest": {
+        "description": "Natural-language case narrative to provider-ready legal search profile.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "case_text": {
+            "description": "Avukat\u0131n do\u011fal dille anlatt\u0131\u011f\u0131 olay ve uyu\u015fmazl\u0131k \u00f6zeti",
+            "maxLength": 20000,
+            "minLength": 20,
+            "title": "Case Text",
+            "type": "string"
+          },
+          "max_queries": {
+            "default": 6,
+            "maximum": 6.0,
+            "minimum": 3.0,
+            "title": "Max Queries",
+            "type": "integer"
+          },
+          "preferred_relief": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Preferred Relief",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_text"
+        ],
+        "title": "CaseSearchProfileRequest",
+        "type": "object"
+      },
+      "CaseSearchProfileResponse": {
+        "description": "Safe, user-facing search plan; never hidden chain-of-thought.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "chronology": {
+            "items": {
+              "$ref": "#/components/schemas/CaseSearchProfileEvent"
+            },
+            "title": "Chronology",
+            "type": "array"
+          },
+          "claims": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "dispute_type": {
+            "title": "Dispute Type",
+            "type": "string"
+          },
+          "evidence_issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Issues",
+            "type": "array"
+          },
+          "extraction_mode": {
+            "default": "deterministic_v1",
+            "enum": [
+              "deterministic_v1",
+              "provider"
+            ],
+            "title": "Extraction Mode",
+            "type": "string"
+          },
+          "legal_area": {
+            "title": "Legal Area",
+            "type": "string"
+          },
+          "legal_issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Legal Issues",
+            "type": "array"
+          },
+          "legislation_hypotheses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Legislation Hypotheses",
+            "type": "array"
+          },
+          "material_facts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Material Facts",
+            "type": "array"
+          },
+          "missing_information": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Information",
+            "type": "array"
+          },
+          "party_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Party Roles",
+            "type": "array"
+          },
+          "possible_defenses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Possible Defenses",
+            "type": "array"
+          },
+          "yargitay_queries": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 3,
+            "title": "Yargitay Queries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "legal_area",
+          "dispute_type",
+          "yargitay_queries",
+          "confidence"
+        ],
+        "title": "CaseSearchProfileResponse",
         "type": "object"
       },
       "CaseStateRequest": {
@@ -1632,7 +1827,7 @@
             "type": "string"
           },
           "date": {
-            "description": "Karar tarihi; kaynakta göründüğü biçimiyle",
+            "description": "Karar tarihi; kaynakta g\u00f6r\u00fcnd\u00fc\u011f\u00fc bi\u00e7imiyle",
             "minLength": 1,
             "title": "Date",
             "type": "string"
@@ -3472,7 +3667,7 @@
             "type": "array"
           },
           "request_type": {
-            "default": "Talebimizin kabulü",
+            "default": "Talebimizin kabul\u00fc",
             "minLength": 3,
             "title": "Request Type",
             "type": "string"
@@ -3491,12 +3686,12 @@
             "type": "array"
           },
           "tone": {
-            "default": "Ölçülü ve ikna edici",
+            "default": "\u00d6l\u00e7\u00fcl\u00fc ve ikna edici",
             "enum": [
-              "Ölçülü ve ikna edici",
-              "Sert ve itiraz odaklı",
-              "Mağduriyet vurgulu",
-              "Kısa ve teknik"
+              "\u00d6l\u00e7\u00fcl\u00fc ve ikna edici",
+              "Sert ve itiraz odakl\u0131",
+              "Ma\u011fduriyet vurgulu",
+              "K\u0131sa ve teknik"
             ],
             "title": "Tone",
             "type": "string"
@@ -5828,7 +6023,7 @@
             "type": "array"
           },
           "request_type": {
-            "default": "Talebimizin kabulü",
+            "default": "Talebimizin kabul\u00fc",
             "minLength": 3,
             "title": "Request Type",
             "type": "string"
@@ -5842,12 +6037,12 @@
             "type": "array"
           },
           "tone": {
-            "default": "Ölçülü ve ikna edici",
+            "default": "\u00d6l\u00e7\u00fcl\u00fc ve ikna edici",
             "enum": [
-              "Ölçülü ve ikna edici",
-              "Sert ve itiraz odaklı",
-              "Mağduriyet vurgulu",
-              "Kısa ve teknik"
+              "\u00d6l\u00e7\u00fcl\u00fc ve ikna edici",
+              "Sert ve itiraz odakl\u0131",
+              "Ma\u011fduriyet vurgulu",
+              "K\u0131sa ve teknik"
             ],
             "title": "Tone",
             "type": "string"
@@ -8840,7 +9035,7 @@
             "type": "string"
           },
           "source": {
-            "default": "Yargıtay",
+            "default": "Yarg\u0131tay",
             "title": "Source",
             "type": "string"
           },
@@ -9051,7 +9246,7 @@
     }
   },
   "info": {
-    "description": "Emsalist backend API. Olay analizi, arama sorgusu üretimi, karar sıralama ve Yargıtay karar arama modüllerini içerir.",
+    "description": "Emsalist backend API. Olay analizi, arama sorgusu \u00fcretimi, karar s\u0131ralama ve Yarg\u0131tay karar arama mod\u00fcllerini i\u00e7erir.",
     "title": "Emsalist API",
     "version": "0.1.0"
   },
@@ -9267,7 +9462,7 @@
         },
         "summary": "Audit Draft",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9308,7 +9503,7 @@
         },
         "summary": "Audit Precedents",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9349,7 +9544,7 @@
         },
         "summary": "Audit Sources",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9390,7 +9585,7 @@
         },
         "summary": "Build Better Searches",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9431,7 +9626,7 @@
         },
         "summary": "Enrich Case",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9472,7 +9667,7 @@
         },
         "summary": "Generate Legal Questions",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9513,7 +9708,7 @@
         },
         "summary": "Refine Draft",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9558,7 +9753,7 @@
         ],
         "summary": "Get Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -9601,7 +9796,7 @@
         ],
         "summary": "Get Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -9666,7 +9861,7 @@
         ],
         "summary": "List Edges",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -9719,7 +9914,7 @@
         ],
         "summary": "Create Edge",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -9784,7 +9979,7 @@
         ],
         "summary": "List Edges",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -9838,7 +10033,7 @@
         ],
         "summary": "Delete Edge",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "patch": {
@@ -9900,7 +10095,7 @@
         ],
         "summary": "Update Edge",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -9954,7 +10149,7 @@
         ],
         "summary": "Restore Edge",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10029,7 +10224,7 @@
         ],
         "summary": "List Nodes",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -10082,7 +10277,7 @@
         ],
         "summary": "Create Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10157,7 +10352,7 @@
         ],
         "summary": "List Nodes",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10211,7 +10406,7 @@
         ],
         "summary": "Delete Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "get": {
@@ -10263,7 +10458,7 @@
         ],
         "summary": "Get Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "patch": {
@@ -10325,7 +10520,7 @@
         ],
         "summary": "Update Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10379,7 +10574,7 @@
         ],
         "summary": "Get Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10433,7 +10628,7 @@
         ],
         "summary": "Restore Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10478,7 +10673,7 @@
         ],
         "summary": "Rebuild Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10523,7 +10718,7 @@
         ],
         "summary": "Get Summary",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -10566,7 +10761,7 @@
         ],
         "summary": "Get Summary",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10611,7 +10806,7 @@
         ],
         "summary": "Validate Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -10654,7 +10849,7 @@
         ],
         "summary": "Validate Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -13932,7 +14127,7 @@
         ],
         "summary": "List Jobs",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       },
       "post": {
@@ -13974,7 +14169,7 @@
         ],
         "summary": "Enqueue Job",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -13993,7 +14188,7 @@
         },
         "summary": "List Job Types",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14038,7 +14233,7 @@
         ],
         "summary": "Get Job",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14083,7 +14278,7 @@
         ],
         "summary": "Get Artifacts",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14128,7 +14323,7 @@
         ],
         "summary": "Cancel Job",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14184,7 +14379,7 @@
         ],
         "summary": "Get Events",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14229,7 +14424,7 @@
         ],
         "summary": "Retry Job",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -16473,7 +16668,7 @@
         },
         "summary": "Build Petition Draft",
         "tags": [
-          "Dilekçe"
+          "Dilek\u00e7e"
         ]
       }
     },
@@ -16514,7 +16709,7 @@
         },
         "summary": "Build Final Petition Draft",
         "tags": [
-          "Dilekçe"
+          "Dilek\u00e7e"
         ]
       }
     },
@@ -16555,7 +16750,7 @@
         },
         "summary": "Build Petition Strategy",
         "tags": [
-          "Dilekçe"
+          "Dilek\u00e7e"
         ]
       }
     },
@@ -16679,7 +16874,7 @@
         },
         "summary": "Research Yargitay",
         "tags": [
-          "Araştırma"
+          "Ara\u015ft\u0131rma"
         ]
       }
     },
@@ -16811,6 +17006,52 @@
           }
         ],
         "summary": "Search Opposing",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/profile": {
+      "post": {
+        "operationId": "search_build_case_profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseSearchProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseSearchProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Build Case Search Profile",
         "tags": [
           "Search"
         ]
@@ -17019,7 +17260,7 @@
         },
         "summary": "Delete Case",
         "tags": [
-          "Güvenlik"
+          "G\u00fcvenlik"
         ]
       }
     },
@@ -17042,7 +17283,7 @@
         },
         "summary": "Get Fingerprint",
         "tags": [
-          "Güvenlik"
+          "G\u00fcvenlik"
         ]
       }
     },
@@ -17307,7 +17548,7 @@
         },
         "summary": "Workflow Review",
         "tags": [
-          "İş Akışı"
+          "\u0130\u015f Ak\u0131\u015f\u0131"
         ]
       }
     },
@@ -17348,7 +17589,7 @@
         },
         "summary": "Search Yargitay",
         "tags": [
-          "Yargıtay"
+          "Yarg\u0131tay"
         ]
       }
     },

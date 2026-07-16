@@ -121,7 +121,7 @@ class DeterministicCaseSearchProfileProvider:
         party_roles = _matched_phrases(
             folded,
             (
-                (("alıcı", "müvekkil satın aldı", "satın aldım"), "Alıcı"),
+                (("alıcı", "müvekkil satın aldı", "satın aldım", "satın aldı"), "Alıcı"),
                 (("satıcı", "satandan", "galeri", "bayi"), "Satıcı"),
                 (("galeri", "bayi", "tacir", "şirket"), "Ticari satıcı ihtimali"),
                 (("özel kişi", "şahıstan", "bireysel satıcı"), "Özel kişi satıcı ihtimali"),
