@@ -3,6 +3,8 @@ name: P2 Core Generate Contract
 on:
   push:
     branches: [feat/p2-core-value-dynamic-precedent-pool]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
