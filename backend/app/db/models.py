@@ -1942,3 +1942,252 @@ class PrecedentDecisionAnalysis(Base):
         Index("ix_decision_analyses_pool", "pool_id", "created_at"),
         Index("ix_decision_analyses_tenant_case", "tenant_id", "case_id"),
     )
+
+
+# ── P2.9A — Grounded draft persistence backbone ─────────────────────────────
+DRAFT_DOCUMENT_STATUSES = frozenset({
+    "draft", "reviewing", "finalized", "superseded", "deleted",
+})
+
+DRAFT_DOCUMENT_TYPES = frozenset({
+    "dava_dilekcesi", "cevap_dilekcesi", "cevaba_cevap", "ikinci_cevap",
+    "istinaf", "temyiz", "ihtiyati_tedbir", "itiraz", "beyan",
+    "delil_listesi", "ihtarname", "arabuluculuk_basvurusu",
+})
+
+DRAFT_PARAGRAPH_TYPES = frozenset({
+    "merci", "taraflar", "konu", "kisa_ozet", "olaylar",
+    "hukuki_degerlendirme", "deliller", "hukuki_nedenler",
+    "sonuc_ve_talep", "ekler", "body",
+})
+
+DRAFT_PARAGRAPH_VERIFICATION_STATUSES = frozenset({
+    "pending_review", "accepted", "needs_review",
+})
+
+DRAFT_PARAGRAPH_GENERATORS = frozenset({"user", "ai"})
+
+DRAFT_PARAGRAPH_ISSUE_RELATIONS = frozenset({"issue_drafted_in_paragraph"})
+
+DRAFT_SOURCE_USAGE_TYPES = frozenset({"citation", "quotation", "reference"})
+
+DRAFT_SOURCE_LINK_VERIFICATION_STATUSES = frozenset({"verified", "needs_review"})
+
+# Prebuilt: DraftParagraph's ``text`` column shadows sqlalchemy.text in its body.
+_DRAFT_ACTIVE_ROWS = text("deleted_at IS NULL")
+
+
+class DraftDocument(Base):
+    """P2.9A — Canonical persisted draft (no parallel JSON draft store)."""
+
+    __tablename__ = "draft_documents"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    draft_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft")
+    supersedes_draft_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_draft_documents_tenant_case_id"),
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(DRAFT_DOCUMENT_STATUSES))})",
+            name="ck_draft_documents_status",
+        ),
+        CheckConstraint(
+            f"draft_type IN ({', '.join(repr(s) for s in sorted(DRAFT_DOCUMENT_TYPES))})",
+            name="ck_draft_documents_draft_type",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "supersedes_draft_id"],
+            ["draft_documents.tenant_id", "draft_documents.case_id", "draft_documents.id"],
+            name="fk_draft_documents_supersedes",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_draft_documents_tenant_case", "tenant_id", "case_id"),
+        Index("ix_draft_documents_case_status", "case_id", "status"),
+    )
+
+
+class DraftParagraph(Base):
+    """P2.9A — Ordered draft paragraph with grounding provenance."""
+
+    __tablename__ = "draft_paragraphs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    draft_document_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    paragraph_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    paragraph_type: Mapped[str] = mapped_column(String(40), nullable=False, default="body")
+    text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    verification_status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending_review")
+    generated_by: Mapped[str] = mapped_column(String(20), nullable=False, default="user")
+    model_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id", name="uq_draft_paragraphs_tenant_case_id"),
+        CheckConstraint(
+            f"paragraph_type IN ({', '.join(repr(s) for s in sorted(DRAFT_PARAGRAPH_TYPES))})",
+            name="ck_draft_paragraphs_paragraph_type",
+        ),
+        CheckConstraint(
+            f"verification_status IN ({', '.join(repr(s) for s in sorted(DRAFT_PARAGRAPH_VERIFICATION_STATUSES))})",
+            name="ck_draft_paragraphs_verification_status",
+        ),
+        CheckConstraint(
+            f"generated_by IN ({', '.join(repr(s) for s in sorted(DRAFT_PARAGRAPH_GENERATORS))})",
+            name="ck_draft_paragraphs_generated_by",
+        ),
+        CheckConstraint("paragraph_order >= 1", name="ck_draft_paragraphs_order_min"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "draft_document_id"],
+            ["draft_documents.tenant_id", "draft_documents.case_id", "draft_documents.id"],
+            name="fk_draft_paragraphs_draft_document",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "uq_draft_paragraphs_active_order",
+            "draft_document_id", "paragraph_order",
+            unique=True,
+            postgresql_where=_DRAFT_ACTIVE_ROWS,
+            sqlite_where=_DRAFT_ACTIVE_ROWS,
+        ),
+        Index("ix_draft_paragraphs_tenant_case", "tenant_id", "case_id"),
+        Index("ix_draft_paragraphs_document_order", "draft_document_id", "paragraph_order"),
+    )
+
+
+class DraftParagraphIssueLink(Base):
+    """P2.9A — issue_drafted_in_paragraph relation (owned by P2.9)."""
+
+    __tablename__ = "draft_paragraph_issue_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    draft_paragraph_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    legal_issue_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False, default="issue_drafted_in_paragraph")
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        CheckConstraint(
+            "relation_type IN ('issue_drafted_in_paragraph')",
+            name="ck_draft_paragraph_issue_links_relation_type",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "draft_paragraph_id"],
+            ["draft_paragraphs.tenant_id", "draft_paragraphs.case_id", "draft_paragraphs.id"],
+            name="fk_draft_paragraph_issue_links_paragraph",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "legal_issue_id"],
+            ["legal_issues.tenant_id", "legal_issues.case_id", "legal_issues.id"],
+            name="fk_draft_paragraph_issue_links_issue",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "uq_draft_paragraph_issue_links_active",
+            "tenant_id", "case_id", "draft_paragraph_id", "legal_issue_id", "relation_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_draft_paragraph_issue_links_tenant_case", "tenant_id", "case_id"),
+        Index("ix_draft_paragraph_issue_links_paragraph", "draft_paragraph_id"),
+        Index("ix_draft_paragraph_issue_links_issue", "legal_issue_id"),
+    )
+
+
+class DraftParagraphSourceLink(Base):
+    """P2.9A — Exact source provenance for a draft paragraph.
+
+    Every link pins the exact SourceRecord + SourceVersion + SourceParagraph
+    chain plus a quote hash matching the source paragraph text hash.
+    """
+
+    __tablename__ = "draft_paragraph_source_links"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    draft_paragraph_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_record_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_version_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_paragraph_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    usage_type: Mapped[str] = mapped_column(String(30), nullable=False, default="citation")
+    quote_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    verification_status: Mapped[str] = mapped_column(String(30), nullable=False, default="verified")
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        CheckConstraint(
+            f"usage_type IN ({', '.join(repr(s) for s in sorted(DRAFT_SOURCE_USAGE_TYPES))})",
+            name="ck_draft_paragraph_source_links_usage_type",
+        ),
+        CheckConstraint(
+            f"verification_status IN ({', '.join(repr(s) for s in sorted(DRAFT_SOURCE_LINK_VERIFICATION_STATUSES))})",
+            name="ck_draft_paragraph_source_links_verification_status",
+        ),
+        CheckConstraint("length(quote_hash) = 64", name="ck_draft_paragraph_source_links_quote_hash_len"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "draft_paragraph_id"],
+            ["draft_paragraphs.tenant_id", "draft_paragraphs.case_id", "draft_paragraphs.id"],
+            name="fk_draft_paragraph_source_links_paragraph",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_record_id"],
+            ["source_records.id"],
+            name="fk_draft_paragraph_source_links_source_record",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_record_id", "source_version_id"],
+            ["source_versions.source_record_id", "source_versions.id"],
+            name="fk_draft_paragraph_source_links_source_version",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_version_id", "source_paragraph_id"],
+            ["source_paragraphs.source_version_id", "source_paragraphs.id"],
+            name="fk_draft_paragraph_source_links_source_paragraph",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "uq_draft_paragraph_source_links_active",
+            "tenant_id", "case_id", "draft_paragraph_id",
+            "source_record_id", "source_version_id", "source_paragraph_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_draft_paragraph_source_links_tenant_case", "tenant_id", "case_id"),
+        Index("ix_draft_paragraph_source_links_paragraph", "draft_paragraph_id"),
+        Index(
+            "ix_draft_paragraph_source_links_provenance",
+            "source_record_id", "source_version_id", "source_paragraph_id",
+        ),
+    )
