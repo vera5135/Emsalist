@@ -3094,6 +3094,193 @@
         "title": "DraftingPrecedentItem",
         "type": "object"
       },
+      "DynamicPrecedentIngestionRun": {
+        "properties": {
+          "budget": {
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Budget",
+            "type": "integer"
+          },
+          "conflict": {
+            "default": 0,
+            "title": "Conflict",
+            "type": "integer"
+          },
+          "discovered": {
+            "default": 0,
+            "title": "Discovered",
+            "type": "integer"
+          },
+          "duplicate": {
+            "default": 0,
+            "title": "Duplicate",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "fetched": {
+            "default": 0,
+            "title": "Fetched",
+            "type": "integer"
+          },
+          "ingested": {
+            "default": 0,
+            "title": "Ingested",
+            "type": "integer"
+          },
+          "new_version": {
+            "default": 0,
+            "title": "New Version",
+            "type": "integer"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "safe_error_code": {
+            "default": "",
+            "title": "Safe Error Code",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "budget",
+          "status"
+        ],
+        "title": "DynamicPrecedentIngestionRun",
+        "type": "object"
+      },
+      "DynamicPrecedentPoolRequest": {
+        "description": "One bounded case-to-corpus-to-shortlist operation.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "case_text": {
+            "description": "Avukat\u0131n do\u011fal dille anlatt\u0131\u011f\u0131 olay ve uyu\u015fmazl\u0131k \u00f6zeti",
+            "maxLength": 20000,
+            "minLength": 20,
+            "title": "Case Text",
+            "type": "string"
+          },
+          "max_candidates": {
+            "default": 50,
+            "maximum": 50.0,
+            "minimum": 10.0,
+            "title": "Max Candidates",
+            "type": "integer"
+          },
+          "max_queries": {
+            "default": 6,
+            "maximum": 6.0,
+            "minimum": 3.0,
+            "title": "Max Queries",
+            "type": "integer"
+          },
+          "preferred_relief": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Preferred Relief",
+            "type": "array"
+          },
+          "shortlist_size": {
+            "default": 12,
+            "maximum": 15.0,
+            "minimum": 3.0,
+            "title": "Shortlist Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_text"
+        ],
+        "title": "DynamicPrecedentPoolRequest",
+        "type": "object"
+      },
+      "DynamicPrecedentPoolResponse": {
+        "properties": {
+          "candidate_cap": {
+            "maximum": 50.0,
+            "minimum": 10.0,
+            "title": "Candidate Cap",
+            "type": "integer"
+          },
+          "ingestion_runs": {
+            "items": {
+              "$ref": "#/components/schemas/DynamicPrecedentIngestionRun"
+            },
+            "title": "Ingestion Runs",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/CaseSearchProfileResponse"
+          },
+          "provider_code": {
+            "default": "yargitay",
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "provider_status": {
+            "enum": [
+              "completed",
+              "completed_with_errors",
+              "degraded_existing_corpus"
+            ],
+            "title": "Provider Status",
+            "type": "string"
+          },
+          "shortlist": {
+            "$ref": "#/components/schemas/LegalSearchResponse"
+          },
+          "total_discovered": {
+            "default": 0,
+            "title": "Total Discovered",
+            "type": "integer"
+          },
+          "total_duplicate": {
+            "default": 0,
+            "title": "Total Duplicate",
+            "type": "integer"
+          },
+          "total_failed": {
+            "default": 0,
+            "title": "Total Failed",
+            "type": "integer"
+          },
+          "total_ingested": {
+            "default": 0,
+            "title": "Total Ingested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "profile",
+          "provider_status",
+          "candidate_cap",
+          "shortlist"
+        ],
+        "title": "DynamicPrecedentPoolResponse",
+        "type": "object"
+      },
       "DynamicReasonerRequest": {
         "properties": {
           "analysis_context": {
@@ -16914,6 +17101,52 @@
           }
         },
         "summary": "Build Search Queries",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/dynamic-pool": {
+      "post": {
+        "operationId": "search_build_dynamic_precedent_pool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DynamicPrecedentPoolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicPrecedentPoolResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Dynamic Precedent Pool",
         "tags": [
           "Search"
         ]
