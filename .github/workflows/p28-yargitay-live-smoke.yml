@@ -60,15 +60,23 @@ jobs:
         id: smoke
         working-directory: backend
         run: |
-          set -e
-          python -m scripts.p28sy1_yargitay_corpus_smoke --confirm-live-smoke 2>&1 | tee /tmp/smoke-output.log
-          echo "SMOKE_EXIT=$?" >> $GITHUB_ENV
+          python -m scripts.p28sy1_yargitay_corpus_smoke --confirm-live-smoke > /tmp/smoke-output.log 2>&1
+          SMOKE_EXIT=$?
+          echo "smoke_exit=$SMOKE_EXIT" >> $GITHUB_OUTPUT
+          cat /tmp/smoke-output.log
 
-      - name: Prove ingested records
+          if [ "$SMOKE_EXIT" -ne 0 ]; then
+            echo "SMOKE FAIL-CLOSED (exit=$SMOKE_EXIT)"
+            grep "total_ingested=" /tmp/smoke-output.log || true
+            grep "last_error=" /tmp/smoke-output.log || true
+          fi
+
+      - name: Prove ingestion records exist
+        id: prove
         working-directory: backend
         run: |
           python -c "
-          import asyncio, json, sys
+          import asyncio, json
           from app.db.session import get_sessionmaker
           from app.db.models import SourceRecord, SourceVersion, SourceParagraph, SourceVerification
           from sqlalchemy import select
@@ -80,61 +88,75 @@ jobs:
                       select(SourceRecord).where(SourceRecord.source_type == 'supreme_court_decision')
                   )).scalars().all()
 
-                  proof = {
-                      'source_records': len(records),
-                      'decisions': []
-                  }
+                  result = {'total_decisions': len(records), 'checks': {}}
+
+                  result['checks']['has_source_records'] = len(records) >= 1
+                  if not records:
+                      print(json.dumps(result, ensure_ascii=False))
+                      return 1
+
+                  all_pass = True
                   for rec in records:
                       ver = (await db.execute(
                           select(SourceVersion).where(SourceVersion.id == rec.current_version_id)
-                      )).scalar_one()
-                      paras = (await db.execute(
-                          select(SourceParagraph).where(SourceParagraph.source_version_id == ver.id)
-                      )).scalars().all()
-                      verifications = (await db.execute(
-                          select(SourceVerification).where(
-                              SourceVerification.source_record_id == rec.id,
-                              SourceVerification.source_version_id == ver.id,
+                      )).scalar_one_or_none()
+
+                      has_ver = ver is not None
+                      has_paras = False
+                      has_official = False
+                      para_count = 0
+
+                      if has_ver:
+                          paras = (await db.execute(
+                              select(SourceParagraph).where(SourceParagraph.source_version_id == ver.id)
+                          )).scalars().all()
+                          para_count = len(paras)
+                          has_paras = para_count >= 1
+
+                          verifications = (await db.execute(
+                              select(SourceVerification).where(
+                                  SourceVerification.source_record_id == rec.id,
+                                  SourceVerification.source_version_id == ver.id,
+                              )
+                          )).scalars().all()
+                          has_official = any(
+                              v.verification_method == 'official_fetch_match'
+                              and v.result == 'verified_official'
+                              for v in verifications
                           )
-                      )).scalars().all()
 
-                      verif_methods = [v.verification_method for v in verifications]
-                      official_verified = any(
-                          v.verification_method == 'official_fetch_match'
-                          and v.result == 'verified_official'
-                          for v in verifications
-                      )
+                      if not has_official: all_pass = False
+                      if not has_paras: all_pass = False
 
-                      proof['decisions'].append({
-                          'source_record_id': rec.id,
-                          'source_version_id': ver.id,
-                          'title': rec.title,
+                      result[rec.id] = {
+                          'has_version': has_ver,
+                          'has_paragraphs': has_paras,
+                          'paragraph_count': para_count,
+                          'has_official_fetch': has_official,
                           'court': rec.court,
                           'chamber': rec.chamber,
                           'case_number': rec.case_number,
-                          'decision_number': rec.decision_number,
-                          'decision_date': rec.decision_date,
-                          'canonical_key': rec.canonical_key,
-                          'paragraph_count': len(paras),
-                          'verification_status': rec.verification_status,
-                          'content_hash': ver.content_hash,
-                          'retrieval_method': ver.retrieval_method,
-                          'official_verified': official_verified,
-                          'verification_methods': verif_methods,
-                          'has_paragraph_text': all((p.text or '').strip() and p.text_hash for p in paras),
-                          'paragraph_text_lengths': [len(p.text or '') for p in paras],
-                      })
+                      }
 
-                  proof['total_decisions'] = len(records)
-                  proof['has_current_version'] = all(r.current_version_id for r in records)
-                  proof['all_court_yargitay'] = all(r.court == 'Yargıtay' for r in records)
+                  result['checks']['all_have_paragraphs'] = all_pass
+                  print(json.dumps(result, ensure_ascii=False))
+                  return 0 if all_pass else 1
 
-                  print(json.dumps(proof, ensure_ascii=False, indent=2))
+          exit_code = asyncio.run(prove())
+          import sys; sys.exit(exit_code)
+          " > /tmp/ingestion-proof.json 2>&1
 
-          asyncio.run(prove())
-          " > /tmp/ingestion-proof.json
+      - name: Fail on missing decisions
+        if: steps.smoke.outputs.smoke_exit != '0' || failure()
+        run: |
+          echo "=== CRITICAL: YARGITAY LIVE SMOKE DID NOT INGEST DECISIONS ==="
+          echo "Safe diagnostics from output:"
+          grep -E "(SMOKE FAIL-CLOSED|last_error=|total_ingested=)" /tmp/smoke-output.log || true
+          grep -E "(discovered=|fetched=|ingested=|duplicate=|failed=|status=|last_error=)" /tmp/smoke-output.log || true
+          exit 1
 
       - name: Upload sanitized smoke evidence
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: p2-8-yargitay-live-smoke-evidence
@@ -144,10 +166,10 @@ jobs:
           retention-days: 30
 
       - name: Smoke summary
+        if: success()
         run: |
-          echo "=== P2.8 YARGITAY LIVE SMOKE COMPLETE ==="
+          echo "=== P2.8 YARGITAY LIVE SMOKE PASSED ==="
           echo "Head: ${{ github.sha }}"
           echo "Run ID: ${{ github.run_id }}"
-          echo "---"
-          grep "total_ingested=" /tmp/smoke-output.log || echo "total_ingested not found in output"
-          grep "live_requests=" /tmp/smoke-output.log || echo "live_requests not found in output"
+          grep "total_ingested=" /tmp/smoke-output.log
+          grep "live_requests=" /tmp/smoke-output.log

@@ -283,6 +283,32 @@ class OfficialSourceProvider:
         except SourceFetchError as e:
             raise self._provider_error_from_fetch_error(e) from e
 
+    def _secure_fetch_request(self, request, *, transport=None, resolver=None):
+        """Execute a controlled ``SourceFetchRequest`` through the P2.6 seam.
+
+        Same SSRF/allowlist/error-mapping boundary as :meth:`_secure_fetch`,
+        generalized to the closed GET/POST request-descriptor vocabulary.
+        Providers must construct the descriptor exclusively from their own
+        fixed official bases and provider-owned JSON.
+        """
+        from app.services.source_fetcher import (
+            SourceFetchError,
+            default_resolver,
+            fetch_source_request,
+        )
+
+        self.validate_contract()
+        try:
+            return fetch_source_request(
+                request,
+                resolver=resolver or default_resolver,
+                transport=transport,
+                timeout=self.request_policy.request_timeout_seconds,
+                allowed_domains=self.official_domains,
+            )
+        except SourceFetchError as e:
+            raise self._provider_error_from_fetch_error(e) from e
+
     def _provider_error_from_fetch_error(self, e) -> ProviderError:
         """Map fetcher failures to safe provider errors and retry metadata."""
         ssrf_codes = frozenset({
@@ -329,6 +355,9 @@ class OfficialSourceProvider:
             "tls_error",
             "response_too_large",
             "unsupported_content_type",
+            "method_not_allowed",
+            "invalid_request_body",
+            "post_redirect_not_allowed",
         }:
             return ProviderError(ERR_FETCH_FAILED, e.code)
         return ProviderError(ERR_FETCH_FAILED, e.code)

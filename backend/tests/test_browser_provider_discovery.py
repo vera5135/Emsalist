@@ -461,8 +461,10 @@ def test_status_keeps_unvalidated_provider_unavailable_even_when_flags_enabled()
         official_provider_browser_discovery_enabled=True,
         official_provider_live_smoke=True,
     )
+    # Danıştay still requires a browser and its strategy is not live-validated
+    # (Yargıtay no longer requires a browser — its discovery is plain HTTP JSON).
     with patch.object(registry, "is_enabled", return_value=True), \
          patch.object(routes, "get_settings", return_value=settings):
         assert routes._provider_status(
-            "yargitay", _provider("yargitay"), None, None,
+            "danistay", _provider("danistay"), None, None,
         ) == "browser_discovery_unavailable"

@@ -37,6 +37,14 @@ class CaseChatScreen extends ConsumerWidget {
         title: Text(title),
         actions: <Widget>[
           IconButton(
+            icon: const Icon(Icons.account_tree_outlined),
+            tooltip: 'Hukuki Konular',
+            onPressed: () => context.pushNamed(
+              AppRoutes.caseLegalIssues,
+              pathParameters: <String, String>{'caseId': caseId},
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.folder_outlined),
             tooltip: 'Belgeler',
             onPressed: () => context.pushNamed(

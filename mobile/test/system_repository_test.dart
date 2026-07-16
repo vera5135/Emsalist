@@ -48,6 +48,10 @@ class _FakeApiClient implements ApiClient {
   }
 
   @override
+  Future<T> patchJson<T>(String path, {Object? body, Object? cancelToken}) =>
+      postJson<T>(path, body: body, cancelToken: cancelToken);
+
+  @override
   Future<T> deleteJson<T>(String path, {Object? cancelToken}) async {
     requestedPaths.add(path);
     if (error != null) {

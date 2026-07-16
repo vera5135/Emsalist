@@ -55,4 +55,5 @@ jobs:
           echo "PASS: Running as $USER"
 
       - name: Inspect image size
-        run: docker images emsalist-api:ci-test --format "Image size: {{.Size}}"
+        run: |
+          docker images emsalist-api:ci-test --format "Image size: {{.Size}}"

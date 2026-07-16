@@ -455,6 +455,35 @@ def _jwt_token(role: str) -> str:
     return create_access_token(f"u-{role}", "prov-tenant", role, f"s-{role}")
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def _seed_jwt_auth_for_p26c():
+    from app.db.models import AuthSession, Tenant, User
+    from datetime import UTC, datetime, timedelta
+    from hashlib import sha256
+    from app.db.session import get_sessionmaker
+    maker = get_sessionmaker()
+    async with maker() as session:
+        t = await session.get(Tenant, "prov-tenant")
+        if not t:
+            session.add(Tenant(id="prov-tenant", name="Provider Tenant", slug="prov-tenant", status="active"))
+        for role in ("lawyer", "tenant_admin", "editor", "admin"):
+            uid = f"u-{role}"
+            sid = f"s-{role}"
+            u = await session.get(User, uid)
+            if not u:
+                session.add(User(id=uid, tenant_id="prov-tenant", email_normalized=f"{uid}@test",
+                                 display_name=role, status="active", role=role, token_version=0))
+            s = await session.get(AuthSession, sid)
+            if not s:
+                now = datetime.now(UTC)
+                session.add(AuthSession(id=sid, tenant_id="prov-tenant", user_id=uid,
+                    refresh_token_hash=sha256(f"rt-{sid}".encode()).hexdigest(),
+                    token_family_id=f"tf-{sid}", created_at=now, last_used_at=now,
+                    expires_at=now + timedelta(days=7)))
+        await session.commit()
+    yield
+
+
 @pytest.mark.asyncio
 async def test_rejected_api_query_creates_no_run_row():
     from app.main import app

@@ -100,6 +100,29 @@ class DioApiClient implements ApiClient {
   }
 
   @override
+  Future<T> patchJson<T>(
+    String path, {
+    Object? body,
+    Object? cancelToken,
+  }) async {
+    try {
+      final Response<dynamic> response = await _dio.patch<dynamic>(
+        path,
+        data: body,
+        cancelToken: cancelToken is CancelToken ? cancelToken : null,
+      );
+      if (response.data is T) return response.data as T;
+      throw _errorMapper.unexpected();
+    } on DioException catch (error) {
+      throw _errorMapper.fromDioException(error);
+    } on ApiException {
+      rethrow;
+    } on Object {
+      throw _errorMapper.unexpected();
+    }
+  }
+
+  @override
   Future<T> deleteJson<T>(String path, {Object? cancelToken}) async {
     try {
       final Response<dynamic> response = await _dio.delete<dynamic>(

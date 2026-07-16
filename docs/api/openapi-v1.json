@@ -71,6 +71,25 @@
         "title": "AIRunSummary",
         "type": "object"
       },
+      "AnalyzePrecedentPoolRequest": {
+        "properties": {
+          "decision_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 15,
+            "title": "Decision Ids",
+            "type": "array"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "AnalyzePrecedentPoolRequest",
+        "type": "object"
+      },
       "AppleAuthenticatedResponse": {
         "properties": {
           "access_token": {
@@ -239,12 +258,12 @@
       "AuditedPrecedent": {
         "properties": {
           "alignment": {
-            "default": "nötr",
+            "default": "n\u00f6tr",
             "enum": [
               "lehe",
               "aleyhe",
               "riskli",
-              "nötr"
+              "n\u00f6tr"
             ],
             "title": "Alignment",
             "type": "string"
@@ -760,7 +779,7 @@
             "title": "Case Id"
           },
           "case_text": {
-            "description": "Avukat tarafından yazılan olay özeti",
+            "description": "Avukat taraf\u0131ndan yaz\u0131lan olay \u00f6zeti",
             "minLength": 10,
             "title": "Case Text",
             "type": "string"
@@ -1180,6 +1199,201 @@
           "updated_at"
         ],
         "title": "CaseResponse",
+        "type": "object"
+      },
+      "CaseSearchProfileEvent": {
+        "properties": {
+          "certainty": {
+            "default": "explicit",
+            "enum": [
+              "explicit",
+              "inferred"
+            ],
+            "title": "Certainty",
+            "type": "string"
+          },
+          "date_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Text"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "title": "CaseSearchProfileEvent",
+        "type": "object"
+      },
+      "CaseSearchProfileRequest": {
+        "description": "Natural-language case narrative to provider-ready legal search profile.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "case_text": {
+            "description": "Avukat\u0131n do\u011fal dille anlatt\u0131\u011f\u0131 olay ve uyu\u015fmazl\u0131k \u00f6zeti",
+            "maxLength": 20000,
+            "minLength": 20,
+            "title": "Case Text",
+            "type": "string"
+          },
+          "max_queries": {
+            "default": 6,
+            "maximum": 6.0,
+            "minimum": 3.0,
+            "title": "Max Queries",
+            "type": "integer"
+          },
+          "preferred_relief": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Preferred Relief",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_text"
+        ],
+        "title": "CaseSearchProfileRequest",
+        "type": "object"
+      },
+      "CaseSearchProfileResponse": {
+        "description": "Safe, user-facing search plan; never hidden chain-of-thought.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "chronology": {
+            "items": {
+              "$ref": "#/components/schemas/CaseSearchProfileEvent"
+            },
+            "title": "Chronology",
+            "type": "array"
+          },
+          "claims": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "dispute_type": {
+            "title": "Dispute Type",
+            "type": "string"
+          },
+          "evidence_issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Issues",
+            "type": "array"
+          },
+          "extraction_mode": {
+            "default": "deterministic_v1",
+            "enum": [
+              "deterministic_v1",
+              "provider"
+            ],
+            "title": "Extraction Mode",
+            "type": "string"
+          },
+          "legal_area": {
+            "title": "Legal Area",
+            "type": "string"
+          },
+          "legal_issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Legal Issues",
+            "type": "array"
+          },
+          "legislation_hypotheses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Legislation Hypotheses",
+            "type": "array"
+          },
+          "material_facts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Material Facts",
+            "type": "array"
+          },
+          "missing_information": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Information",
+            "type": "array"
+          },
+          "party_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Party Roles",
+            "type": "array"
+          },
+          "possible_defenses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Possible Defenses",
+            "type": "array"
+          },
+          "yargitay_queries": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 3,
+            "title": "Yargitay Queries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "legal_area",
+          "dispute_type",
+          "yargitay_queries",
+          "confidence"
+        ],
+        "title": "CaseSearchProfileResponse",
         "type": "object"
       },
       "CaseStateRequest": {
@@ -1632,7 +1846,7 @@
             "type": "string"
           },
           "date": {
-            "description": "Karar tarihi; kaynakta göründüğü biçimiyle",
+            "description": "Karar tarihi; kaynakta g\u00f6r\u00fcnd\u00fc\u011f\u00fc bi\u00e7imiyle",
             "minLength": 1,
             "title": "Date",
             "type": "string"
@@ -2899,6 +3113,209 @@
         "title": "DraftingPrecedentItem",
         "type": "object"
       },
+      "DynamicPrecedentIngestionRun": {
+        "properties": {
+          "budget": {
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Budget",
+            "type": "integer"
+          },
+          "conflict": {
+            "default": 0,
+            "title": "Conflict",
+            "type": "integer"
+          },
+          "discovered": {
+            "default": 0,
+            "title": "Discovered",
+            "type": "integer"
+          },
+          "duplicate": {
+            "default": 0,
+            "title": "Duplicate",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "fetched": {
+            "default": 0,
+            "title": "Fetched",
+            "type": "integer"
+          },
+          "ingested": {
+            "default": 0,
+            "title": "Ingested",
+            "type": "integer"
+          },
+          "new_version": {
+            "default": 0,
+            "title": "New Version",
+            "type": "integer"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "run_id": {
+            "default": "",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "safe_error_code": {
+            "default": "",
+            "title": "Safe Error Code",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "budget",
+          "status"
+        ],
+        "title": "DynamicPrecedentIngestionRun",
+        "type": "object"
+      },
+      "DynamicPrecedentPoolRequest": {
+        "description": "One bounded case-to-corpus-to-shortlist operation.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "case_text": {
+            "description": "Avukat\u0131n do\u011fal dille anlatt\u0131\u011f\u0131 olay ve uyu\u015fmazl\u0131k \u00f6zeti",
+            "maxLength": 20000,
+            "minLength": 20,
+            "title": "Case Text",
+            "type": "string"
+          },
+          "max_candidates": {
+            "default": 50,
+            "maximum": 50.0,
+            "minimum": 10.0,
+            "title": "Max Candidates",
+            "type": "integer"
+          },
+          "max_queries": {
+            "default": 6,
+            "maximum": 6.0,
+            "minimum": 3.0,
+            "title": "Max Queries",
+            "type": "integer"
+          },
+          "preferred_relief": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Preferred Relief",
+            "type": "array"
+          },
+          "shortlist_size": {
+            "default": 12,
+            "maximum": 15.0,
+            "minimum": 3.0,
+            "title": "Shortlist Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_text"
+        ],
+        "title": "DynamicPrecedentPoolRequest",
+        "type": "object"
+      },
+      "DynamicPrecedentPoolResponse": {
+        "properties": {
+          "candidate_cap": {
+            "maximum": 50.0,
+            "minimum": 10.0,
+            "title": "Candidate Cap",
+            "type": "integer"
+          },
+          "ingestion_runs": {
+            "items": {
+              "$ref": "#/components/schemas/DynamicPrecedentIngestionRun"
+            },
+            "title": "Ingestion Runs",
+            "type": "array"
+          },
+          "pool_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pool Id"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/CaseSearchProfileResponse"
+          },
+          "provider_code": {
+            "default": "yargitay",
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "provider_status": {
+            "enum": [
+              "completed",
+              "completed_with_errors",
+              "degraded_existing_corpus"
+            ],
+            "title": "Provider Status",
+            "type": "string"
+          },
+          "shortlist": {
+            "$ref": "#/components/schemas/LegalSearchResponse"
+          },
+          "total_discovered": {
+            "default": 0,
+            "title": "Total Discovered",
+            "type": "integer"
+          },
+          "total_duplicate": {
+            "default": 0,
+            "title": "Total Duplicate",
+            "type": "integer"
+          },
+          "total_failed": {
+            "default": 0,
+            "title": "Total Failed",
+            "type": "integer"
+          },
+          "total_ingested": {
+            "default": 0,
+            "title": "Total Ingested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "profile",
+          "provider_status",
+          "candidate_cap",
+          "shortlist"
+        ],
+        "title": "DynamicPrecedentPoolResponse",
+        "type": "object"
+      },
       "DynamicReasonerRequest": {
         "properties": {
           "analysis_context": {
@@ -3025,6 +3442,34 @@
           }
         },
         "title": "EdgeUpdate",
+        "type": "object"
+      },
+      "EvidenceLinkRequest": {
+        "properties": {
+          "claim_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "evidence_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "relation_type": {
+            "pattern": "^(evidence_supports_claim|evidence_contradicts_claim)$",
+            "title": "Relation Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_id",
+          "evidence_id",
+          "relation_type"
+        ],
+        "title": "EvidenceLinkRequest",
         "type": "object"
       },
       "ExtractedFact": {
@@ -3472,7 +3917,7 @@
             "type": "array"
           },
           "request_type": {
-            "default": "Talebimizin kabulü",
+            "default": "Talebimizin kabul\u00fc",
             "minLength": 3,
             "title": "Request Type",
             "type": "string"
@@ -3491,12 +3936,12 @@
             "type": "array"
           },
           "tone": {
-            "default": "Ölçülü ve ikna edici",
+            "default": "\u00d6l\u00e7\u00fcl\u00fc ve ikna edici",
             "enum": [
-              "Ölçülü ve ikna edici",
-              "Sert ve itiraz odaklı",
-              "Mağduriyet vurgulu",
-              "Kısa ve teknik"
+              "\u00d6l\u00e7\u00fcl\u00fc ve ikna edici",
+              "Sert ve itiraz odakl\u0131",
+              "Ma\u011fduriyet vurgulu",
+              "K\u0131sa ve teknik"
             ],
             "title": "Tone",
             "type": "string"
@@ -3613,6 +4058,104 @@
           "drafting_package"
         ],
         "title": "FinalPetitionDraftResponse",
+        "type": "object"
+      },
+      "GraphResponse": {
+        "properties": {
+          "burdens": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Burdens",
+            "type": "array"
+          },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "counterarguments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Counterarguments",
+            "type": "array"
+          },
+          "dependencies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "evidence_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Evidence Links",
+            "type": "array"
+          },
+          "fact_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Fact Links",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "missing_information": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Missing Information",
+            "type": "array"
+          },
+          "risk_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Risk Links",
+            "type": "array"
+          },
+          "source_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Source Links",
+            "type": "array"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "unsupported_claims": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Unsupported Claims",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "stale"
+        ],
+        "title": "GraphResponse",
         "type": "object"
       },
       "GroundingAnalyzeRequest": {
@@ -4705,6 +5248,131 @@
           }
         },
         "title": "LegalGroundValidationResponse",
+        "type": "object"
+      },
+      "LegalIssueResponse": {
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "issue_code": {
+            "title": "Issue Code",
+            "type": "string"
+          },
+          "parent_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Issue Id"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "support_state": {
+            "title": "Support State",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "issue_code",
+          "title",
+          "description",
+          "status",
+          "support_state",
+          "version"
+        ],
+        "title": "LegalIssueResponse",
+        "type": "object"
+      },
+      "LegalIssueUpdateRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "LegalIssueUpdateRequest",
         "type": "object"
       },
       "LegalQuestionItem": {
@@ -5828,7 +6496,7 @@
             "type": "array"
           },
           "request_type": {
-            "default": "Talebimizin kabulü",
+            "default": "Talebimizin kabul\u00fc",
             "minLength": 3,
             "title": "Request Type",
             "type": "string"
@@ -5842,12 +6510,12 @@
             "type": "array"
           },
           "tone": {
-            "default": "Ölçülü ve ikna edici",
+            "default": "\u00d6l\u00e7\u00fcl\u00fc ve ikna edici",
             "enum": [
-              "Ölçülü ve ikna edici",
-              "Sert ve itiraz odaklı",
-              "Mağduriyet vurgulu",
-              "Kısa ve teknik"
+              "\u00d6l\u00e7\u00fcl\u00fc ve ikna edici",
+              "Sert ve itiraz odakl\u0131",
+              "Ma\u011fduriyet vurgulu",
+              "K\u0131sa ve teknik"
             ],
             "title": "Tone",
             "type": "string"
@@ -6197,6 +6865,110 @@
         "title": "PrecedentAnalysis",
         "type": "object"
       },
+      "PrecedentAnalysisListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedentAnalysisResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "title": "PrecedentAnalysisListResponse",
+        "type": "object"
+      },
+      "PrecedentAnalysisResponse": {
+        "properties": {
+          "analysis": {
+            "additionalProperties": true,
+            "title": "Analysis",
+            "type": "object"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "output_fingerprint": {
+            "title": "Output Fingerprint",
+            "type": "string"
+          },
+          "pool_decision_id": {
+            "title": "Pool Decision Id",
+            "type": "string"
+          },
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provenance": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Provenance",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source_fingerprint": {
+            "title": "Source Fingerprint",
+            "type": "string"
+          },
+          "source_record_id": {
+            "title": "Source Record Id",
+            "type": "string"
+          },
+          "source_version_id": {
+            "title": "Source Version Id",
+            "type": "string"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pool_id",
+          "pool_decision_id",
+          "source_record_id",
+          "source_version_id",
+          "provider",
+          "model_version",
+          "prompt_version",
+          "schema_version",
+          "source_fingerprint",
+          "output_fingerprint",
+          "status",
+          "stale",
+          "created_at"
+        ],
+        "title": "PrecedentAnalysisResponse",
+        "type": "object"
+      },
       "PrecedentAuditRequest": {
         "properties": {
           "case_enrichment": {
@@ -6367,6 +7139,307 @@
           }
         },
         "title": "PrecedentAuthorityResponse",
+        "type": "object"
+      },
+      "PrecedentPoolDecisionResponse": {
+        "properties": {
+          "case_number": {
+            "default": "",
+            "title": "Case Number",
+            "type": "string"
+          },
+          "chamber": {
+            "default": "",
+            "title": "Chamber",
+            "type": "string"
+          },
+          "court": {
+            "default": "",
+            "title": "Court",
+            "type": "string"
+          },
+          "decision_date": {
+            "default": "",
+            "title": "Decision Date",
+            "type": "string"
+          },
+          "decision_number": {
+            "default": "",
+            "title": "Decision Number",
+            "type": "string"
+          },
+          "duplicate_of_decision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Of Decision Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "match_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Match Reasons",
+            "type": "array"
+          },
+          "official_url": {
+            "default": "",
+            "title": "Official Url",
+            "type": "string"
+          },
+          "pool_id": {
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "relevant_paragraph": {
+            "default": "",
+            "title": "Relevant Paragraph",
+            "type": "string"
+          },
+          "retrieval_rank": {
+            "title": "Retrieval Rank",
+            "type": "integer"
+          },
+          "scores": {
+            "additionalProperties": true,
+            "title": "Scores",
+            "type": "object"
+          },
+          "selected_source_paragraph_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Source Paragraph Ids",
+            "type": "array"
+          },
+          "selection_state": {
+            "title": "Selection State",
+            "type": "string"
+          },
+          "source_record_id": {
+            "title": "Source Record Id",
+            "type": "string"
+          },
+          "source_version_id": {
+            "title": "Source Version Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pool_id",
+          "source_record_id",
+          "source_version_id",
+          "retrieval_rank",
+          "selection_state"
+        ],
+        "title": "PrecedentPoolDecisionResponse",
+        "type": "object"
+      },
+      "PrecedentPoolDetail": {
+        "properties": {
+          "candidate_cap": {
+            "title": "Candidate Cap",
+            "type": "integer"
+          },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model_version": {
+            "default": "",
+            "title": "Model Version",
+            "type": "string"
+          },
+          "planner_version": {
+            "default": "",
+            "title": "Planner Version",
+            "type": "string"
+          },
+          "profile_summary": {
+            "additionalProperties": true,
+            "title": "Profile Summary",
+            "type": "object"
+          },
+          "provider_code": {
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "provider_status": {
+            "title": "Provider Status",
+            "type": "string"
+          },
+          "query_strategies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Query Strategies",
+            "type": "array"
+          },
+          "safe_error_code": {
+            "default": "",
+            "title": "Safe Error Code",
+            "type": "string"
+          },
+          "source_ingestion_run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ingestion Run Ids",
+            "type": "array"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_discovered": {
+            "default": 0,
+            "title": "Total Discovered",
+            "type": "integer"
+          },
+          "total_duplicate": {
+            "default": 0,
+            "title": "Total Duplicate",
+            "type": "integer"
+          },
+          "total_failed": {
+            "default": 0,
+            "title": "Total Failed",
+            "type": "integer"
+          },
+          "total_ingested": {
+            "default": 0,
+            "title": "Total Ingested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "provider_code",
+          "provider_status",
+          "status",
+          "candidate_cap",
+          "started_at"
+        ],
+        "title": "PrecedentPoolDetail",
+        "type": "object"
+      },
+      "PrecedentPoolSummary": {
+        "properties": {
+          "candidate_cap": {
+            "title": "Candidate Cap",
+            "type": "integer"
+          },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "profile_summary": {
+            "additionalProperties": true,
+            "title": "Profile Summary",
+            "type": "object"
+          },
+          "provider_code": {
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "provider_status": {
+            "title": "Provider Status",
+            "type": "string"
+          },
+          "safe_error_code": {
+            "default": "",
+            "title": "Safe Error Code",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_discovered": {
+            "default": 0,
+            "title": "Total Discovered",
+            "type": "integer"
+          },
+          "total_duplicate": {
+            "default": 0,
+            "title": "Total Duplicate",
+            "type": "integer"
+          },
+          "total_failed": {
+            "default": 0,
+            "title": "Total Failed",
+            "type": "integer"
+          },
+          "total_ingested": {
+            "default": 0,
+            "title": "Total Ingested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "provider_code",
+          "provider_status",
+          "status",
+          "candidate_cap",
+          "started_at"
+        ],
+        "title": "PrecedentPoolSummary",
         "type": "object"
       },
       "PrecedentSelectRequest": {
@@ -6575,6 +7648,86 @@
           "petition_paragraph"
         ],
         "title": "RankedDecision",
+        "type": "object"
+      },
+      "ReasoningRunResponse": {
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "memory_revision_id": {
+            "title": "Memory Revision Id",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "output_hash": {
+            "title": "Output Hash",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "safe_summary": {
+            "additionalProperties": true,
+            "title": "Safe Summary",
+            "type": "object"
+          },
+          "source_fingerprint": {
+            "title": "Source Fingerprint",
+            "type": "string"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "memory_revision_id",
+          "source_fingerprint",
+          "provider",
+          "model_version",
+          "prompt_version",
+          "output_hash",
+          "status",
+          "stale",
+          "created_at"
+        ],
+        "title": "ReasoningRunResponse",
+        "type": "object"
+      },
+      "RebuildRequest": {
+        "properties": {
+          "prompt_version": {
+            "default": "p2.8b-legal-reasoning-1",
+            "maxLength": 40,
+            "title": "Prompt Version",
+            "type": "string"
+          }
+        },
+        "title": "RebuildRequest",
         "type": "object"
       },
       "RefreshRequest": {
@@ -7643,6 +8796,41 @@
           "outcome"
         ],
         "title": "SourceIngestResponse",
+        "type": "object"
+      },
+      "SourceLinkRequest": {
+        "properties": {
+          "relation_type": {
+            "default": "source_governs_issue",
+            "pattern": "^source_governs_issue$",
+            "title": "Relation Type",
+            "type": "string"
+          },
+          "source_paragraph_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Paragraph Id",
+            "type": "string"
+          },
+          "source_record_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Record Id",
+            "type": "string"
+          },
+          "source_version_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Source Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_record_id",
+          "source_version_id",
+          "source_paragraph_id"
+        ],
+        "title": "SourceLinkRequest",
         "type": "object"
       },
       "SourceParagraphResponse": {
@@ -8840,7 +10028,7 @@
             "type": "string"
           },
           "source": {
-            "default": "Yargıtay",
+            "default": "Yarg\u0131tay",
             "title": "Source",
             "type": "string"
           },
@@ -9051,7 +10239,7 @@
     }
   },
   "info": {
-    "description": "Emsalist backend API. Olay analizi, arama sorgusu üretimi, karar sıralama ve Yargıtay karar arama modüllerini içerir.",
+    "description": "Emsalist backend API. Olay analizi, arama sorgusu \u00fcretimi, karar s\u0131ralama ve Yarg\u0131tay karar arama mod\u00fcllerini i\u00e7erir.",
     "title": "Emsalist API",
     "version": "0.1.0"
   },
@@ -9267,7 +10455,7 @@
         },
         "summary": "Audit Draft",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9308,7 +10496,7 @@
         },
         "summary": "Audit Precedents",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9349,7 +10537,7 @@
         },
         "summary": "Audit Sources",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9390,7 +10578,7 @@
         },
         "summary": "Build Better Searches",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9431,7 +10619,7 @@
         },
         "summary": "Enrich Case",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9472,7 +10660,7 @@
         },
         "summary": "Generate Legal Questions",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9513,7 +10701,7 @@
         },
         "summary": "Refine Draft",
         "tags": [
-          "Hukuki Zekâ"
+          "Hukuki Zek\u00e2"
         ]
       }
     },
@@ -9558,7 +10746,7 @@
         ],
         "summary": "Get Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -9601,7 +10789,7 @@
         ],
         "summary": "Get Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -9666,7 +10854,7 @@
         ],
         "summary": "List Edges",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -9719,7 +10907,7 @@
         ],
         "summary": "Create Edge",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -9784,7 +10972,7 @@
         ],
         "summary": "List Edges",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -9838,7 +11026,7 @@
         ],
         "summary": "Delete Edge",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "patch": {
@@ -9900,7 +11088,7 @@
         ],
         "summary": "Update Edge",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -9954,7 +11142,7 @@
         ],
         "summary": "Restore Edge",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10029,7 +11217,7 @@
         ],
         "summary": "List Nodes",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -10082,7 +11270,7 @@
         ],
         "summary": "Create Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10157,7 +11345,7 @@
         ],
         "summary": "List Nodes",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10211,7 +11399,7 @@
         ],
         "summary": "Delete Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "get": {
@@ -10263,7 +11451,7 @@
         ],
         "summary": "Get Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "patch": {
@@ -10325,7 +11513,7 @@
         ],
         "summary": "Update Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10379,7 +11567,7 @@
         ],
         "summary": "Get Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10433,7 +11621,7 @@
         ],
         "summary": "Restore Node",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10478,7 +11666,7 @@
         ],
         "summary": "Rebuild Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10523,7 +11711,7 @@
         ],
         "summary": "Get Summary",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -10566,7 +11754,7 @@
         ],
         "summary": "Get Summary",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -10611,7 +11799,7 @@
         ],
         "summary": "Validate Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       },
       "post": {
@@ -10654,7 +11842,7 @@
         ],
         "summary": "Validate Graph",
         "tags": [
-          "Hukuki Mesele Haritası"
+          "Hukuki Mesele Haritas\u0131"
         ]
       }
     },
@@ -12355,6 +13543,114 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/legal-issues": {
+      "get": {
+        "operationId": "list_case_legal_issues",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LegalIssueResponse"
+                  },
+                  "title": "Response List Case Legal Issues",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Case Legal Issues",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/legal-issues/rebuild": {
+      "post": {
+        "operationId": "rebuild_case_legal_issues",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReasoningRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rebuild Case Legal Issues",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/memory": {
       "get": {
         "operationId": "case_memory_get",
@@ -13125,6 +14421,108 @@
         "summary": "Create Timeline Event",
         "tags": [
           "Case Memory"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/precedent-pools": {
+      "get": {
+        "operationId": "list_case_precedent_pools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrecedentPoolSummary"
+                  },
+                  "title": "Response List Case Precedent Pools",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Case Precedent Pools",
+        "tags": [
+          "Precedent Pools"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/reasoning-runs": {
+      "get": {
+        "operationId": "list_case_reasoning_runs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReasoningRunResponse"
+                  },
+                  "title": "Response List Case Reasoning Runs",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Case Reasoning Runs",
+        "tags": [
+          "Legal Reasoning"
         ]
       }
     },
@@ -13932,7 +15330,7 @@
         ],
         "summary": "List Jobs",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       },
       "post": {
@@ -13974,7 +15372,7 @@
         ],
         "summary": "Enqueue Job",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -13993,7 +15391,7 @@
         },
         "summary": "List Job Types",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14038,7 +15436,7 @@
         ],
         "summary": "Get Job",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14083,7 +15481,7 @@
         ],
         "summary": "Get Artifacts",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14128,7 +15526,7 @@
         ],
         "summary": "Cancel Job",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14184,7 +15582,7 @@
         ],
         "summary": "Get Events",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14229,7 +15627,7 @@
         ],
         "summary": "Retry Job",
         "tags": [
-          "Arka Plan Görevleri"
+          "Arka Plan G\u00f6revleri"
         ]
       }
     },
@@ -14590,6 +15988,220 @@
         "summary": "Validate Legal Grounds",
         "tags": [
           "Hukuki Dayanak"
+        ]
+      }
+    },
+    "/api/v1/legal-issues/{issue_id}": {
+      "patch": {
+        "operationId": "update_legal_issue",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegalIssueUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Legal Issue",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
+    "/api/v1/legal-issues/{issue_id}/evidence-links": {
+      "post": {
+        "operationId": "create_legal_issue_evidence_link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvidenceLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Legal Issue Evidence Link",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
+    "/api/v1/legal-issues/{issue_id}/graph": {
+      "get": {
+        "operationId": "get_legal_issue_graph",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Legal Issue Graph",
+        "tags": [
+          "Legal Reasoning"
+        ]
+      }
+    },
+    "/api/v1/legal-issues/{issue_id}/source-links": {
+      "post": {
+        "operationId": "create_legal_issue_source_link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Legal Issue Source Link",
+        "tags": [
+          "Legal Reasoning"
         ]
       }
     },
@@ -16473,7 +18085,7 @@
         },
         "summary": "Build Petition Draft",
         "tags": [
-          "Dilekçe"
+          "Dilek\u00e7e"
         ]
       }
     },
@@ -16514,7 +18126,7 @@
         },
         "summary": "Build Final Petition Draft",
         "tags": [
-          "Dilekçe"
+          "Dilek\u00e7e"
         ]
       }
     },
@@ -16555,7 +18167,209 @@
         },
         "summary": "Build Petition Strategy",
         "tags": [
-          "Dilekçe"
+          "Dilek\u00e7e"
+        ]
+      }
+    },
+    "/api/v1/precedent-pools/{pool_id}": {
+      "get": {
+        "operationId": "get_precedent_pool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecedentPoolDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Precedent Pool",
+        "tags": [
+          "Precedent Pools"
+        ]
+      }
+    },
+    "/api/v1/precedent-pools/{pool_id}/analyses": {
+      "get": {
+        "operationId": "list_precedent_pool_analyses",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecedentAnalysisListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Precedent Pool Analyses",
+        "tags": [
+          "Precedent Pools"
+        ]
+      }
+    },
+    "/api/v1/precedent-pools/{pool_id}/analyze": {
+      "post": {
+        "operationId": "analyze_precedent_pool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzePrecedentPoolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecedentAnalysisListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Analyze Precedent Pool",
+        "tags": [
+          "Precedent Pools"
+        ]
+      }
+    },
+    "/api/v1/precedent-pools/{pool_id}/decisions": {
+      "get": {
+        "operationId": "list_precedent_pool_decisions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrecedentPoolDecisionResponse"
+                  },
+                  "title": "Response List Precedent Pool Decisions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Precedent Pool Decisions",
+        "tags": [
+          "Precedent Pools"
         ]
       }
     },
@@ -16679,7 +18493,7 @@
         },
         "summary": "Research Yargitay",
         "tags": [
-          "Araştırma"
+          "Ara\u015ft\u0131rma"
         ]
       }
     },
@@ -16719,6 +18533,52 @@
           }
         },
         "summary": "Build Search Queries",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/dynamic-pool": {
+      "post": {
+        "operationId": "search_build_dynamic_precedent_pool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DynamicPrecedentPoolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicPrecedentPoolResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Dynamic Precedent Pool",
         "tags": [
           "Search"
         ]
@@ -16811,6 +18671,52 @@
           }
         ],
         "summary": "Search Opposing",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search/profile": {
+      "post": {
+        "operationId": "search_build_case_profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseSearchProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseSearchProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Build Case Search Profile",
         "tags": [
           "Search"
         ]
@@ -17019,7 +18925,7 @@
         },
         "summary": "Delete Case",
         "tags": [
-          "Güvenlik"
+          "G\u00fcvenlik"
         ]
       }
     },
@@ -17042,7 +18948,7 @@
         },
         "summary": "Get Fingerprint",
         "tags": [
-          "Güvenlik"
+          "G\u00fcvenlik"
         ]
       }
     },
@@ -17307,7 +19213,7 @@
         },
         "summary": "Workflow Review",
         "tags": [
-          "İş Akışı"
+          "\u0130\u015f Ak\u0131\u015f\u0131"
         ]
       }
     },
@@ -17348,7 +19254,7 @@
         },
         "summary": "Search Yargitay",
         "tags": [
-          "Yargıtay"
+          "Yarg\u0131tay"
         ]
       }
     },

@@ -101,8 +101,17 @@ def normalize_chamber(chamber: str | None) -> str:
     A numbered *Daire* like "13. HD" / "13.HD" / "13. Hukuk Dairesi" normalizes
     to a canonical "13. Hukuk Dairesi" form. Boards/kurul names are preserved
     verbatim (trimmed) and never collapsed into a numbered chamber.
+
+    A leading closed-chamber annotation such as "(Kapatılan)" (used on the live
+    Yargıtay decision header, e.g. "(Kapatılan) 6. Hukuk Dairesi") is an
+    administrative note, not part of the chamber's legal identity, so it is
+    stripped from the normalized chamber.
     """
     value = (chamber or "").strip()
+    if not value:
+        return ""
+    # Drop a single leading parenthetical annotation (e.g. "(Kapatılan)").
+    value = re.sub(r"^\s*\([^)]*\)\s*", "", value).strip()
     if not value:
         return ""
     low = value.casefold()
@@ -144,19 +153,33 @@ _DOCKET_RE = re.compile(r"(?i)\b(?:E|K|Esas|Karar)\.?\s*(?:No)?\.?\s*[:.]?\s*(\d
 def extract_docket(text: str, kind: str) -> str | None:
     """Extract an E. (esas) or K. (karar) docket like '2020/123' from text.
 
-    kind ∈ {"E", "K"}. Matches both the abbreviated ("E." / "K.") and the full
-    Turkish word forms ("Esas No:" / "Karar No:"). Requires a YYYY/N pattern
-    immediately after (so "Karar Tarihi: 12.06.2021" never matches). Returns
-    'YYYY/N' or None. Does not fabricate.
+    kind ∈ {"E", "K"}. Matches both prefix and suffix legal forms:
+
+    - prefix abbreviated:  ``E. 2020/123`` / ``K. 2021/456``
+    - prefix full word:    ``Esas No: 2020/123`` / ``Karar No: 2021/456``
+    - suffix abbreviated:  ``2009/11739 E.`` / ``2010/4923 K.``
+
+    Both require a ``YYYY/N`` pattern bound to the E/K semantic marker, so
+    ``Karar Tarihi: 12.06.2021`` never matches and a bare two-number pattern
+    without an E/K marker is ignored. Returns 'YYYY/N' or None. The prefix form
+    is matched first; suffix is a fallback so a document header like
+    ``2009/11739 E. , 2010/4923 K.`` is deterministically parsed. Does not
+    fabricate.
     """
     if kind.upper() == "E":
         alts = "Esas|E"
     else:
         alts = "Karar|K"
-    pat = re.compile(
+    prefix = re.compile(
         rf"(?i)\b(?:{alts})\.?\s*(?:no)?\.?\s*[:.]?\s*(\d{{4}})\s*[/-]\s*(\d+)"
     )
-    m = pat.search(text or "")
+    m = prefix.search(text or "")
+    if m:
+        return f"{m.group(1)}/{int(m.group(2))}"
+    suffix = re.compile(
+        rf"(?i)(?<![./\d])(\d{{4}})\s*[/-]\s*(\d+)\s*(?:{alts})\.(?![A-Za-zçğıöşü])"
+    )
+    m = suffix.search(text or "")
     if m:
         return f"{m.group(1)}/{int(m.group(2))}"
     return None
