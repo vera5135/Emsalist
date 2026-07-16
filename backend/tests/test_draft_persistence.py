@@ -497,8 +497,11 @@ def test_migration_single_head_is_draft_revision():
 
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND_DIR / "app" / "db" / "migrations"))
-    heads = ScriptDirectory.from_config(cfg).get_heads()
-    assert heads == ["b1c2d3e4f5a6"]
+    script = ScriptDirectory.from_config(cfg)
+    heads = script.get_heads()
+    assert len(heads) == 1
+    revisions = {rev.revision for rev in script.walk_revisions()}
+    assert "b1c2d3e4f5a6" in revisions
 
 
 def test_migration_downgrade_reupgrade_roundtrip(tmp_path):
@@ -519,8 +522,20 @@ def test_openapi_snapshot_is_drift_free_and_additive():
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
     runtime = app.openapi()
     assert json.dumps(runtime, sort_keys=True) == json.dumps(snapshot, sort_keys=True)
-    draft_paths = [p for p in runtime["paths"] if "/drafts" in p]
-    assert len(draft_paths) == 9
+    base = "/api/v1/cases/{case_id}/drafts"
+    expected_p29a_paths = [
+        base,
+        f"{base}/{{draft_id}}",
+        f"{base}/{{draft_id}}/finalize",
+        f"{base}/{{draft_id}}/paragraphs",
+        f"{base}/{{draft_id}}/paragraphs/{{paragraph_id}}",
+        f"{base}/{{draft_id}}/paragraphs/{{paragraph_id}}/issues",
+        f"{base}/{{draft_id}}/paragraphs/{{paragraph_id}}/issues/{{link_id}}",
+        f"{base}/{{draft_id}}/paragraphs/{{paragraph_id}}/sources",
+        f"{base}/{{draft_id}}/paragraphs/{{paragraph_id}}/sources/{{link_id}}",
+    ]
+    for path in expected_p29a_paths:
+        assert path in runtime["paths"]
 
 
 @pytest.mark.asyncio
