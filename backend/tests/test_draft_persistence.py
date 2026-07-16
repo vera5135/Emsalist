@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from app.db.models import (
     AuditEvent,
@@ -74,6 +74,10 @@ IDS = _ids()
 
 async def _cleanup(session) -> None:
     tenants = [TENANT, OTHER_TENANT]
+    # Break the draft superseding self-reference first (RESTRICT-safe on
+    # PostgreSQL where bulk deletes check FKs per row).
+    await session.execute(update(DraftDocument).where(
+        DraftDocument.tenant_id.in_(tenants)).values(supersedes_draft_id=None))
     for model in (DraftParagraphSourceLink, DraftParagraphIssueLink, DraftParagraph,
                   DraftDocument, SourceUsage, LegalIssue):
         await session.execute(delete(model).where(model.tenant_id.in_(tenants)))
@@ -98,38 +102,44 @@ async def db_setup():
         await session.flush()
         session.add(Tenant(id=TENANT, name="Local", slug="local-draft", status="active"))
         session.add(Tenant(id=OTHER_TENANT, name="Other", slug="other-draft", status="active"))
+        await session.flush()
         session.add(User(id="local-user", tenant_id=TENANT, email_normalized="draft@local",
                          display_name="L", status="active", role="lawyer"))
         session.add(User(id=OTHER_USER, tenant_id=OTHER_TENANT, email_normalized="draft@other",
                          display_name="O", status="active", role="lawyer"))
+        await session.flush()
         session.add(Case(id=CASE_ID, tenant_id=TENANT, owner_user_id="local-user",
                          title="Draft case", legal_topic="kira", status="active", version=1))
         session.add(Case(id=FOREIGN_CASE_ID, tenant_id=OTHER_TENANT, owner_user_id=OTHER_USER,
                          title="Foreign", legal_topic="kira", status="active", version=1))
+        await session.flush()
         session.add(LegalIssue(id=ISSUE_ID, tenant_id=TENANT, case_id=CASE_ID,
                                title="Fesih ihtari", description="", status="proposed"))
         session.add(LegalIssue(id=FOREIGN_ISSUE_ID, tenant_id=OTHER_TENANT,
                                case_id=FOREIGN_CASE_ID, title="Foreign issue",
                                description="", status="proposed"))
+        await session.flush()
         session.add(SourceRecord(id=IDS["record"], source_type="yargitay_karar",
                                  canonical_key=f"draft-smoke-{IDS['record']}",
                                  title="Trusted source",
                                  verification_status="editor_verified",
                                  current_version_id=IDS["version"]))
-        session.add(SourceVersion(id=IDS["version"], source_record_id=IDS["record"],
-                                  version_label="v1", content_hash=text_hash("full text"),
-                                  normalized_text="full text", status="active"))
-        session.add(SourceParagraph(id=IDS["paragraph"], source_version_id=IDS["version"],
-                                    paragraph_index=1, text=SOURCE_PARAGRAPH_TEXT,
-                                    text_hash=QUOTE_HASH))
         session.add(SourceRecord(id=IDS["record2"], source_type="yargitay_karar",
                                  canonical_key=f"draft-smoke-{IDS['record2']}",
                                  title="Untrusted source",
                                  verification_status="needs_review",
                                  current_version_id=IDS["version2"]))
+        await session.flush()
+        session.add(SourceVersion(id=IDS["version"], source_record_id=IDS["record"],
+                                  version_label="v1", content_hash=text_hash("full text"),
+                                  normalized_text="full text", status="active"))
         session.add(SourceVersion(id=IDS["version2"], source_record_id=IDS["record2"],
                                   version_label="v1", content_hash=text_hash("other text"),
                                   normalized_text="other text", status="active"))
+        await session.flush()
+        session.add(SourceParagraph(id=IDS["paragraph"], source_version_id=IDS["version"],
+                                    paragraph_index=1, text=SOURCE_PARAGRAPH_TEXT,
+                                    text_hash=QUOTE_HASH))
         session.add(SourceParagraph(id=IDS["paragraph2"], source_version_id=IDS["version2"],
                                     paragraph_index=1, text=SOURCE_PARAGRAPH_TEXT,
                                     text_hash=QUOTE_HASH))
