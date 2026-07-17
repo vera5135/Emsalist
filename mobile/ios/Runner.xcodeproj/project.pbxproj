@@ -98,6 +98,15 @@
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
 				9740EEB31CF90195004384FC /* Generated.xcconfig */,
+				FADE00000000000000000001 /* Debug-development.xcconfig */,
+				FADE00000000000000000002 /* Profile-development.xcconfig */,
+				FADE00000000000000000003 /* Release-development.xcconfig */,
+				FADE00000000000000000004 /* Debug-staging.xcconfig */,
+				FADE00000000000000000005 /* Profile-staging.xcconfig */,
+				FADE00000000000000000006 /* Release-staging.xcconfig */,
+				FADE00000000000000000007 /* Debug-production.xcconfig */,
+				FADE00000000000000000008 /* Profile-production.xcconfig */,
+				FADE00000000000000000009 /* Release-production.xcconfig */,
 			);
 			name = Flutter;
 			sourceTree = "<group>";
