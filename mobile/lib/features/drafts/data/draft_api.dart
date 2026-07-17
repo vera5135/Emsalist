@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import '../../../core/network/api_client.dart';
+import '../../../core/network/download_service.dart';
 import 'models/draft_dto.dart';
 
 class DraftApi {
@@ -344,5 +347,49 @@ class DraftApi {
           '${_draftPath(caseId, draftId)}/generate/$jobId',
         );
     return DraftGenerationJobDto.fromJson(json);
+  }
+
+  Future<DownloadedFile> downloadDocx(
+    String caseId,
+    String draftId,
+  ) async {
+    final result =
+        await _download('${_draftPath(caseId, draftId)}/export/docx');
+    return DownloadedFile(
+      bytes: result.bytes,
+      filename: result.filename,
+      contentType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+  }
+
+  Future<DownloadedFile> downloadPdf(
+    String caseId,
+    String draftId,
+  ) async {
+    final result =
+        await _download('${_draftPath(caseId, draftId)}/export/pdf');
+    return DownloadedFile(
+      bytes: result.bytes,
+      filename: result.filename,
+      contentType: 'application/pdf',
+    );
+  }
+
+  Future<({Uint8List bytes, String filename})> _download(String path) async {
+    final result = await _client.downloadBytes(path);
+    final String disposition =
+        result.headers['content-disposition'] ?? '';
+    String filename = 'download';
+    final RegExp re =
+        RegExp(r'''filename[^;=\n]*=["']?([^"';\n]*)["']?''');
+    final RegExpMatch? match = re.firstMatch(disposition);
+    if (match != null) {
+      final String? extracted = match.group(1);
+      if (extracted != null && extracted.isNotEmpty) {
+        filename = extracted;
+      }
+    }
+    return (bytes: result.bytes, filename: filename);
   }
 }
