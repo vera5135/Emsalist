@@ -425,16 +425,21 @@ async def test_lease_expiry_recovery_returns_job_to_queued(client: AsyncClient):
         "draft_version": 1, "client_request_id": uuid.uuid4().hex})).status_code == 202
 
     job, session = await claim_next_job()
-    job.lease_expires_at = datetime.now(UTC) - timedelta(seconds=10)
-    await session.flush()
-    await session.rollback()
+    # Simulate an expired lease via a separate session so the committed
+    # claim row from ``claim_next_job`` stays intact.
     await session.close()
+    maker = get_sessionmaker()
+    async with maker() as s:
+        row = (await s.execute(select(DraftGenerationJob).where(
+            DraftGenerationJob.id == job.id))).scalar_one()
+        row.lease_expires_at = datetime.now(UTC) - timedelta(seconds=10)
+        await s.commit()
 
     await recover_expired_jobs()
     job2, session2 = await claim_next_job()
     assert job2 is not None
     assert job2.id == job.id
-    assert job2.attempt_count == 2  # original claim + re-queue bumps count
+    assert job2.attempt_count == 2
     await session2.rollback()
     await session2.close()
 
@@ -446,14 +451,16 @@ async def test_recovery_attempt_exhaustion_fails_job(client: AsyncClient):
         "draft_version": 1, "client_request_id": uuid.uuid4().hex})).status_code == 202
 
     job, session = await claim_next_job()
-    job.attempt_count = 2  # already at max
-    job.lease_expires_at = datetime.now(UTC) - timedelta(seconds=10)
-    await session.flush()
-    await session.rollback()
     await session.close()
+    maker = get_sessionmaker()
+    async with maker() as s:
+        row = (await s.execute(select(DraftGenerationJob).where(
+            DraftGenerationJob.id == job.id))).scalar_one()
+        row.attempt_count = 2  # already at max
+        row.lease_expires_at = datetime.now(UTC) - timedelta(seconds=10)
+        await s.commit()
 
     await recover_expired_jobs(max_recovery_attempts=2)
-    maker = get_sessionmaker()
     async with maker() as session2:
         refreshed = (await session2.execute(select(DraftGenerationJob).where(
             DraftGenerationJob.id == job.id))).scalar_one()
