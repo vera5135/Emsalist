@@ -233,3 +233,27 @@ class DraftReviewActionResponse(BaseModel):
     paragraph_version: int
     draft_version: int
     review_event: DraftReviewEventResponse
+
+
+class DraftGenerationJobRequest(BaseModel):
+    draft_version: int = Field(ge=1)
+    client_request_id: str = Field(min_length=1, max_length=36)
+    selected_issue_ids: list[str] = Field(default_factory=list)
+    selected_source_usage_ids: list[str] = Field(default_factory=list)
+
+
+class DraftGenerationJobResponse(BaseModel):
+    job_id: str
+    draft_id: str
+    status: str
+    stage: str
+    progress_percent: int
+    requested_draft_version: int
+    result_draft_version: int | None = None
+    provider_name: str | None = None
+    model_name: str | None = None
+    safe_error_code: str | None = None
+    safe_metrics: dict[str, int | list[str] | None] = Field(default_factory=dict)
+    queued_at: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
