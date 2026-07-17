@@ -64,6 +64,11 @@ class Settings(BaseModel):
     deepseek_draft_batch_concurrency: int = 2
     deepseek_draft_max_source_paragraphs: int = 24
     deepseek_draft_max_source_chars: int = 48000
+    # ── P2.9C3A Async Draft Generation Jobs ──────────────────────────
+    draft_generation_job_worker_enabled: bool = False
+    draft_generation_job_poll_seconds: int = 5
+    draft_generation_job_lease_seconds: int = 60
+    draft_generation_job_max_recovery_attempts: int = 2
     # ── P2.7 Hybrid Search ───────────────────────────────────────
     search_semantic_enabled: bool = False
     search_embedding_model: str = "gemini-embedding-001"
@@ -284,6 +289,10 @@ def get_settings() -> Settings:
         deepseek_draft_batch_concurrency=int(getenv("DEEPSEEK_DRAFT_BATCH_CONCURRENCY", "2")),
         deepseek_draft_max_source_paragraphs=int(getenv("DEEPSEEK_DRAFT_MAX_SOURCE_PARAGRAPHS", "24")),
         deepseek_draft_max_source_chars=int(getenv("DEEPSEEK_DRAFT_MAX_SOURCE_CHARS", "48000")),
+        draft_generation_job_worker_enabled=getenv("DRAFT_GENERATION_JOB_WORKER_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
+        draft_generation_job_poll_seconds=int(getenv("DRAFT_GENERATION_JOB_POLL_SECONDS", "5")),
+        draft_generation_job_lease_seconds=int(getenv("DRAFT_GENERATION_JOB_LEASE_SECONDS", "60")),
+        draft_generation_job_max_recovery_attempts=int(getenv("DRAFT_GENERATION_JOB_MAX_RECOVERY_ATTEMPTS", "2")),
         search_semantic_enabled=getenv("EMSALIST_SEARCH_SEMANTIC_ENABLED", "false").lower() in {"1", "true", "yes"},
         search_embedding_model=getenv("EMSALIST_SEARCH_EMBEDDING_MODEL", "gemini-embedding-001"),
         search_embedding_version=getenv("EMSALIST_SEARCH_EMBEDDING_VERSION", "p2.7-embedding-1"),
