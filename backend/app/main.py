@@ -403,22 +403,3 @@ async def readiness_check() -> JSONResponse:
 @app.get("/system-health", tags=["System"], include_in_schema=False)
 async def system_health_alias() -> JSONResponse:
     return await health_check()
-
-
-# ── P2.9C3A — Async draft generation lifespan ───────────────────────────────
-@app.on_event("startup")
-async def _lifespan_startup():
-    try:
-        from app.services.draft_generation_worker import start_worker
-        await start_worker()
-    except Exception:
-        pass
-
-
-@app.on_event("shutdown")
-async def _lifespan_shutdown():
-    try:
-        from app.services.draft_generation_worker import stop_worker
-        await stop_worker()
-    except Exception:
-        pass
