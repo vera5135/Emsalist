@@ -176,7 +176,7 @@ async def claim_next_job(
 
 
 async def run_one_claimed_job(job: DraftGenerationJob, session):
-    """Execute the full generation pipeline for a claimed job."""
+
     settings = get_settings()
     _lease = lambda: _now() + timedelta(
         seconds=settings.draft_generation_job_lease_seconds)
@@ -187,34 +187,36 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
         job.lease_expires_at = _lease()
 
     async def _fail(code: str):
-        job.status = "failed"
-        job.stage = "failed"
+        job.status = 'failed'
+        job.stage = 'failed'
         job.progress_percent = 0
         job.safe_error_code = code
         job.completed_at = _now()
         await session.commit()
 
     try:
-        # ---- preflight ---------------------------------------------------
         draft = (await session.execute(select(DraftDocument).where(
             DraftDocument.id == job.draft_document_id,
             DraftDocument.tenant_id == job.tenant_id,
             DraftDocument.case_id == job.case_id,
         ))).scalar_one_or_none()
         if draft is None or draft.status not in EDITABLE_DRAFT_STATUSES:
-            await _fail("draft_generation_job_not_editable")
+            await _fail('draft_generation_job_not_editable')
+            return
         if draft.version != job.requested_draft_version:
-            await _fail("draft_generation_job_version_conflict")
+            await _fail('draft_generation_job_version_conflict')
+            return
         if await DraftParagraphRepository.list_for_draft(
                 session, job.tenant_id, draft.id):
-            await _fail("draft_generation_job_not_empty")
+            await _fail('draft_generation_job_not_empty')
+            return
         readiness = await compute_draft_readiness(
             session, job.tenant_id, job.case_id, draft)
-        if readiness.status == "blocked":
-            await _fail("draft_generation_job_readiness_blocked")
+        if readiness.status == 'blocked':
+            await _fail('draft_generation_job_readiness_blocked')
+            return
 
-        # ---- preparing input ---------------------------------------------
-        _stage("preparing_input")
+        _stage('preparing_input')
         sections = build_section_plan(draft.draft_type,
                                       readiness.active_issue_ids)
         try:
@@ -226,15 +228,11 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
             )
         except UnknownSelectionError as exc:
             await _fail(exc.code)
+            return
 
-        # ---- provider generation ----------------------------------------
-        _stage("provider_generation")
-        # Provider factory: prefer the route-level monkeypatchable one
-        # (so async tests can inject a deterministic provider) and fall
-        # back to the shared production factory.
+        _stage('provider_generation')
         try:
             from app.routes.draft_routes import _draft_generation_provider
-
             provider = _draft_generation_provider()
         except Exception:
             provider = create_configured_draft_generation_provider()
@@ -245,17 +243,16 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
             await _fail(exc.code)
             return
 
-        # ---- validating output ------------------------------------------
-        _stage("validating_output")
-        entries = result["paragraphs"]
+        _stage('validating_output')
+        entries = result['paragraphs']
         for entry in entries:
-            for ref in entry["source_references"]:
-                key = (ref["source_record_id"], ref["source_version_id"],
-                       ref["source_paragraph_id"])
+            for ref in entry['source_references']:
+                key = (ref['source_record_id'], ref['source_version_id'],
+                       ref['source_paragraph_id'])
                 ctx = provenance_context.get(key)
                 if ctx is None:
                     await session.rollback()
-                    await _fail("draft_generation_unknown_source")
+                    await _fail('draft_generation_unknown_source')
                     return
                 row = (await session.execute(
                     select(SourceRecord.id, SourceRecord.verification_status)
@@ -265,39 +262,35 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                 )).first()
                 if row is None:
                     await session.rollback()
-                    await _fail("draft_generation_provenance_mismatch")
+                    await _fail('draft_generation_provenance_mismatch')
                     return
                 trust = await _resolve_trust(
                     session, row.id, key[1], row.verification_status)
-                if trust not in {"verified_official", "verified_secondary",
-                                  "editor_verified"}:
+                if trust not in {'verified_official', 'verified_secondary',
+                                  'editor_verified'}:
                     await session.rollback()
-                    await _fail("draft_generation_provenance_mismatch")
+                    await _fail('draft_generation_provenance_mismatch')
                     return
                 sp = (await session.execute(select(SourceParagraph).where(
                     SourceParagraph.id == key[2],
                     SourceParagraph.source_version_id == key[1],
                 ))).scalar_one_or_none()
-                if sp is None or (sp.text_hash or "") != ctx.text_hash \
-                        or source_text_hash(sp.text or "") != ctx.text_hash:
+                if sp is None or (sp.text_hash or '') != ctx.text_hash \
+                        or source_text_hash(sp.text or '') != ctx.text_hash:
                     await session.rollback()
-                    await _fail("draft_generation_provenance_mismatch")
+                    await _fail('draft_generation_provenance_mismatch')
                     return
 
-        # ---- persisting (atomic) ----------------------------------------
-        _stage("persisting")
-        run_id = new_uuid()
-        input_fp = generation_input_fingerprint(payload)
-        created_paragraphs = []
-        issue_link_count = 0
-        source_link_count = 0
+        _stage('persisting')
+        run_id = new_uuid(); input_fp = generation_input_fingerprint(payload)
+        created_paragraphs = []; issue_link_count = 0; source_link_count = 0
         for entry in entries:
             paragraph = await DraftParagraphRepository.create(
                 session, tenant_id=job.tenant_id, case_id=job.case_id,
                 draft_document_id=draft.id,
-                paragraph_order=entry["section_order"],
-                paragraph_type=entry["paragraph_type"],
-                text=entry["text"], generated_by="ai",
+                paragraph_order=entry['section_order'],
+                paragraph_type=entry['paragraph_type'],
+                text=entry['text'], generated_by='ai',
                 model_name=provider.model_version,
             )
             paragraph.generation_run_id = run_id
@@ -308,10 +301,10 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                 draft_document_id=draft.id,
                 draft_paragraph_id=paragraph.id, revision_number=1,
                 base_paragraph_version=paragraph.version,
-                text=entry["text"], change_type="initial_generation",
+                text=entry['text'], change_type='initial_generation',
                 created_by=job.requested_by_user_id,
             )
-            for iid in entry["legal_issue_ids"]:
+            for iid in entry['legal_issue_ids']:
                 if await DraftParagraphIssueLinkRepository.active_exists(
                         session, job.tenant_id, job.case_id, paragraph.id, iid):
                     continue
@@ -320,49 +313,46 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                     draft_paragraph_id=paragraph.id, legal_issue_id=iid,
                     created_by=job.requested_by_user_id)
                 issue_link_count += 1
-            for ref in entry["source_references"]:
-                key = (ref["source_record_id"], ref["source_version_id"],
-                       ref["source_paragraph_id"])
-                ctx = provenance_context[key]
+            for ref in entry['source_references']:
+                key_tuple = (ref['source_record_id'], ref['source_version_id'],
+                             ref['source_paragraph_id'])
+                ctx2 = provenance_context[key_tuple]
                 if await DraftParagraphSourceLinkRepository.active_exists(
                         session, job.tenant_id, job.case_id,
-                        paragraph.id, *key):
+                        paragraph.id, *key_tuple):
                     continue
                 await DraftParagraphSourceLinkRepository.create(
                     session, tenant_id=job.tenant_id, case_id=job.case_id,
                     draft_paragraph_id=paragraph.id,
-                    source_record_id=key[0], source_version_id=key[1],
-                    source_paragraph_id=key[2],
-                    usage_type="citation", quote_hash=ctx.text_hash,
+                    source_record_id=key_tuple[0],
+                    source_version_id=key_tuple[1],
+                    source_paragraph_id=key_tuple[2],
+                    usage_type='citation', quote_hash=ctx2.text_hash,
                     created_by=job.requested_by_user_id,
-                    verification_status="verified")
+                    verification_status='verified')
                 source_link_count += 1
 
         draft.version += 1
-        metrics = getattr(provider, "last_metrics", {}) or {}
+        metrics = getattr(provider, 'last_metrics', {}) or {}
         job.provider_name = provider.provider_name
         job.model_name = provider.model_version
-        job.logical_call_count = int(metrics.get("logical_call_count", 1))
-        job.request_attempt_count = int(metrics.get("request_attempt_count", 0))
-        job.prompt_tokens = int(metrics.get("prompt_tokens", 0))
-        job.completion_tokens = int(metrics.get("completion_tokens", 0))
-        job.total_tokens = int(metrics.get("total_tokens", 0))
-        job.reasoning_tokens = int(metrics.get("reasoning_tokens", 0))
-        job.finish_reasons_json = [
-            str(r) for r in metrics.get("finish_reasons", [])
-        ]
+        job.logical_call_count = int(metrics.get('logical_call_count', 1))
+        job.request_attempt_count = int(metrics.get('request_attempt_count', 0))
+        job.prompt_tokens = int(metrics.get('prompt_tokens', 0))
+        job.completion_tokens = int(metrics.get('completion_tokens', 0))
+        job.total_tokens = int(metrics.get('total_tokens', 0))
+        job.reasoning_tokens = int(metrics.get('reasoning_tokens', 0))
+        job.finish_reasons_json = [str(r) for r in metrics.get('finish_reasons', [])]
         job.result_draft_version = draft.version
-        job.status = "succeeded"
-        job.stage = "completed"
+        job.status = 'succeeded'
+        job.stage = 'completed'
         job.progress_percent = 100
         job.completed_at = _now()
         await session.commit()
-        logger.info(
-            "draft_generation_worker succeeded job_id=%s draft_id=%s "
-            "paragraph_count=%d provider=%s model=%s",
-            job.id, draft.id, len(created_paragraphs),
-            provider.provider_name, provider.model_version,
-        )
+        logger.info('draft_generation_worker succeeded job_id=%s draft_id=%s '
+                    'paragraph_count=%d provider=%s model=%s',
+                    job.id, draft.id, len(created_paragraphs),
+                    provider.provider_name, provider.model_version)
     except Exception:
         await session.rollback()
         raise
