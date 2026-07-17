@@ -1777,20 +1777,12 @@ async def enqueue_draft_generation_job(
     if body.draft_version != draft.version:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="draft_generation_job_version_conflict")
-    existing_paragraphs = await DraftParagraphRepository.list_for_draft(
-        db, ctx.tenant_id, draft.id)
-    if existing_paragraphs:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail="draft_generation_job_not_empty")
 
-    readiness = await compute_draft_readiness(db, ctx.tenant_id, case_id, draft)
-    if readiness.status == "blocked":
-        raise HTTPException(status_code=422, detail="draft_generation_job_readiness_blocked")
-
+    # Idempotency: same client_request_id must resolve to the SAME job
+    # regardless of the active-job guard.
     fingerprint = _draft_generation_job_request_fingerprint(
         draft.id, body.draft_version, body.selected_issue_ids,
         body.selected_source_usage_ids)
-
     existing = await DraftGenerationJobRepository.find_by_request(
         db, ctx.tenant_id, case_id, draft.id, body.client_request_id)
     if existing is not None:
@@ -1821,6 +1813,16 @@ async def enqueue_draft_generation_job(
             started_at=_iso(existing.started_at),
             completed_at=_iso(existing.completed_at),
         )
+
+    existing_paragraphs = await DraftParagraphRepository.list_for_draft(
+        db, ctx.tenant_id, draft.id)
+    if existing_paragraphs:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_generation_job_not_empty")
+
+    readiness = await compute_draft_readiness(db, ctx.tenant_id, case_id, draft)
+    if readiness.status == "blocked":
+        raise HTTPException(status_code=422, detail="draft_generation_job_readiness_blocked")
 
     active = await DraftGenerationJobRepository.find_active_for_draft(
         db, ctx.tenant_id, case_id, draft.id)
