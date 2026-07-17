@@ -7,6 +7,7 @@ text and source quotes are never written to logs or audit metadata.
 """
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
