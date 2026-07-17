@@ -330,7 +330,7 @@ class DraftApi {
     }
     final Map<String, dynamic> json = await _client
         .postJson<Map<String, dynamic>>(
-          '${_draftPath(caseId, draftId)}/generate',
+          '${_draftPath(caseId, draftId)}/generation-jobs',
           body: body,
         );
     return DraftGenerationJobDto.fromJson(json);
@@ -343,7 +343,7 @@ class DraftApi {
   ) async {
     final Map<String, dynamic> json = await _client
         .getJson<Map<String, dynamic>>(
-          '${_draftPath(caseId, draftId)}/generate/$jobId',
+          '${_draftPath(caseId, draftId)}/generation-jobs/$jobId',
         );
     return DraftGenerationJobDto.fromJson(json);
   }

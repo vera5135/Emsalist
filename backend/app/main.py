@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 if sys.platform.startswith("win"):
@@ -64,6 +65,19 @@ from app.api.v1 import api_v1_router
 logger = logging.getLogger(__name__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    from app.services.draft_generation_worker import start_worker, stop_worker
+
+    await start_worker()
+    try:
+        yield
+    finally:
+        await stop_worker()
+        await dispose_engine()
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -73,6 +87,7 @@ app = FastAPI(
         "ve Yargıtay karar arama modüllerini içerir."
     ),
     debug=settings.debug,
+    lifespan=lifespan,
 )
 
 # -- production middleware: trusted hosts --
@@ -91,7 +106,7 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Correlation-ID"],
 )
 

@@ -603,7 +603,6 @@
 		FC010000000000000001 /* Debug-development */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000001 /* Debug-development.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -625,7 +624,6 @@
 		FC010000000000000002 /* Profile-development */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000002 /* Profile-development.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -646,7 +644,6 @@
 		FC010000000000000003 /* Release-development */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000003 /* Release-development.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -667,7 +664,6 @@
 		FC010000000000000004 /* Debug-staging */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000004 /* Debug-staging.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -689,7 +685,6 @@
 		FC010000000000000005 /* Profile-staging */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000005 /* Profile-staging.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -710,7 +705,6 @@
 		FC010000000000000006 /* Release-staging */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000006 /* Release-staging.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -731,7 +725,6 @@
 		FC010000000000000007 /* Debug-production */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000007 /* Debug-production.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -753,7 +746,6 @@
 		FC010000000000000008 /* Profile-production */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000008 /* Profile-production.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -774,7 +766,6 @@
 		FC010000000000000009 /* Release-production */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FADE00000000000000000009 /* Release-production.xcconfig */;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -794,7 +785,6 @@
 		};
 		FC020000000000000001 /* Debug-development */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -812,7 +802,6 @@
 		};
 		FC020000000000000002 /* Profile-development */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -828,7 +817,6 @@
 		};
 		FC020000000000000003 /* Release-development */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -843,7 +831,6 @@
 			name = "Release-development";
 		};
 		FC020000000000000004 /* Debug-staging */ = {
-			isa = XCBuildConfiguration;
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -862,7 +849,6 @@
 		};
 		FC020000000000000005 /* Profile-staging */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -878,7 +864,6 @@
 		};
 		FC020000000000000006 /* Release-staging */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -893,7 +878,6 @@
 			name = "Release-staging";
 		};
 		FC020000000000000007 /* Debug-production */ = {
-			isa = XCBuildConfiguration;
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -912,7 +896,6 @@
 		};
 		FC020000000000000008 /* Profile-production */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -928,7 +911,6 @@
 		};
 		FC020000000000000009 /* Release-production */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -943,7 +925,6 @@
 			name = "Release-production";
 		};
 		FC030000000000000001 /* Debug-development */ = {
-			isa = XCBuildConfiguration;
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -1002,7 +983,6 @@
 		};
 		FC030000000000000002 /* Profile-development */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1054,7 +1034,6 @@
 			name = "Profile-development";
 		};
 		FC030000000000000003 /* Release-development */ = {
-			isa = XCBuildConfiguration;
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -1109,7 +1088,6 @@
 			name = "Release-development";
 		};
 		FC030000000000000004 /* Debug-staging */ = {
-			isa = XCBuildConfiguration;
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -1168,7 +1146,6 @@
 		};
 		FC030000000000000005 /* Profile-staging */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1220,7 +1197,6 @@
 			name = "Profile-staging";
 		};
 		FC030000000000000006 /* Release-staging */ = {
-			isa = XCBuildConfiguration;
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -1275,7 +1251,6 @@
 			name = "Release-staging";
 		};
 		FC030000000000000007 /* Debug-production */ = {
-			isa = XCBuildConfiguration;
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -1334,7 +1309,6 @@
 		};
 		FC030000000000000008 /* Profile-production */ = {
 			isa = XCBuildConfiguration;
-			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1386,7 +1360,6 @@
 			name = "Profile-production";
 		};
 		FC030000000000000009 /* Release-production */ = {
-			isa = XCBuildConfiguration;
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
