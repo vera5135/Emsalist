@@ -56,11 +56,13 @@ class DraftGenerationJobState {
       progressPercent: progressPercent ?? this.progressPercent,
       jobId: clearJobId ? null : (jobId ?? this.jobId),
       draftId: clearDraftId ? null : (draftId ?? this.draftId),
-      safeErrorCode:
-          clearSafeErrorCode ? null : (safeErrorCode ?? this.safeErrorCode),
+      safeErrorCode: clearSafeErrorCode
+          ? null
+          : (safeErrorCode ?? this.safeErrorCode),
       isPolling: isPolling ?? this.isPolling,
-      enqueueError:
-          clearEnqueueError ? null : (enqueueError ?? this.enqueueError),
+      enqueueError: clearEnqueueError
+          ? null
+          : (enqueueError ?? this.enqueueError),
       clientRequestId: clearClientRequestId
           ? null
           : (clientRequestId ?? this.clientRequestId),
@@ -125,7 +127,8 @@ class DraftGenerationJobNotifier
     } on ApiException catch (e) {
       if (e.statusCode == 409) {
         state = state.copyWith(
-          enqueueError: 'Bu taslak için zaten bir oluşturma işlemi devam ediyor.',
+          enqueueError:
+              'Bu taslak için zaten bir oluşturma işlemi devam ediyor.',
         );
       } else {
         state = state.copyWith(enqueueError: e.message);
@@ -143,8 +146,11 @@ class DraftGenerationJobNotifier
     }
 
     try {
-      final DraftGenerationJobItem job =
-          await _repo.getGenerationJob(caseId, draftId, jobId);
+      final DraftGenerationJobItem job = await _repo.getGenerationJob(
+        caseId,
+        draftId,
+        jobId,
+      );
 
       state = state.copyWith(
         status: job.status,
@@ -158,9 +164,7 @@ class DraftGenerationJobNotifier
 
         if (job.status == 'succeeded') {
           _ref.invalidate(
-            draftDetailProvider(
-              (caseId: caseId, draftId: draftId),
-            ),
+            draftDetailProvider((caseId: caseId, draftId: draftId)),
           );
         }
       }
@@ -201,13 +205,14 @@ class DraftGenerationJobNotifier
   }
 }
 
-final draftGenerationJobProvider = StateNotifierProvider.autoDispose.family<
-    DraftGenerationJobNotifier,
-    DraftGenerationJobState,
-    ({String caseId, String draftId})
->((ref, params) {
-  return DraftGenerationJobNotifier(
-    ref.watch(draftRepositoryProvider),
-    ref,
-  );
-});
+final draftGenerationJobProvider = StateNotifierProvider.autoDispose
+    .family<
+      DraftGenerationJobNotifier,
+      DraftGenerationJobState,
+      ({String caseId, String draftId})
+    >((ref, params) {
+      return DraftGenerationJobNotifier(
+        ref.watch(draftRepositoryProvider),
+        ref,
+      );
+    });

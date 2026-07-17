@@ -40,9 +40,7 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
   String get _draftId => widget.draftId;
 
   void _refreshDetail() {
-    ref.invalidate(
-      draftDetailProvider((caseId: _caseId, draftId: _draftId)),
-    );
+    ref.invalidate(draftDetailProvider((caseId: _caseId, draftId: _draftId)));
   }
 
   Future<void> _checkReadiness() async {
@@ -58,9 +56,9 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(safeErrorMessage(e.code ?? ''))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(safeErrorMessage(e.code ?? ''))));
       }
     } on Object {
       if (mounted) {
@@ -83,13 +81,15 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
           title: Row(
             children: <Widget>[
               Icon(
-                ready ? Icons.check_circle_outline : Icons.warning_amber_outlined,
-                color: ready ? theme.colorScheme.primary : theme.colorScheme.error,
+                ready
+                    ? Icons.check_circle_outline
+                    : Icons.warning_amber_outlined,
+                color: ready
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.error,
               ),
               const SizedBox(width: AppConstants.spacingSm),
-              Text(
-                ready ? 'Taslak Hazır' : 'Taslak Hazır Değil',
-              ),
+              Text(ready ? 'Taslak Hazır' : 'Taslak Hazır Değil'),
             ],
           ),
           content: SingleChildScrollView(
@@ -100,10 +100,7 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
                 _ReadinessStatusChip(status: readiness.status),
                 if (readiness.blockedReasons.isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppConstants.spacingMd),
-                  Text(
-                    'Engeller',
-                    style: theme.textTheme.titleSmall,
-                  ),
+                  Text('Engeller', style: theme.textTheme.titleSmall),
                   const SizedBox(height: AppConstants.spacingSm),
                   ...readiness.blockedReasons.map(
                     (String r) => Padding(
@@ -126,10 +123,7 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
                 ],
                 if (readiness.warnings.isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppConstants.spacingMd),
-                  Text(
-                    'Uyarılar',
-                    style: theme.textTheme.titleSmall,
-                  ),
+                  Text('Uyarılar', style: theme.textTheme.titleSmall),
                   const SizedBox(height: AppConstants.spacingSm),
                   ...readiness.warnings.map(
                     (String w) => Padding(
@@ -149,34 +143,31 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
                 ],
                 if (readiness.metrics.isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppConstants.spacingMd),
-                  Text(
-                    'Ölçümler',
-                    style: theme.textTheme.titleSmall,
-                  ),
+                  Text('Ölçümler', style: theme.textTheme.titleSmall),
                   const SizedBox(height: AppConstants.spacingSm),
-                  ...readiness.metrics.entries.map(
-                    (MapEntry<String, dynamic> e) {
-                      return Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: AppConstants.spacingXs,
-                        ),
-                        child: Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                e.key,
-                                style: theme.textTheme.bodySmall,
-                              ),
+                  ...readiness.metrics.entries.map((
+                    MapEntry<String, dynamic> e,
+                  ) {
+                    return Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: AppConstants.spacingXs,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              e.key,
+                              style: theme.textTheme.bodySmall,
                             ),
-                            Text(
-                              '${e.value}',
-                              style: theme.textTheme.labelMedium,
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                          ),
+                          Text(
+                            '${e.value}',
+                            style: theme.textTheme.labelMedium,
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ],
             ),
@@ -205,15 +196,15 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(safeErrorMessage(e.code ?? ''))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(safeErrorMessage(e.code ?? ''))));
       }
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Doğrulama yapılamadı.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Doğrulama yapılamadı.')));
       }
     } finally {
       if (mounted) setState(() => _validationLoading = false);
@@ -273,10 +264,7 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
                 ],
                 if (validation.warnings.isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppConstants.spacingMd),
-                  Text(
-                    'Uyarılar',
-                    style: theme.textTheme.titleSmall,
-                  ),
+                  Text('Uyarılar', style: theme.textTheme.titleSmall),
                   const SizedBox(height: AppConstants.spacingSm),
                   ...validation.warnings.map(
                     (String w) => Padding(
@@ -326,55 +314,53 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
   }
 
   Future<void> _finalizeDraft(DraftDetailItem draft) async {
-    final bool confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          title: const Text('Taslağı Tamamla'),
-          content: const Text(
-            'Bu taslağı tamamlamak istediğinize emin misiniz? '
-            'Tamamlandıktan sonra düzenleme yapılamaz.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('İptal'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Tamamla'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext ctx) {
+            return AlertDialog(
+              title: const Text('Taslağı Tamamla'),
+              content: const Text(
+                'Bu taslağı tamamlamak istediğinize emin misiniz? '
+                'Tamamlandıktan sonra düzenleme yapılamaz.',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('İptal'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Tamamla'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
 
     if (!confirmed) return;
 
     setState(() => _finalizing = true);
     try {
-      await _repo.finalizeDraft(
-        _caseId,
-        _draftId,
-        version: draft.version,
-      );
+      await _repo.finalizeDraft(_caseId, _draftId, version: draft.version);
       _refreshDetail();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Taslak tamamlandı.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Taslak tamamlandı.')));
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(safeErrorMessage(e.code ?? ''))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(safeErrorMessage(e.code ?? ''))));
       }
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Taslak tamamlanamadı.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Taslak tamamlanamadı.')));
       }
     } finally {
       if (mounted) setState(() => _finalizing = false);
@@ -425,15 +411,15 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
       );
       _refreshDetail();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Paragraf kabul edildi.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Paragraf kabul edildi.')));
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(safeErrorMessage(e.code ?? ''))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(safeErrorMessage(e.code ?? ''))));
       }
     } on Object {
       if (mounted) {
@@ -480,9 +466,7 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
         } on Object {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Değişiklik talebi gönderilemedi.'),
-              ),
+              const SnackBar(content: Text('Değişiklik talebi gönderilemedi.')),
             );
           }
         }
@@ -556,9 +540,7 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
     ref.listen(
       draftGenerationJobProvider((caseId: _caseId, draftId: _draftId)),
       (DraftGenerationJobState? previous, DraftGenerationJobState next) {
-        if (next.status == 'succeeded' &&
-            !_didShowSuccessDialog &&
-            mounted) {
+        if (next.status == 'succeeded' && !_didShowSuccessDialog && mounted) {
           _didShowSuccessDialog = true;
           showDialog<void>(
             context: context,
@@ -588,8 +570,7 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Taslak Detayı')),
       body: detail.when(
-        loading: () =>
-            const LoadingWidget(message: 'Taslak yükleniyor'),
+        loading: () => const LoadingWidget(message: 'Taslak yükleniyor'),
         error: (Object error, _) => AppErrorWidget(
           message: error is ApiException
               ? error.message
@@ -600,19 +581,20 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
           final bool editable = draft.isEditable;
           final bool isFinalized = draft.status == 'finalized';
           final bool showGenerate = editable && draft.paragraphs.isEmpty;
-          final bool allAccepted = draft.paragraphs.isNotEmpty &&
+          final bool allAccepted =
+              draft.paragraphs.isNotEmpty &&
               draft.paragraphs.every(
-                (DraftParagraphItem p) =>
-                    p.verificationStatus == 'accepted',
+                (DraftParagraphItem p) => p.verificationStatus == 'accepted',
               );
 
           return RefreshIndicator(
             onRefresh: () async {
               _refreshDetail();
               await ref.read(
-                draftDetailProvider(
-                  (caseId: _caseId, draftId: _draftId),
-                ).future,
+                draftDetailProvider((
+                  caseId: _caseId,
+                  draftId: _draftId,
+                )).future,
               );
             },
             child: CustomScrollView(
@@ -665,10 +647,7 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
                 ),
                 if (isFinalized)
                   SliverToBoxAdapter(
-                    child: DraftExportBar(
-                      caseId: _caseId,
-                      draftId: _draftId,
-                    ),
+                    child: DraftExportBar(caseId: _caseId, draftId: _draftId),
                   ),
                 SliverToBoxAdapter(
                   child: Padding(
@@ -696,39 +675,39 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
                   )
                 else
                   SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        final DraftParagraphItem paragraph =
-                            draft.paragraphs[index];
-                        final List<DraftIssueLinkItem> paraIssues =
-                            draft.issueLinks
-                                .where(
-                                  (DraftIssueLinkItem il) =>
-                                      il.draftParagraphId == paragraph.id,
-                                )
-                                .toList();
-                        final List<DraftSourceLinkItem> paraSources =
-                            draft.sourceLinks
-                                .where(
-                                  (DraftSourceLinkItem sl) =>
-                                      sl.draftParagraphId == paragraph.id,
-                                )
-                                .toList();
-                        return _ParagraphCard(
-                          paragraph: paragraph,
-                          draft: draft,
-                          editable: editable,
-                          issueLinks: paraIssues,
-                          sourceLinks: paraSources,
-                          onEdit: () => _editParagraph(draft, paragraph),
-                          onAccept: () => _acceptParagraph(draft, paragraph),
-                          onRequestChanges: () =>
-                              _requestChanges(draft, paragraph),
-                          onShowRevisions: () => _showRevisions(paragraph),
-                        );
-                      },
-                      childCount: draft.paragraphs.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((
+                      BuildContext context,
+                      int index,
+                    ) {
+                      final DraftParagraphItem paragraph =
+                          draft.paragraphs[index];
+                      final List<DraftIssueLinkItem> paraIssues = draft
+                          .issueLinks
+                          .where(
+                            (DraftIssueLinkItem il) =>
+                                il.draftParagraphId == paragraph.id,
+                          )
+                          .toList();
+                      final List<DraftSourceLinkItem> paraSources = draft
+                          .sourceLinks
+                          .where(
+                            (DraftSourceLinkItem sl) =>
+                                sl.draftParagraphId == paragraph.id,
+                          )
+                          .toList();
+                      return _ParagraphCard(
+                        paragraph: paragraph,
+                        draft: draft,
+                        editable: editable,
+                        issueLinks: paraIssues,
+                        sourceLinks: paraSources,
+                        onEdit: () => _editParagraph(draft, paragraph),
+                        onAccept: () => _acceptParagraph(draft, paragraph),
+                        onRequestChanges: () =>
+                            _requestChanges(draft, paragraph),
+                        onShowRevisions: () => _showRevisions(paragraph),
+                      );
+                    }, childCount: draft.paragraphs.length),
                   ),
                 const SliverToBoxAdapter(
                   child: SizedBox(height: AppConstants.spacingXl),
@@ -740,7 +719,6 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
       ),
     );
   }
-
 }
 
 class _DraftHeader extends StatelessWidget {
@@ -783,10 +761,7 @@ class _DraftHeader extends StatelessWidget {
                   color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(AppConstants.radiusSm),
                 ),
-                child: Text(
-                  draft.label,
-                  style: theme.textTheme.labelMedium,
-                ),
+                child: Text(draft.label, style: theme.textTheme.labelMedium),
               ),
               const SizedBox(width: AppConstants.spacingSm),
               Text(
@@ -842,11 +817,7 @@ class _FinalizedBanner extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Icon(
-            Icons.info_outline,
-            color: theme.colorScheme.primary,
-            size: 20,
-          ),
+          Icon(Icons.info_outline, color: theme.colorScheme.primary, size: 20),
           const SizedBox(width: AppConstants.spacingSm),
           Expanded(
             child: Text(
@@ -943,11 +914,8 @@ class _ActionBar extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.auto_awesome, size: 18),
-                label: Text(
-                  generatingActive ? 'Oluşturuluyor...' : 'Oluştur',
-                ),
-                onPressed:
-                    (generating || generatingActive) ? null : onGenerate,
+                label: Text(generatingActive ? 'Oluşturuluyor...' : 'Oluştur'),
+                onPressed: (generating || generatingActive) ? null : onGenerate,
               ),
             ),
           if (editable && !isFinalized)
@@ -994,9 +962,7 @@ class _GenerationProgress extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.tertiaryContainer.withAlpha(60),
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        border: Border.all(
-          color: theme.colorScheme.tertiary.withAlpha(60),
-        ),
+        border: Border.all(color: theme.colorScheme.tertiary.withAlpha(60)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1014,8 +980,8 @@ class _GenerationProgress extends StatelessWidget {
                   jobState.isPolling
                       ? stageLabel
                       : jobState.status == 'succeeded'
-                          ? 'Oluşturma tamamlandı'
-                          : 'Oluşturma başarısız',
+                      ? 'Oluşturma tamamlandı'
+                      : 'Oluşturma başarısız',
                   style: theme.textTheme.titleSmall,
                 ),
               ),
@@ -1079,9 +1045,7 @@ class _GenerationError extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.errorContainer.withAlpha(60),
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        border: Border.all(
-          color: theme.colorScheme.error.withAlpha(60),
-        ),
+        border: Border.all(color: theme.colorScheme.error.withAlpha(60)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1101,10 +1065,7 @@ class _GenerationError extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppConstants.spacingSm),
-          FilledButton(
-            onPressed: onRetry,
-            child: const Text('Tekrar Dene'),
-          ),
+          FilledButton(onPressed: onRetry, child: const Text('Tekrar Dene')),
         ],
       ),
     );
@@ -1263,9 +1224,7 @@ class _ParagraphCard extends StatelessWidget {
                       : '';
                   return Chip(
                     avatar: Icon(
-                      sl.isVerified
-                          ? Icons.verified
-                          : Icons.link,
+                      sl.isVerified ? Icons.verified : Icons.link,
                       size: 14,
                       color: sl.isVerified
                           ? theme.colorScheme.primary
@@ -1406,8 +1365,8 @@ class _ReadinessStatusChip extends StatelessWidget {
         status == 'ready'
             ? 'Hazır'
             : status == 'ready_with_warnings'
-                ? 'Uyarılarla Hazır'
-                : 'Engelli',
+            ? 'Uyarılarla Hazır'
+            : 'Engelli',
       ),
     );
   }

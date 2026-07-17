@@ -157,11 +157,7 @@ class DraftRepository {
     String draftId, {
     required int version,
   }) async {
-    final dto = await _api.finalizeDraft(
-      caseId,
-      draftId,
-      version: version,
-    );
+    final dto = await _api.finalizeDraft(caseId, draftId, version: version);
     return DraftFinalizeItem.fromDto(dto);
   }
 

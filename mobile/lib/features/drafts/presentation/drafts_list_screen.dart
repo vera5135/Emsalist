@@ -48,9 +48,8 @@ class DraftsListScreen extends ConsumerWidget {
                 final DraftItem draft = items[index];
                 return _DraftListCard(
                   draft: draft,
-                  onTap: () => context.push(
-                    '/cases/$caseId/drafts/${draft.id}',
-                  ),
+                  onTap: () =>
+                      context.push('/cases/$caseId/drafts/${draft.id}'),
                 );
               },
             ),
@@ -175,15 +174,14 @@ final List<Map<String, String>> _draftTypes = const <Map<String, String>>[
   <String, String>{'value': 'hukuki_mutalaa', 'label': 'Hukuki Mütalaa'},
   <String, String>{'value': 'ihtarname', 'label': 'İhtarname'},
   <String, String>{'value': 'istinaf_dilekcesi', 'label': 'İstinaf Dilekçesi'},
-  <String, String>{'value': 'kapanis_aciklamasi', 'label': 'Kapanış Açıklaması'},
+  <String, String>{
+    'value': 'kapanis_aciklamasi',
+    'label': 'Kapanış Açıklaması',
+  },
   <String, String>{'value': 'temyiz_dilekcesi', 'label': 'Temyiz Dilekçesi'},
 ];
 
-void _showCreateDraftSheet(
-  BuildContext context,
-  WidgetRef ref,
-  String caseId,
-) {
+void _showCreateDraftSheet(BuildContext context, WidgetRef ref, String caseId) {
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
   final TextEditingController titleController = TextEditingController();
   final TextEditingController supersedesController = TextEditingController();
@@ -199,7 +197,8 @@ void _showCreateDraftSheet(
           left: AppConstants.spacingMd,
           right: AppConstants.spacingMd,
           top: AppConstants.spacingMd,
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom +
+          bottom:
+              MediaQuery.of(sheetContext).viewInsets.bottom +
               AppConstants.spacingMd,
         ),
         child: Form(
@@ -235,14 +234,12 @@ void _showCreateDraftSheet(
                   labelText: 'Taslak Türü',
                   border: OutlineInputBorder(),
                 ),
-                items: _draftTypes.map(
-                  (Map<String, String> t) {
-                    return DropdownMenuItem<String>(
-                      value: t['value'],
-                      child: Text(t['label']!),
-                    );
-                  },
-                ).toList(),
+                items: _draftTypes.map((Map<String, String> t) {
+                  return DropdownMenuItem<String>(
+                    value: t['value'],
+                    child: Text(t['label']!),
+                  );
+                }).toList(),
                 onChanged: (String? value) {
                   if (value != null) {
                     selectedType = value;
@@ -274,27 +271,23 @@ void _showCreateDraftSheet(
                             draftType: selectedType,
                             supersedesDraftId:
                                 supersedesController.text.trim().isEmpty
-                                    ? null
-                                    : supersedesController.text.trim(),
+                                ? null
+                                : supersedesController.text.trim(),
                           );
 
                       ref.invalidate(caseDraftsProvider(caseId));
                       Navigator.of(sheetContext).pop();
 
                       if (context.mounted) {
-                        context.push(
-                          '/cases/$caseId/drafts/${result.id}',
-                        );
+                        context.push('/cases/$caseId/drafts/${result.id}');
                       }
                     } on ApiException catch (e) {
-                      ScaffoldMessenger.of(sheetContext).showSnackBar(
-                        SnackBar(content: Text(e.message)),
-                      );
+                      ScaffoldMessenger.of(
+                        sheetContext,
+                      ).showSnackBar(SnackBar(content: Text(e.message)));
                     } on Object {
                       ScaffoldMessenger.of(sheetContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Taslak oluşturulamadı.'),
-                        ),
+                        const SnackBar(content: Text('Taslak oluşturulamadı.')),
                       );
                     }
                   },

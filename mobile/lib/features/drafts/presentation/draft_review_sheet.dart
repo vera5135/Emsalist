@@ -37,26 +37,24 @@ void showRequestChangesSheet(
                     style: Theme.of(ctx).textTheme.titleLarge,
                   ),
                   const SizedBox(height: AppConstants.spacingMd),
-                  ..._reasonCodes.map(
-                    (Map<String, String> rc) {
-                      final String code = rc['code']!;
-                      final String label = rc['label']!;
-                      return RadioListTile<String>(
-                        title: Text(label),
-                        value: code,
-                        groupValue: selectedCode,
-                        onChanged: (String? value) {
-                          if (value != null) {
-                            setSheetState(() => selectedCode = value);
-                            Navigator.of(sheetContext).pop();
-                            onConfirm(selectedCode);
-                          }
-                        },
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                      );
-                    },
-                  ),
+                  ..._reasonCodes.map((Map<String, String> rc) {
+                    final String code = rc['code']!;
+                    final String label = rc['label']!;
+                    return RadioListTile<String>(
+                      title: Text(label),
+                      value: code,
+                      groupValue: selectedCode,
+                      onChanged: (String? value) {
+                        if (value != null) {
+                          setSheetState(() => selectedCode = value);
+                          Navigator.of(sheetContext).pop();
+                          onConfirm(selectedCode);
+                        }
+                      },
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    );
+                  }),
                   const SizedBox(height: AppConstants.spacingMd),
                 ],
               ),
@@ -182,10 +180,7 @@ class _RevisionTileState extends State<_RevisionTile> {
                     color: theme.colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(AppConstants.radiusSm),
                   ),
-                  child: Text(
-                    rev.label,
-                    style: theme.textTheme.labelSmall,
-                  ),
+                  child: Text(rev.label, style: theme.textTheme.labelSmall),
                 ),
                 if (widget.isCurrent) ...<Widget>[
                   const SizedBox(width: AppConstants.spacingSm),
@@ -196,21 +191,18 @@ class _RevisionTileState extends State<_RevisionTile> {
                     ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radiusSm,
+                      ),
                     ),
-                    child: Text(
-                      'Güncel',
-                      style: theme.textTheme.labelSmall,
-                    ),
+                    child: Text('Güncel', style: theme.textTheme.labelSmall),
                   ),
                 ],
               ],
             ),
             subtitle: Text(_formatDateTime(rev.createdAt)),
             trailing: IconButton(
-              icon: Icon(
-                _expanded ? Icons.expand_less : Icons.expand_more,
-              ),
+              icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
               tooltip: _expanded ? 'Küçült' : 'Genişlet',
               onPressed: () => setState(() => _expanded = !_expanded),
             ),

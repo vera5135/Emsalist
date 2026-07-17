@@ -57,9 +57,7 @@ class DraftApi {
     String? title,
     String? status,
   }) async {
-    final Map<String, dynamic> body = <String, dynamic>{
-      'version': version,
-    };
+    final Map<String, dynamic> body = <String, dynamic>{'version': version};
     if (title != null) body['title'] = title;
     if (status != null) body['status'] = status;
     final Map<String, dynamic> json = await _client
@@ -172,9 +170,7 @@ class DraftApi {
 
   Future<DraftPlanDto> getPlan(String caseId, String draftId) async {
     final Map<String, dynamic> json = await _client
-        .getJson<Map<String, dynamic>>(
-          '${_draftPath(caseId, draftId)}/plan',
-        );
+        .getJson<Map<String, dynamic>>('${_draftPath(caseId, draftId)}/plan');
     return DraftPlanDto.fromJson(json);
   }
 
@@ -273,8 +269,9 @@ class DraftApi {
       '${_paragraphPath(caseId, draftId, paragraphId)}/revisions',
     );
     return json
-        .map((dynamic e) =>
-            DraftRevisionDto.fromJson(e as Map<String, dynamic>))
+        .map(
+          (dynamic e) => DraftRevisionDto.fromJson(e as Map<String, dynamic>),
+        )
         .toList();
   }
 
@@ -286,14 +283,14 @@ class DraftApi {
     required int draftVersion,
     required int paragraphVersion,
   }) async {
-    final Map<String, dynamic> json = await _client
-        .postJson<Map<String, dynamic>>(
-          '${_paragraphPath(caseId, draftId, paragraphId)}/revisions/$revisionId/restore',
-          body: <String, dynamic>{
-            'draft_version': draftVersion,
-            'paragraph_version': paragraphVersion,
-          },
-        );
+    final Map<String, dynamic>
+    json = await _client.postJson<Map<String, dynamic>>(
+      '${_paragraphPath(caseId, draftId, paragraphId)}/revisions/$revisionId/restore',
+      body: <String, dynamic>{
+        'draft_version': draftVersion,
+        'paragraph_version': paragraphVersion,
+      },
+    );
     return DraftRevisionActionDto.fromJson(json);
   }
 
@@ -306,8 +303,10 @@ class DraftApi {
       '${_paragraphPath(caseId, draftId, paragraphId)}/reviews',
     );
     return json
-        .map((dynamic e) =>
-            DraftReviewEventDto.fromJson(e as Map<String, dynamic>))
+        .map(
+          (dynamic e) =>
+              DraftReviewEventDto.fromJson(e as Map<String, dynamic>),
+        )
         .toList();
   }
 
@@ -349,12 +348,10 @@ class DraftApi {
     return DraftGenerationJobDto.fromJson(json);
   }
 
-  Future<DownloadedFile> downloadDocx(
-    String caseId,
-    String draftId,
-  ) async {
-    final result =
-        await _download('${_draftPath(caseId, draftId)}/export/docx');
+  Future<DownloadedFile> downloadDocx(String caseId, String draftId) async {
+    final result = await _download(
+      '${_draftPath(caseId, draftId)}/export/docx',
+    );
     return DownloadedFile(
       bytes: result.bytes,
       filename: result.filename,
@@ -363,12 +360,8 @@ class DraftApi {
     );
   }
 
-  Future<DownloadedFile> downloadPdf(
-    String caseId,
-    String draftId,
-  ) async {
-    final result =
-        await _download('${_draftPath(caseId, draftId)}/export/pdf');
+  Future<DownloadedFile> downloadPdf(String caseId, String draftId) async {
+    final result = await _download('${_draftPath(caseId, draftId)}/export/pdf');
     return DownloadedFile(
       bytes: result.bytes,
       filename: result.filename,
@@ -378,11 +371,9 @@ class DraftApi {
 
   Future<({Uint8List bytes, String filename})> _download(String path) async {
     final result = await _client.downloadBytes(path);
-    final String disposition =
-        result.headers['content-disposition'] ?? '';
+    final String disposition = result.headers['content-disposition'] ?? '';
     String filename = 'download';
-    final RegExp re =
-        RegExp(r'''filename[^;=\n]*=["']?([^"';\n]*)["']?''');
+    final RegExp re = RegExp(r'''filename[^;=\n]*=["']?([^"';\n]*)["']?''');
     final RegExpMatch? match = re.firstMatch(disposition);
     if (match != null) {
       final String? extracted = match.group(1);

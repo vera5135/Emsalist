@@ -63,7 +63,9 @@ Future<void> showEditParagraphDialog(
             ),
             actions: <Widget>[
               TextButton(
-                onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
+                onPressed: saving
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
                 child: const Text('İptal'),
               ),
               Semantics(
@@ -85,9 +87,7 @@ Future<void> showEditParagraphDialog(
                             if (dialogContext.mounted) {
                               ScaffoldMessenger.of(dialogContext).showSnackBar(
                                 const SnackBar(
-                                  content: Text(
-                                    'Paragraf düzenlenemedi.',
-                                  ),
+                                  content: Text('Paragraf düzenlenemedi.'),
                                 ),
                               );
                             }

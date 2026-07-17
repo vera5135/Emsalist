@@ -277,7 +277,9 @@ class _DraftsHomeScreen extends ConsumerWidget {
       body: cases.when(
         loading: () => const LoadingWidget(message: 'Dosyalar yükleniyor…'),
         error: (Object error, _) => AppErrorWidget(
-          message: error is ApiException ? error.message : 'Dosyalar yüklenemedi',
+          message: error is ApiException
+              ? error.message
+              : 'Dosyalar yüklenemedi',
           onRetry: () => ref.invalidate(activeCasesProvider),
         ),
         data: (List<CaseItem> caseList) {

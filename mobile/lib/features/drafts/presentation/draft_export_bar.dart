@@ -9,16 +9,18 @@ import '../data/draft_api.dart';
 import '../domain/draft_item.dart';
 
 class DraftExportBar extends ConsumerWidget {
-  const DraftExportBar({required this.caseId, required this.draftId, super.key});
+  const DraftExportBar({
+    required this.caseId,
+    required this.draftId,
+    super.key,
+  });
 
   final String caseId;
   final String draftId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final DownloadService downloadService = ref.watch(
-      downloadServiceProvider,
-    );
+    final DownloadService downloadService = ref.watch(downloadServiceProvider);
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -86,9 +88,9 @@ class DraftExportBar extends ConsumerWidget {
       await downloadService.saveAndOpen(file);
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(safeErrorMessage(e.code ?? ''))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(safeErrorMessage(e.code ?? ''))));
       }
     } on Object {
       if (context.mounted) {

@@ -63,7 +63,11 @@ class FakeApiClient implements ApiClient {
     _postErrors[path] = error;
   }
 
-  void whenDownload(String path, {required List<int> bytes, Map<String, String> headers = const <String, String>{}}) {
+  void whenDownload(
+    String path, {
+    required List<int> bytes,
+    Map<String, String> headers = const <String, String>{},
+  }) {
     _downloadResponses[path] = (bytes: bytes, headers: headers);
     _downloadErrors.remove(path);
   }
@@ -149,7 +153,8 @@ class FakeApiClient implements ApiClient {
   final List<String> deletePaths = <String>[];
   final List<String> downloadPaths = <String>[];
   final Map<String, ({List<int> bytes, Map<String, String> headers})>
-      _downloadResponses = <String, ({List<int> bytes, Map<String, String> headers})>{};
+  _downloadResponses =
+      <String, ({List<int> bytes, Map<String, String> headers})>{};
   final Map<String, Object> _downloadErrors = <String, Object>{};
   final List<String> uploadPaths = <String>[];
   final List<Object?> uploadBodies = <Object?>[];
