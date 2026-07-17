@@ -33,6 +33,13 @@ ENV EMSALIST_LOG_LEVEL=INFO
 ENV EMSALIST_COMMIT="${BUILD_COMMIT}"
 ENV EMSALIST_BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"
 
+# P2.9C2 — Unicode-safe PDF export font (explicit runtime dependency; no
+# proprietary font files are committed to the repository).
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+ENV EMSALIST_PDF_FONT_PATH=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+
 RUN groupadd --gid "${GID}" emsalist \
     && useradd --uid "${UID}" --gid "${GID}" --no-create-home --shell /bin/false emsalist
 
