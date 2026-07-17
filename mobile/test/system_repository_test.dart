@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:emsalist_mobile/core/data/system/system_api.dart';
 import 'package:emsalist_mobile/core/data/system/system_repository.dart';
 import 'package:emsalist_mobile/core/network/api_client.dart';
@@ -79,6 +81,16 @@ class _FakeApiClient implements ApiClient {
       return value;
     }
     throw StateError('No fake response for $path');
+  }
+
+  @override
+  Future<({Uint8List bytes, Map<String, String> headers})> downloadBytes(
+    String path, {
+    Map<String, String>? queryParameters,
+    Object? cancelToken,
+  }) async {
+    requestedPaths.add(path);
+    throw StateError('No fake download for $path');
   }
 }
 

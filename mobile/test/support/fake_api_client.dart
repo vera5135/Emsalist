@@ -1,5 +1,6 @@
 import 'package:emsalist_mobile/core/network/api_client.dart';
 import 'package:emsalist_mobile/core/network/api_exception.dart';
+import 'dart:typed_data';
 
 /// A programmable in-memory [ApiClient] for auth flow tests.
 ///
@@ -60,6 +61,16 @@ class FakeApiClient implements ApiClient {
 
   void whenPostError(String path, Object error) {
     _postErrors[path] = error;
+  }
+
+  void whenDownload(String path, {required List<int> bytes, Map<String, String> headers = const <String, String>{}}) {
+    _downloadResponses[path] = (bytes: bytes, headers: headers);
+    _downloadErrors.remove(path);
+  }
+
+  void whenDownloadError(String path, Object error) {
+    _downloadErrors[path] = error;
+    _downloadResponses.remove(path);
   }
 
   @override
@@ -136,6 +147,10 @@ class FakeApiClient implements ApiClient {
   }
 
   final List<String> deletePaths = <String>[];
+  final List<String> downloadPaths = <String>[];
+  final Map<String, ({List<int> bytes, Map<String, String> headers})>
+      _downloadResponses = <String, ({List<int> bytes, Map<String, String> headers})>{};
+  final Map<String, Object> _downloadErrors = <String, Object>{};
   final List<String> uploadPaths = <String>[];
   final List<Object?> uploadBodies = <Object?>[];
 
@@ -175,6 +190,27 @@ class FakeApiClient implements ApiClient {
     throw const ApiException(
       kind: ApiErrorKind.unexpected,
       message: 'no fake upload',
+    );
+  }
+
+  @override
+  Future<({Uint8List bytes, Map<String, String> headers})> downloadBytes(
+    String path, {
+    Map<String, String>? queryParameters,
+    Object? cancelToken,
+  }) async {
+    downloadPaths.add(path);
+    final Object? error = _downloadErrors[path];
+    if (error != null) {
+      throw error;
+    }
+    final Object? value = _downloadResponses[path];
+    if (value is ({List<int> bytes, Map<String, String> headers})) {
+      return (bytes: Uint8List.fromList(value.bytes), headers: value.headers);
+    }
+    throw const ApiException(
+      kind: ApiErrorKind.unexpected,
+      message: 'no fake download',
     );
   }
 }
