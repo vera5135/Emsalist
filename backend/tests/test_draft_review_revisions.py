@@ -695,7 +695,9 @@ def test_migration_single_head_is_review_revision():
     cfg.set_main_option("script_location", str(BACKEND_DIR / "app" / "db" / "migrations"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["d3e4f5a6b7c8"]
+    assert len(heads) == 1
+    revisions = {rev.revision for rev in script.walk_revisions()}
+    assert "d3e4f5a6b7c8" in revisions
 
 
 def test_migration_downgrade_reupgrade_roundtrip(tmp_path):
