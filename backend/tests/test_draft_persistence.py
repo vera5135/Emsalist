@@ -179,11 +179,19 @@ async def _add_paragraph(client: AsyncClient, draft_id: str, order: int = 1,
 
 
 async def _accept_paragraph(client: AsyncClient, draft_id: str, paragraph: dict) -> dict:
-    r = await client.patch(f"{BASE}/{draft_id}/paragraphs/{paragraph['id']}", json={
-        "version": paragraph["version"], "verification_status": "accepted",
+    # P2.9C1: acceptance flows through the review accept endpoint (latest
+    # revision + verified source links required).
+    revisions = (await client.get(
+        f"{BASE}/{draft_id}/paragraphs/{paragraph['id']}/revisions")).json()
+    draft = (await client.get(f"{BASE}/{draft_id}")).json()
+    current = next(p for p in draft["paragraphs"] if p["id"] == paragraph["id"])
+    r = await client.post(f"{BASE}/{draft_id}/paragraphs/{paragraph['id']}/accept", json={
+        "draft_version": draft["version"], "paragraph_version": current["version"],
+        "revision_id": revisions[-1]["id"],
     })
     assert r.status_code == 200, r.text
-    return r.json()
+    refreshed = (await client.get(f"{BASE}/{draft_id}")).json()
+    return next(p for p in refreshed["paragraphs"] if p["id"] == paragraph["id"])
 
 
 def _source_link_body(**overrides) -> dict:
