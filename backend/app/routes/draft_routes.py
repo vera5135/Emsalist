@@ -60,6 +60,8 @@ from app.models.draft_models import (
     DraftParagraphEditRequest,
     DraftParagraphIssueLinkRequest,
     DraftParagraphIssueLinkResponse,
+    DraftParagraphRegenerateRequest,
+    DraftParagraphRegenerateResponse,
     DraftParagraphRequestChangesRequest,
     DraftParagraphResponse,
     DraftParagraphRestoreRequest,
@@ -1557,3 +1559,185 @@ async def list_paragraph_reviews(
     events = await DraftParagraphReviewEventRepository.list_for_paragraph(
         db, ctx.tenant_id, paragraph.id)
     return [_review_event_resp(event) for event in events]
+
+
+# ---------------------------------------------------------------------------
+# P2.9C1B — Selective grounded paragraph regeneration (single paragraph)
+# ---------------------------------------------------------------------------
+def _section_profile_for(draft_type: str, paragraph_type: str) -> tuple[bool, bool, bool]:
+    """(required, requires_source, targets_issues) from the canonical plan."""
+    for entry in SECTION_PLAN_BY_DRAFT_TYPE[draft_type]:
+        if entry[0] == paragraph_type:
+            return entry[1], entry[2], entry[3]
+    return False, False, False
+
+
+@router.post("/{draft_id}/paragraphs/{paragraph_id}/regenerate",
+             response_model=DraftParagraphRegenerateResponse,
+             operation_id="draft_paragraph_regenerate")
+async def regenerate_paragraph(
+    case_id: str,
+    draft_id: str,
+    paragraph_id: str,
+    body: DraftParagraphRegenerateRequest,
+    ctx: SecurityContext = Depends(require_case_write),
+    db: AsyncSession = Depends(get_session),
+) -> DraftParagraphRegenerateResponse:
+    await _authorized_case(db, ctx, case_id, write=True)
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    if draft.status not in EDITABLE_DRAFT_STATUSES:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_not_editable")
+    if body.draft_version != draft.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_version_conflict")
+    paragraph = await _load_paragraph(db, ctx, case_id, draft.id, paragraph_id)
+    if body.paragraph_version != paragraph.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_version_conflict")
+
+    readiness = await compute_draft_readiness(db, ctx.tenant_id, case_id, draft)
+    residual_blockers = [r for r in readiness.blocked_reasons if r != "draft_not_empty"]
+    if residual_blockers:
+        raise HTTPException(status_code=422, detail="readiness_blocked")
+
+    required, requires_source, targets_issues = _section_profile_for(
+        draft.draft_type, paragraph.paragraph_type)
+    section = {
+        "order": paragraph.paragraph_order,
+        "paragraph_type": paragraph.paragraph_type,
+        "required": required,
+        "requires_source": requires_source,
+        "target_issue_ids": sorted(
+            body.selected_legal_issue_ids or readiness.active_issue_ids
+        ) if targets_issues else [],
+    }
+    try:
+        payload, provenance_context = await build_generation_input(
+            db, ctx.tenant_id, case_id, draft, [section],
+            readiness.trusted_sources, readiness.active_issue_ids,
+            selected_legal_issue_ids=body.selected_legal_issue_ids,
+            selected_source_usage_ids=body.selected_source_usage_ids,
+        )
+    except UnknownSelectionError as exc:
+        raise HTTPException(status_code=422, detail=exc.code)
+
+    input_fingerprint = generation_input_fingerprint(payload)
+    provider = _draft_generation_provider()
+    try:
+        result = await provider.generate(payload)
+    except DraftGenerationError as exc:
+        logger.warning(
+            "draft_paragraph_regeneration_failed draft_id=%s case_id=%s "
+            "paragraph_id=%s provider=%s model=%s safe_error_code=%s",
+            draft.id, case_id, paragraph.id, provider.provider_name,
+            provider.model_version, exc.code,
+        )
+        status_code = 503 if exc.code in _GENERATION_UNAVAILABLE_CODES else 502
+        raise HTTPException(status_code=status_code, detail=exc.code)
+
+    entry = result["paragraphs"][0]
+    run_id = new_uuid()
+    try:
+        for reference in entry["source_references"]:
+            key = (reference["source_record_id"], reference["source_version_id"],
+                   reference["source_paragraph_id"])
+            context_item = provenance_context.get(key)
+            if context_item is None:
+                raise HTTPException(status_code=502,
+                                    detail="draft_generation_unknown_source")
+            record, version, source_paragraph = await _resolve_exact_source(
+                db, key[0], key[1], key[2])
+            await _require_draft_trust_eligible(db, record, version)
+            if (source_paragraph.text_hash or "") != context_item.text_hash or \
+                    source_text_hash(source_paragraph.text or "") != context_item.text_hash:
+                raise HTTPException(status_code=502,
+                                    detail="draft_generation_provenance_mismatch")
+
+        revision = await _append_paragraph_revision(
+            db, ctx, draft, paragraph, new_text=entry["text"],
+            change_type="ai_regeneration")
+        paragraph.text = entry["text"]
+        paragraph.verification_status = "pending_review"
+        paragraph.generated_by = "ai"
+        paragraph.model_name = provider.model_version
+        paragraph.generation_run_id = run_id
+        paragraph.generation_input_fingerprint = input_fingerprint
+        paragraph.version += 1
+
+        # Replace the previous grounding with the newly validated one; old
+        # links stay in history via soft delete, never hard-removed.
+        from app.db.draft_repository import _now
+
+        old_issue_links = await DraftParagraphIssueLinkRepository.list_for_paragraphs(
+            db, ctx.tenant_id, [paragraph.id])
+        old_source_links = await DraftParagraphSourceLinkRepository.list_for_paragraphs(
+            db, ctx.tenant_id, [paragraph.id])
+        replaced_at = _now()
+        for link in old_issue_links + old_source_links:
+            link.deleted_at = replaced_at
+
+        issue_link_count = 0
+        for issue_id in entry["legal_issue_ids"]:
+            await DraftParagraphIssueLinkRepository.create(
+                db, tenant_id=ctx.tenant_id, case_id=case_id,
+                draft_paragraph_id=paragraph.id, legal_issue_id=issue_id,
+                created_by=ctx.actor_id,
+            )
+            issue_link_count += 1
+        source_link_count = 0
+        for reference in entry["source_references"]:
+            key = (reference["source_record_id"], reference["source_version_id"],
+                   reference["source_paragraph_id"])
+            context_item = provenance_context[key]
+            await DraftParagraphSourceLinkRepository.create(
+                db, tenant_id=ctx.tenant_id, case_id=case_id,
+                draft_paragraph_id=paragraph.id,
+                source_record_id=key[0], source_version_id=key[1],
+                source_paragraph_id=key[2],
+                usage_type="citation", quote_hash=context_item.text_hash,
+                created_by=ctx.actor_id, verification_status="verified",
+            )
+            source_link_count += 1
+
+        draft.version += 1
+        metrics = _safe_provider_metrics(getattr(provider, "last_metrics", {}) or {})
+        await _audit(db, ctx, case_id, "draft_paragraph_regenerated",
+                     {"resource": "draft_paragraph_revision", "draft_id": draft.id,
+                      "paragraph_id": paragraph.id,
+                      "generation_run_id": run_id,
+                      "revision_id": revision.id,
+                      "revision_number": revision.revision_number,
+                      "provider": provider.provider_name,
+                      "model": provider.model_version,
+                      "issue_link_count": issue_link_count,
+                      "source_link_count": source_link_count,
+                      "replaced_issue_link_count": len(old_issue_links),
+                      "replaced_source_link_count": len(old_source_links),
+                      "paragraph_version": paragraph.version,
+                      "draft_version": draft.version})
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+
+    logger.info(
+        "draft_paragraph_regenerated draft_id=%s case_id=%s paragraph_id=%s "
+        "run_id=%s provider=%s model=%s issue_link_count=%d source_link_count=%d",
+        draft.id, case_id, paragraph.id, run_id, provider.provider_name,
+        provider.model_version, issue_link_count, source_link_count,
+    )
+    return DraftParagraphRegenerateResponse(
+        paragraph_id=paragraph.id, generation_run_id=run_id,
+        provider=provider.provider_name, model_name=provider.model_version,
+        revision=_revision_resp(revision, current=True),
+        verification_status=paragraph.verification_status,
+        paragraph_version=paragraph.version, draft_version=draft.version,
+        issue_link_count=issue_link_count, source_link_count=source_link_count,
+        replaced_issue_link_count=len(old_issue_links),
+        replaced_source_link_count=len(old_source_links),
+        metrics=metrics,
+    )
