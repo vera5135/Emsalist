@@ -7,6 +7,7 @@ text and source quotes are never written to logs or audit metadata.
 """
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -30,6 +31,7 @@ from app.db.draft_repository import (
     EDITABLE_DRAFT_STATUSES,
     InvalidDraftTransitionError,
 )
+from app.db.draft_generation_job_repository import DraftGenerationJobRepository
 from app.db.models import (
     DRAFT_DOCUMENT_TYPES,
     DRAFT_PARAGRAPH_TYPES,
@@ -54,6 +56,8 @@ from app.models.draft_models import (
     DraftFinalizeResponse,
     DraftGenerateRequest,
     DraftGenerateResponse,
+    DraftGenerationJobRequest,
+    DraftGenerationJobResponse,
     DraftListResponse,
     DraftParagraphAcceptRequest,
     DraftParagraphCreateRequest,
@@ -89,6 +93,7 @@ from app.services.draft_generation_provider import (
     create_configured_draft_generation_provider,
     generation_input_fingerprint,
 )
+from app.services.draft_readiness import compute_draft_readiness
 from app.services.draft_readiness import compute_draft_readiness
 from app.services.draft_section_plan import SECTION_PLAN_BY_DRAFT_TYPE, build_section_plan
 from app.services.source_ingestion_service import resolve_version_verification_status
@@ -1733,4 +1738,158 @@ async def export_draft_pdf(
     return _export_response(
         content, export_filename(draft.draft_type, draft.id, "pdf"),
         "application/pdf",
+    )
+
+
+# ---------------------------------------------------------------------------
+# P2.9C3A — Async draft generation job enqueue + status
+# ---------------------------------------------------------------------------
+def _draft_generation_job_request_fingerprint(
+    draft_id: str, draft_version: int,
+    selected_issue_ids: list[str], selected_source_usage_ids: list[str],
+) -> str:
+    import hashlib
+
+    payload = {
+        "draft_id": draft_id,
+        "draft_version": draft_version,
+        "issues": sorted(selected_issue_ids),
+        "sources": sorted(selected_source_usage_ids),
+    }
+    canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+@router.post("/{draft_id}/generation-jobs", response_model=DraftGenerationJobResponse,
+             status_code=202, operation_id="draft_generation_job_enqueue")
+async def enqueue_draft_generation_job(
+    case_id: str,
+    draft_id: str,
+    body: DraftGenerationJobRequest,
+    ctx: SecurityContext = Depends(require_case_write),
+    db: AsyncSession = Depends(get_session),
+) -> DraftGenerationJobResponse:
+    await _authorized_case(db, ctx, case_id, write=True)
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    if draft.status not in EDITABLE_DRAFT_STATUSES:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_generation_job_not_editable")
+    if body.draft_version != draft.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_generation_job_version_conflict")
+
+    # Idempotency: same client_request_id must resolve to the SAME job
+    # regardless of the active-job guard.
+    fingerprint = _draft_generation_job_request_fingerprint(
+        draft.id, body.draft_version, body.selected_issue_ids,
+        body.selected_source_usage_ids)
+    existing = await DraftGenerationJobRepository.find_by_request(
+        db, ctx.tenant_id, case_id, draft.id, body.client_request_id)
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="draft_generation_job_idempotency_conflict",
+            )
+        return DraftGenerationJobResponse(
+            job_id=existing.id, draft_id=draft.id,
+            status=existing.status, stage=existing.stage,
+            progress_percent=existing.progress_percent,
+            requested_draft_version=existing.requested_draft_version,
+            result_draft_version=existing.result_draft_version,
+            provider_name=existing.provider_name,
+            model_name=existing.model_name,
+            safe_error_code=existing.safe_error_code,
+            safe_metrics={
+                "logical_call_count": existing.logical_call_count,
+                "request_attempt_count": existing.request_attempt_count,
+                "prompt_tokens": existing.prompt_tokens,
+                "completion_tokens": existing.completion_tokens,
+                "total_tokens": existing.total_tokens,
+                "reasoning_tokens": existing.reasoning_tokens,
+                "finish_reasons": existing.finish_reasons_json,
+            },
+            queued_at=_iso(existing.queued_at),
+            started_at=_iso(existing.started_at),
+            completed_at=_iso(existing.completed_at),
+        )
+
+    existing_paragraphs = await DraftParagraphRepository.list_for_draft(
+        db, ctx.tenant_id, draft.id)
+    if existing_paragraphs:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_generation_job_not_empty")
+
+    readiness = await compute_draft_readiness(db, ctx.tenant_id, case_id, draft)
+    if readiness.status == "blocked":
+        raise HTTPException(status_code=422, detail="draft_generation_job_readiness_blocked")
+
+    active = await DraftGenerationJobRepository.find_active_for_draft(
+        db, ctx.tenant_id, case_id, draft.id)
+    if active is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_generation_job_active_exists")
+
+    job = await DraftGenerationJobRepository.create(
+        db, tenant_id=ctx.tenant_id, case_id=case_id,
+        draft_document_id=draft.id,
+        requested_by_user_id=ctx.actor_id,
+        requested_draft_version=body.draft_version,
+        client_request_id=body.client_request_id,
+        request_fingerprint=fingerprint,
+    )
+    await _audit(db, ctx, case_id, "draft_generation_job_enqueued",
+                 {"resource": "draft_generation_job", "job_id": job.id,
+                  "draft_id": draft.id, "status": job.status,
+                  "client_request_id": job.client_request_id})
+    await db.commit()
+    return DraftGenerationJobResponse(
+        job_id=job.id, draft_id=draft.id, status=job.status, stage=job.stage,
+        progress_percent=job.progress_percent,
+        requested_draft_version=job.requested_draft_version,
+        result_draft_version=job.result_draft_version,
+        provider_name=job.provider_name,
+        model_name=job.model_name,
+        safe_error_code=job.safe_error_code,
+        safe_metrics={},
+        queued_at=_iso(job.queued_at),
+        started_at=_iso(job.started_at),
+        completed_at=_iso(job.completed_at),
+    )
+
+
+@router.get("/{draft_id}/generation-jobs/{job_id}",
+            response_model=DraftGenerationJobResponse,
+            operation_id="draft_generation_job_status")
+async def get_draft_generation_job_status(
+    case_id: str,
+    draft_id: str,
+    job_id: str,
+    ctx: SecurityContext = Depends(require_case_read),
+    db: AsyncSession = Depends(get_session),
+) -> DraftGenerationJobResponse:
+    await _authorized_case(db, ctx, case_id, write=False)
+    await _load_draft(db, ctx, case_id, draft_id)
+    job = await DraftGenerationJobRepository.get(
+        db, ctx.tenant_id, case_id, draft_id, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    return DraftGenerationJobResponse(
+        job_id=job.id, draft_id=draft_id, status=job.status, stage=job.stage,
+        progress_percent=job.progress_percent,
+        requested_draft_version=job.requested_draft_version,
+        result_draft_version=job.result_draft_version,
+        provider_name=job.provider_name, model_name=job.model_name,
+        safe_error_code=job.safe_error_code,
+        safe_metrics={
+            "logical_call_count": job.logical_call_count,
+            "request_attempt_count": job.request_attempt_count,
+            "prompt_tokens": job.prompt_tokens,
+            "completion_tokens": job.completion_tokens,
+            "total_tokens": job.total_tokens,
+            "reasoning_tokens": job.reasoning_tokens,
+            "finish_reasons": job.finish_reasons_json,
+        },
+        queued_at=_iso(job.queued_at), started_at=_iso(job.started_at),
+        completed_at=_iso(job.completed_at),
     )

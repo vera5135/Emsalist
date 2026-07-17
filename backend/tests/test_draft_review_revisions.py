@@ -687,7 +687,7 @@ async def test_revision_text_never_in_audit_or_logs(client: AsyncClient, caplog)
     assert "draft_paragraph_revised" in actions
 
 
-def test_migration_single_head_is_review_revision():
+def test_migration_single_head_is_current_draft_job_head():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
@@ -695,7 +695,9 @@ def test_migration_single_head_is_review_revision():
     cfg.set_main_option("script_location", str(BACKEND_DIR / "app" / "db" / "migrations"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["d3e4f5a6b7c8"]
+    assert len(heads) == 1
+    revisions = {rev.revision for rev in script.walk_revisions()}
+    assert "e4f5a6b7c8d9" in revisions
 
 
 def test_migration_downgrade_reupgrade_roundtrip(tmp_path):

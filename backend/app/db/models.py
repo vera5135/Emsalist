@@ -2310,3 +2310,92 @@ class DraftParagraphReviewEvent(Base):
               "draft_paragraph_id", "created_at"),
         Index("ix_draft_paragraph_review_events_tenant_case", "tenant_id", "case_id"),
     )
+
+
+# ── P2.9C3A — Durable async draft generation jobs ───────────────────────────
+DRAFT_GEN_JOB_STATUSES = frozenset({"queued", "running", "succeeded", "failed"})
+
+DRAFT_GEN_JOB_STAGES = frozenset({
+    "queued", "preflight", "preparing_input", "provider_generation",
+    "validating_output", "persisting", "completed", "failed",
+})
+
+DRAFT_GEN_JOB_STAGE_PROGRESS: dict[str, int] = {
+    "queued": 0, "preflight": 10, "preparing_input": 20,
+    "provider_generation": 40, "validating_output": 75,
+    "persisting": 90, "completed": 100, "failed": 0,
+}
+
+
+class DraftGenerationJob(Base):
+    """P2.9C3A — Durable async draft generation job (PostgreSQL-backed)."""
+
+    __tablename__ = "draft_generation_jobs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    draft_document_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    requested_by_user_id: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
+    stage: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
+    progress_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    requested_draft_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    client_request_id: Mapped[str] = mapped_column(String(36), nullable=False, default="")
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    provider_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    result_draft_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    safe_error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    logical_call_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    request_attempt_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reasoning_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    finish_reasons_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    lease_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in sorted(DRAFT_GEN_JOB_STATUSES))})",
+            name="ck_draft_generation_jobs_status",
+        ),
+        CheckConstraint(
+            f"stage IN ({', '.join(repr(s) for s in sorted(DRAFT_GEN_JOB_STAGES))})",
+            name="ck_draft_generation_jobs_stage",
+        ),
+        CheckConstraint(
+            "progress_percent >= 0 AND progress_percent <= 100",
+            name="ck_draft_generation_jobs_progress",
+        ),
+        CheckConstraint(
+            "attempt_count >= 0",
+            name="ck_draft_generation_jobs_attempt_count",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "draft_document_id"],
+            ["draft_documents.tenant_id", "draft_documents.case_id", "draft_documents.id"],
+            name="fk_draft_generation_jobs_draft_document",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "uq_draft_generation_jobs_active_per_draft",
+            "tenant_id", "case_id", "draft_document_id",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
+        UniqueConstraint("tenant_id", "case_id", "draft_document_id",
+                         "client_request_id",
+                         name="uq_draft_generation_jobs_request_id"),
+        Index("ix_draft_generation_jobs_tenant_case", "tenant_id", "case_id"),
+        Index("ix_draft_generation_jobs_draft", "draft_document_id"),
+        Index("ix_draft_generation_jobs_status", "status"),
+    )

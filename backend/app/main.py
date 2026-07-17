@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings, validate_production_config
 from app.core.logging import setup_logging
-from app.db.session import check_db_health
+from app.db.session import check_db_health, dispose_engine, get_sessionmaker
 
 settings = get_settings()
 
