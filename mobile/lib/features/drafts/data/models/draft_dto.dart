@@ -136,6 +136,8 @@ class DraftParagraphDto {
     this.effectiveTrust,
     this.currentRevisionId,
     this.currentReviewId,
+    this.generatedBy,
+    this.modelName,
   });
 
   final String id;
@@ -169,6 +171,12 @@ class DraftParagraphDto {
 
   @JsonKey(name: 'current_review_id')
   final String? currentReviewId;
+
+  @JsonKey(name: 'generated_by')
+  final String? generatedBy;
+
+  @JsonKey(name: 'model_name')
+  final String? modelName;
 
   factory DraftParagraphDto.fromJson(Map<String, dynamic> json) =>
       _$DraftParagraphDtoFromJson(json);

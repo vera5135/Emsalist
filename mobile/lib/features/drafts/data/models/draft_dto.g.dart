@@ -73,6 +73,8 @@ DraftParagraphDto _$DraftParagraphDtoFromJson(Map<String, dynamic> json) =>
       effectiveTrust: (json['effective_trust'] as num?)?.toDouble(),
       currentRevisionId: json['current_revision_id'] as String?,
       currentReviewId: json['current_review_id'] as String?,
+      generatedBy: json['generated_by'] as String?,
+      modelName: json['model_name'] as String?,
     );
 
 DraftIssueLinkDto _$DraftIssueLinkDtoFromJson(Map<String, dynamic> json) =>

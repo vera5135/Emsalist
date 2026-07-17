@@ -1,9 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/download_service.dart';
 import '../../auth/application/auth_providers.dart';
 import '../data/draft_api.dart';
 import '../data/draft_repository.dart';
 import '../domain/draft_item.dart';
+
+final Provider<DownloadService> downloadServiceProvider =
+    Provider<DownloadService>((ref) => getDownloadService());
 
 final Provider<DraftApi> draftApiProvider = Provider<DraftApi>((ref) {
   return DraftApi(ref.watch(authenticatedApiClientProvider));

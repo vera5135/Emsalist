@@ -113,6 +113,10 @@ String reasonCodeLabelText(String reasonCode) {
       return 'Eksik atıf';
     case 'tone_language':
       return 'Üslup / Dil';
+    case 'insufficient_support':
+      return 'Yetersiz dayanak';
+    case 'irrelevant_content':
+      return 'İlgisiz içerik';
     case 'other':
       return 'Diğer';
     default:
@@ -252,6 +256,8 @@ class DraftParagraphItem {
     this.effectiveTrust,
     this.currentRevisionId,
     this.currentReviewId,
+    this.generatedBy,
+    this.modelName,
   });
 
   final String id;
@@ -266,6 +272,11 @@ class DraftParagraphItem {
   final double? effectiveTrust;
   final String? currentRevisionId;
   final String? currentReviewId;
+
+  final String? generatedBy;
+  final String? modelName;
+
+  bool get isAiGenerated => generatedBy == 'ai';
 
   String get label => paragraphTypeLabel(paragraphType);
 
@@ -283,6 +294,8 @@ class DraftParagraphItem {
         effectiveTrust: dto.effectiveTrust,
         currentRevisionId: dto.currentRevisionId,
         currentReviewId: dto.currentReviewId,
+        generatedBy: dto.generatedBy,
+        modelName: dto.modelName,
       );
 }
 
@@ -665,4 +678,35 @@ class DraftGenerateItem {
     text: dto.text,
     metadata: dto.metadata,
   );
+}
+
+String safeErrorMessage(String code) {
+  switch (code) {
+    case 'draft_export_requires_finalized_draft':
+      return 'Yalnızca tamamlanmış taslaklar dışa aktarılabilir.';
+    case 'readiness_blocked':
+      return 'Taslak henüz hazır değil.';
+    case 'draft_not_empty':
+      return 'Taslakta zaten paragraf var.';
+    case 'draft_generation_unavailable':
+      return 'Yapay zeka oluşturma şu anda kullanılamıyor.';
+    case 'draft_already_finalized':
+      return 'Bu taslak zaten tamamlanmış.';
+    case 'draft_not_editable':
+      return 'Bu taslak düzenlenemez durumda.';
+    case 'paragraph_not_found':
+      return 'Paragraf bulunamadı.';
+    case 'revision_not_found':
+      return 'Geçmiş sürüm bulunamadı.';
+    case 'review_already_exists':
+      return 'Bu paragraf için zaten bir inceleme mevcut.';
+    case 'export_failed':
+      return 'Dışa aktarma başarısız oldu.';
+    case 'generation_in_progress':
+      return 'Oluşturma işlemi zaten devam ediyor.';
+    case 'generation_failed':
+      return 'Yapay zeka oluşturma başarısız oldu.';
+    default:
+      return 'İşlem tamamlanamadı.';
+  }
 }
