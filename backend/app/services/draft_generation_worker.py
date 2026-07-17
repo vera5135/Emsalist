@@ -30,6 +30,8 @@ from app.db.models import (
     DRAFT_GEN_JOB_STAGE_PROGRESS,
     DraftDocument,
     DraftGenerationJob,
+    SourceParagraph,
+    SourceRecord,
     new_uuid,
 )
 from app.db.session import get_sessionmaker

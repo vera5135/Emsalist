@@ -161,6 +161,13 @@ async def client():
         yield ac
 
 
+@pytest.fixture
+def deterministic_provider(monkeypatch: pytest.MonkeyPatch):
+    provider = DeterministicDraftGenerationProvider()
+    monkeypatch.setattr(draft_routes, "_draft_generation_provider", lambda: provider)
+    return provider
+
+
 async def _create_draft(client: AsyncClient, title: str = "Job taslak") -> dict:
     r = await client.post(BASE, json={"title": title, "draft_type": "dava_dilekcesi"})
     assert r.status_code == 201, r.text
@@ -323,7 +330,7 @@ async def test_skip_locked_prevents_double_claim(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_run_one_claimed_job_advances_stages_and_persists(
-    client: AsyncClient,
+    client: AsyncClient, deterministic_provider,
 ):
     draft = await _create_draft(client)
     assert (await client.post(f"{BASE}/{draft['id']}/generation-jobs", json={
@@ -347,7 +354,7 @@ async def test_run_one_claimed_job_advances_stages_and_persists(
 
 @pytest.mark.asyncio
 async def test_success_creates_canonical_rows_exactly_once(
-    client: AsyncClient,
+    client: AsyncClient, deterministic_provider,
 ):
     draft = await _create_draft(client)
     assert (await client.post(f"{BASE}/{draft['id']}/generation-jobs", json={
