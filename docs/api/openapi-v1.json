@@ -3109,6 +3109,127 @@
         "title": "DraftParagraphIssueLinkResponse",
         "type": "object"
       },
+      "DraftParagraphRegenerateRequest": {
+        "properties": {
+          "draft_version": {
+            "minimum": 1.0,
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "paragraph_version": {
+            "minimum": 1.0,
+            "title": "Paragraph Version",
+            "type": "integer"
+          },
+          "selected_legal_issue_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Legal Issue Ids",
+            "type": "array"
+          },
+          "selected_source_usage_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Source Usage Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "draft_version",
+          "paragraph_version"
+        ],
+        "title": "DraftParagraphRegenerateRequest",
+        "type": "object"
+      },
+      "DraftParagraphRegenerateResponse": {
+        "properties": {
+          "draft_version": {
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "generation_run_id": {
+            "title": "Generation Run Id",
+            "type": "string"
+          },
+          "issue_link_count": {
+            "title": "Issue Link Count",
+            "type": "integer"
+          },
+          "metrics": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "title": "Metrics",
+            "type": "object"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "paragraph_id": {
+            "title": "Paragraph Id",
+            "type": "string"
+          },
+          "paragraph_version": {
+            "title": "Paragraph Version",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "replaced_issue_link_count": {
+            "title": "Replaced Issue Link Count",
+            "type": "integer"
+          },
+          "replaced_source_link_count": {
+            "title": "Replaced Source Link Count",
+            "type": "integer"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/DraftParagraphRevisionResponse"
+          },
+          "source_link_count": {
+            "title": "Source Link Count",
+            "type": "integer"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paragraph_id",
+          "generation_run_id",
+          "provider",
+          "model_name",
+          "revision",
+          "verification_status",
+          "paragraph_version",
+          "draft_version",
+          "issue_link_count",
+          "source_link_count",
+          "replaced_issue_link_count",
+          "replaced_source_link_count"
+        ],
+        "title": "DraftParagraphRegenerateResponse",
+        "type": "object"
+      },
       "DraftParagraphRequestChangesRequest": {
         "properties": {
           "draft_version": {
@@ -15561,6 +15682,81 @@
           }
         ],
         "summary": "Delete Paragraph Issue Link",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/regenerate": {
+      "post": {
+        "operationId": "draft_paragraph_regenerate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphRegenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftParagraphRegenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Regenerate Paragraph",
         "tags": [
           "Drafts"
         ]

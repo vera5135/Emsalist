@@ -2198,6 +2198,7 @@ class DraftParagraphSourceLink(Base):
 # ── P2.9C1 — Immutable paragraph revision history + review decisions ────────
 DRAFT_REVISION_CHANGE_TYPES = frozenset({
     "initial_generation", "user_edit", "manual_creation", "restored_revision",
+    "ai_regeneration",
 })
 
 DRAFT_REVIEW_DECISIONS = frozenset({"accepted", "changes_requested"})

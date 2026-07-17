@@ -233,3 +233,26 @@ class DraftReviewActionResponse(BaseModel):
     paragraph_version: int
     draft_version: int
     review_event: DraftReviewEventResponse
+
+
+class DraftParagraphRegenerateRequest(BaseModel):
+    draft_version: int = Field(ge=1)
+    paragraph_version: int = Field(ge=1)
+    selected_legal_issue_ids: list[str] = Field(default_factory=list)
+    selected_source_usage_ids: list[str] = Field(default_factory=list)
+
+
+class DraftParagraphRegenerateResponse(BaseModel):
+    paragraph_id: str
+    generation_run_id: str
+    provider: str
+    model_name: str
+    revision: DraftParagraphRevisionResponse
+    verification_status: str
+    paragraph_version: int
+    draft_version: int
+    issue_link_count: int
+    source_link_count: int
+    replaced_issue_link_count: int
+    replaced_source_link_count: int
+    metrics: dict[str, int | str | list[str]] = Field(default_factory=dict)
