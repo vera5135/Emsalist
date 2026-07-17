@@ -39,7 +39,7 @@ from app.services.draft_generation_input import (
 )
 from app.services.draft_generation_provider import (
     DraftGenerationError,
-    _draft_generation_provider as _provider_factory,
+    create_configured_draft_generation_provider,
     generation_input_fingerprint,
 )
 from app.services.draft_readiness import compute_draft_readiness
@@ -221,7 +221,15 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
 
         # ---- provider generation ----------------------------------------
         _stage("provider_generation")
-        provider = _provider_factory()
+        # Provider factory: prefer the route-level monkeypatchable one
+        # (so async tests can inject a deterministic provider) and fall
+        # back to the shared production factory.
+        try:
+            from app.routes.draft_routes import _draft_generation_provider
+
+            provider = _draft_generation_provider()
+        except Exception:
+            provider = create_configured_draft_generation_provider()
         try:
             result = await provider.generate(payload)
         except DraftGenerationError as exc:
