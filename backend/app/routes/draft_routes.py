@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1557,3 +1557,149 @@ async def list_paragraph_reviews(
     events = await DraftParagraphReviewEventRepository.list_for_paragraph(
         db, ctx.tenant_id, paragraph.id)
     return [_review_event_resp(event) for event in events]
+
+
+# ---------------------------------------------------------------------------
+# P2.9C2 — Deterministic export (finalized drafts only, read-only)
+# ---------------------------------------------------------------------------
+async def _build_export_document(
+    db: AsyncSession, ctx: SecurityContext, case_id: str, draft: DraftDocument,
+):
+    """Re-validate every finalize/provenance barrier and assemble the export.
+
+    Read-only: never mutates the draft, never writes audit rows. Citations
+    come exclusively from the deterministic server-side renderer.
+    """
+    from app.services.draft_export import (
+        DRAFT_TYPE_LABELS,
+        ExportDocument,
+        ExportParagraph,
+        TURKISH_SECTION_HEADINGS,
+    )
+
+    if draft.status != DRAFT_STATUS_FINALIZED:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="draft_export_requires_finalized_draft")
+
+    paragraphs = await DraftParagraphRepository.list_for_draft(db, ctx.tenant_id, draft.id)
+    if not paragraphs:
+        raise HTTPException(status_code=422, detail="draft_export_no_paragraphs")
+    orders = sorted(p.paragraph_order for p in paragraphs)
+    if orders != list(range(1, len(paragraphs) + 1)):
+        raise HTTPException(status_code=422, detail="draft_export_order_invalid")
+
+    export_paragraphs: list[ExportParagraph] = []
+    for paragraph in paragraphs:
+        if paragraph.verification_status != "accepted":
+            raise HTTPException(status_code=422,
+                                detail="draft_export_paragraph_not_accepted")
+        latest_revision = await DraftParagraphRevisionRepository.latest_for_paragraph(
+            db, ctx.tenant_id, paragraph.id)
+        if latest_revision is None or \
+                latest_revision.text_hash != source_text_hash(paragraph.text or ""):
+            raise HTTPException(status_code=422,
+                                detail="draft_export_revision_mismatch")
+        latest_event = await DraftParagraphReviewEventRepository.latest_for_paragraph(
+            db, ctx.tenant_id, paragraph.id)
+        if (latest_event is None or latest_event.decision != "accepted"
+                or latest_event.paragraph_revision_id != latest_revision.id):
+            raise HTTPException(status_code=422,
+                                detail="draft_export_revision_mismatch")
+
+        source_links = await DraftParagraphSourceLinkRepository.list_for_paragraphs(
+            db, ctx.tenant_id, [paragraph.id])
+        source_links.sort(key=lambda link: (
+            link.source_record_id, link.source_version_id, link.source_paragraph_id))
+        citations: list[str] = []
+        for link in source_links:
+            if link.verification_status != "verified":
+                raise HTTPException(status_code=422,
+                                    detail="draft_export_provenance_invalid")
+            row = (await db.execute(
+                select(SourceRecord, SourceVersion, SourceParagraph)
+                .join(SourceVersion, SourceVersion.source_record_id == SourceRecord.id)
+                .join(SourceParagraph,
+                      SourceParagraph.source_version_id == SourceVersion.id)
+                .where(
+                    SourceRecord.id == link.source_record_id,
+                    SourceVersion.id == link.source_version_id,
+                    SourceParagraph.id == link.source_paragraph_id,
+                    SourceRecord.current_version_id == link.source_version_id,
+                    SourceRecord.deleted_at.is_(None),
+                )
+            )).first()
+            if row is None:
+                raise HTTPException(status_code=422,
+                                    detail="draft_export_provenance_invalid")
+            record, version, source_paragraph = row
+            trust = await resolve_version_verification_status(
+                db, record.id, version.id, record.verification_status)
+            if record.verification_status in BLOCKED_FOR_USAGE or \
+                    trust not in TRUSTED_STATUSES:
+                raise HTTPException(status_code=422,
+                                    detail="draft_export_provenance_invalid")
+            if link.quote_hash != (source_paragraph.text_hash or "") or \
+                    link.quote_hash != source_text_hash(source_paragraph.text or ""):
+                raise HTTPException(status_code=422,
+                                    detail="draft_export_provenance_invalid")
+            citation = render_citation(
+                court=record.court or "", chamber=record.chamber or "",
+                case_number=record.case_number or "",
+                decision_number=record.decision_number or "",
+                decision_date=record.decision_date or "",
+                article_number=source_paragraph.article_number or "",
+                paragraph_index=source_paragraph.paragraph_index,
+            )
+            if citation:
+                citations.append(citation)
+        export_paragraphs.append(ExportParagraph(
+            order=paragraph.paragraph_order,
+            heading=TURKISH_SECTION_HEADINGS.get(paragraph.paragraph_type, ""),
+            text=paragraph.text,
+            citations=tuple(citations),
+        ))
+
+    label = DRAFT_TYPE_LABELS.get(draft.draft_type, draft.draft_type)
+    return ExportDocument(
+        title=f"{label} — Emsalist Taslak {draft.id[:8]}",
+        draft_type=draft.draft_type,
+        draft_type_label=label,
+        draft_id_short=draft.id[:8],
+        version=draft.version,
+        paragraphs=tuple(export_paragraphs),
+    )
+
+
+def _export_response(content: bytes, filename: str, media_type: str) -> Response:
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/{draft_id}/export/docx", operation_id="draft_export_docx",
+            response_class=Response)
+async def export_draft_docx(
+    case_id: str,
+    draft_id: str,
+    ctx: SecurityContext = Depends(require_case_read),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    from app.services.draft_export import export_filename, render_docx
+
+    await _authorized_case(db, ctx, case_id, write=False)
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    document = await _build_export_document(db, ctx, case_id, draft)
+    content = render_docx(document)
+    logger.info(
+        "draft_exported draft_id=%s case_id=%s export_format=docx size_bytes=%d",
+        draft.id, case_id, len(content),
+    )
+    return _export_response(
+        content, export_filename(draft.draft_type, draft.id, "docx"),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
