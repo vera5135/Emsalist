@@ -32,6 +32,8 @@ from app.db.models import (
     DraftDocument,
     DraftParagraph,
     DraftParagraphIssueLink,
+    DraftParagraphReviewEvent,
+    DraftParagraphRevision,
     DraftParagraphSourceLink,
     Evidence,
     EvidenceClaimLink,
@@ -89,7 +91,8 @@ async def _cleanup(session) -> None:
     tenants = [TENANT, OTHER_TENANT]
     await session.execute(update(DraftDocument).where(
         DraftDocument.tenant_id.in_(tenants)).values(supersedes_draft_id=None))
-    for model in (DraftParagraphSourceLink, DraftParagraphIssueLink, DraftParagraph,
+    for model in (DraftParagraphReviewEvent, DraftParagraphRevision,
+                  DraftParagraphSourceLink, DraftParagraphIssueLink, DraftParagraph,
                   DraftDocument, SourceUsage, EvidenceSufficiencyAssessment,
                   EvidenceClaimLink, Evidence, Claim, Contradiction,
                   MissingInformation, TimelineEvent, CaseFact, LegalIssue):
