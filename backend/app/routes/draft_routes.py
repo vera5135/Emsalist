@@ -24,6 +24,8 @@ from app.db.draft_repository import (
     DraftDocumentRepository,
     DraftParagraphIssueLinkRepository,
     DraftParagraphRepository,
+    DraftParagraphReviewEventRepository,
+    DraftParagraphRevisionRepository,
     DraftParagraphSourceLinkRepository,
     EDITABLE_DRAFT_STATUSES,
     InvalidDraftTransitionError,
@@ -32,6 +34,7 @@ from app.db.models import (
     DRAFT_DOCUMENT_TYPES,
     DRAFT_PARAGRAPH_TYPES,
     DRAFT_PARAGRAPH_VERIFICATION_STATUSES,
+    DRAFT_REVIEW_REASON_CODES,
     DRAFT_SOURCE_USAGE_TYPES,
     DraftDocument,
     DraftParagraph,
@@ -52,16 +55,24 @@ from app.models.draft_models import (
     DraftGenerateRequest,
     DraftGenerateResponse,
     DraftListResponse,
+    DraftParagraphAcceptRequest,
     DraftParagraphCreateRequest,
+    DraftParagraphEditRequest,
     DraftParagraphIssueLinkRequest,
     DraftParagraphIssueLinkResponse,
+    DraftParagraphRequestChangesRequest,
     DraftParagraphResponse,
+    DraftParagraphRestoreRequest,
+    DraftParagraphRevisionActionResponse,
+    DraftParagraphRevisionResponse,
     DraftParagraphSourceLinkRequest,
     DraftParagraphSourceLinkResponse,
     DraftParagraphUpdateRequest,
     DraftPlanResponse,
     DraftReadinessResponse,
     DraftResponse,
+    DraftReviewActionResponse,
+    DraftReviewEventResponse,
     DraftUpdateRequest,
     DraftValidateResponse,
     SectionPlanEntry,
@@ -197,6 +208,59 @@ def _paragraph_resp(paragraph: DraftParagraph, issue_links, source_links) -> Dra
         source_links=[_source_link_resp(link) for link in source_links],
         created_at=_iso(paragraph.created_at) or "",
         updated_at=_iso(paragraph.updated_at) or "", version=paragraph.version,
+    )
+
+
+def _revision_resp(revision, *, current: bool) -> DraftParagraphRevisionResponse:
+    # Revision text may be returned to the user; it must never be logged or
+    # placed in audit metadata.
+    return DraftParagraphRevisionResponse(
+        id=revision.id, draft_paragraph_id=revision.draft_paragraph_id,
+        revision_number=revision.revision_number, change_type=revision.change_type,
+        created_by=revision.created_by, created_at=_iso(revision.created_at) or "",
+        text_hash=revision.text_hash, current_revision=current, text=revision.text,
+    )
+
+
+def _review_event_resp(event) -> DraftReviewEventResponse:
+    return DraftReviewEventResponse(
+        id=event.id, draft_paragraph_id=event.draft_paragraph_id,
+        paragraph_revision_id=event.paragraph_revision_id, decision=event.decision,
+        reason_code=event.reason_code, reviewer_user_id=event.reviewer_user_id,
+        paragraph_version=event.paragraph_version,
+        created_at=_iso(event.created_at) or "",
+    )
+
+
+async def _mark_source_links_needs_review(
+    db: AsyncSession, ctx: SecurityContext, paragraph: DraftParagraph,
+) -> int:
+    """Paragraph text changed: grounding must be re-verified by the user."""
+    links = await DraftParagraphSourceLinkRepository.list_for_paragraphs(
+        db, ctx.tenant_id, [paragraph.id])
+    marked = 0
+    for link in links:
+        if link.verification_status != "needs_review":
+            link.verification_status = "needs_review"
+            link.version += 1
+            marked += 1
+    return marked
+
+
+async def _append_paragraph_revision(
+    db: AsyncSession, ctx: SecurityContext, draft: DraftDocument,
+    paragraph: DraftParagraph, *, new_text: str, change_type: str,
+):
+    """Bootstrap-if-needed + append one immutable revision (same transaction)."""
+    await DraftParagraphRevisionRepository.ensure_bootstrap(db, paragraph)
+    latest = await DraftParagraphRevisionRepository.latest_for_paragraph(
+        db, ctx.tenant_id, paragraph.id)
+    return await DraftParagraphRevisionRepository.create(
+        db, tenant_id=ctx.tenant_id, case_id=paragraph.case_id,
+        draft_document_id=draft.id, draft_paragraph_id=paragraph.id,
+        revision_number=(latest.revision_number + 1) if latest else 1,
+        base_paragraph_version=paragraph.version,
+        text=new_text, change_type=change_type, created_by=ctx.actor_id,
     )
 
 
@@ -368,6 +432,12 @@ async def create_paragraph(
         paragraph_order=body.paragraph_order, paragraph_type=body.paragraph_type,
         text=body.text, generated_by="user", model_name="",
     )
+    await DraftParagraphRevisionRepository.create(
+        db, tenant_id=ctx.tenant_id, case_id=case_id, draft_document_id=draft.id,
+        draft_paragraph_id=paragraph.id, revision_number=1,
+        base_paragraph_version=paragraph.version, text=body.text,
+        change_type="manual_creation", created_by=ctx.actor_id,
+    )
     draft.version += 1
     await _audit(db, ctx, case_id, "draft_paragraph_added",
                  {"resource": "draft_paragraph", "draft_id": draft.id,
@@ -395,9 +465,16 @@ async def update_paragraph(
     _require_version(body.version, paragraph.version)
     if body.paragraph_type is not None and body.paragraph_type not in DRAFT_PARAGRAPH_TYPES:
         raise HTTPException(status_code=422, detail="Invalid paragraph type")
-    if (body.verification_status is not None
-            and body.verification_status not in DRAFT_PARAGRAPH_VERIFICATION_STATUSES):
-        raise HTTPException(status_code=422, detail="Invalid paragraph verification status")
+    if body.verification_status is not None:
+        if body.verification_status not in DRAFT_PARAGRAPH_VERIFICATION_STATUSES:
+            raise HTTPException(status_code=422, detail="Invalid paragraph verification status")
+        if body.verification_status == "accepted":
+            # P2.9C1: accepted is only reachable through the review accept
+            # endpoint (revision + source verification barriers).
+            raise HTTPException(
+                status_code=422,
+                detail="Paragraph acceptance requires the review accept endpoint",
+            )
     if body.paragraph_order is not None and body.paragraph_order != paragraph.paragraph_order:
         if await DraftParagraphRepository.active_order_exists(db, draft.id, body.paragraph_order):
             raise HTTPException(
@@ -407,11 +484,16 @@ async def update_paragraph(
         paragraph.paragraph_order = body.paragraph_order
     if body.paragraph_type is not None:
         paragraph.paragraph_type = body.paragraph_type
-    if body.text is not None:
+    marked_links = 0
+    if body.text is not None and body.text != paragraph.text:
+        # Manual edit: append an immutable revision and force re-review.
+        await _append_paragraph_revision(
+            db, ctx, draft, paragraph, new_text=body.text, change_type="user_edit")
         paragraph.text = body.text
-        # Text changed by the user: grounding must be re-reviewed.
+        marked_links = await _mark_source_links_needs_review(db, ctx, paragraph)
         if body.verification_status is None:
             paragraph.verification_status = "pending_review"
+        draft.version += 1
     if body.verification_status is not None:
         paragraph.verification_status = body.verification_status
     paragraph.version += 1
@@ -691,6 +773,31 @@ async def finalize_draft(
             detail="All paragraphs must be accepted before finalize",
         )
 
+    # P2.9C1 additive barriers: acceptance must cover the CURRENT text of the
+    # latest immutable revision; an accepted-then-edited paragraph blocks
+    # finalize until it is re-reviewed.
+    for entry in paragraphs:
+        latest_revision = await DraftParagraphRevisionRepository.latest_for_paragraph(
+            db, ctx.tenant_id, entry.id)
+        if latest_revision is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Draft has paragraphs without revision history",
+            )
+        if latest_revision.text_hash != source_text_hash(entry.text or ""):
+            raise HTTPException(
+                status_code=422,
+                detail="Paragraph was modified after its latest revision",
+            )
+        latest_event = await DraftParagraphReviewEventRepository.latest_for_paragraph(
+            db, ctx.tenant_id, entry.id)
+        if (latest_event is None or latest_event.decision != "accepted"
+                or latest_event.paragraph_revision_id != latest_revision.id):
+            raise HTTPException(
+                status_code=422,
+                detail="Paragraph acceptance does not cover its latest revision",
+            )
+
     paragraph_ids = [p.id for p in paragraphs]
     issue_links = await DraftParagraphIssueLinkRepository.list_for_paragraphs(
         db, ctx.tenant_id, paragraph_ids)
@@ -933,6 +1040,15 @@ async def generate_draft(
             paragraph.generation_run_id = run_id
             paragraph.generation_input_fingerprint = input_fingerprint
             created_paragraphs.append(paragraph)
+            # P2.9C1: every generated paragraph starts its immutable history
+            # with revision 1 inside the same atomic transaction.
+            await DraftParagraphRevisionRepository.create(
+                db, tenant_id=ctx.tenant_id, case_id=case_id,
+                draft_document_id=draft.id, draft_paragraph_id=paragraph.id,
+                revision_number=1, base_paragraph_version=paragraph.version,
+                text=entry["text"], change_type="initial_generation",
+                created_by=ctx.actor_id,
+            )
             for issue_id in entry["legal_issue_ids"]:
                 if await DraftParagraphIssueLinkRepository.active_exists(
                         db, ctx.tenant_id, case_id, paragraph.id, issue_id):
@@ -1125,3 +1241,319 @@ async def validate_draft(
             "linked_issue_count": len(linked_issue_ids),
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# P2.9C1 — Immutable revision history + manual editing
+# ---------------------------------------------------------------------------
+async def _load_editable_paragraph(
+    db: AsyncSession, ctx: SecurityContext, case_id: str, draft_id: str,
+    paragraph_id: str, *, draft_version: int, paragraph_version: int,
+):
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    _require_editable(draft)
+    _require_version(draft_version, draft.version)
+    paragraph = await _load_paragraph(db, ctx, case_id, draft.id, paragraph_id)
+    _require_version(paragraph_version, paragraph.version)
+    return draft, paragraph
+
+
+@router.post("/{draft_id}/paragraphs/{paragraph_id}/revisions",
+             response_model=DraftParagraphRevisionActionResponse, status_code=201,
+             operation_id="draft_paragraph_edit_revision")
+async def create_paragraph_edit_revision(
+    case_id: str,
+    draft_id: str,
+    paragraph_id: str,
+    body: DraftParagraphEditRequest,
+    ctx: SecurityContext = Depends(require_case_write),
+    db: AsyncSession = Depends(get_session),
+) -> DraftParagraphRevisionActionResponse:
+    await _authorized_case(db, ctx, case_id, write=True)
+    draft, paragraph = await _load_editable_paragraph(
+        db, ctx, case_id, draft_id, paragraph_id,
+        draft_version=body.draft_version, paragraph_version=body.paragraph_version)
+    try:
+        revision = await _append_paragraph_revision(
+            db, ctx, draft, paragraph, new_text=body.text, change_type="user_edit")
+        paragraph.text = body.text
+        paragraph.verification_status = "pending_review"
+        paragraph.version += 1
+        marked = await _mark_source_links_needs_review(db, ctx, paragraph)
+        draft.version += 1
+        await _audit(db, ctx, case_id, "draft_paragraph_revised",
+                     {"resource": "draft_paragraph_revision", "draft_id": draft.id,
+                      "paragraph_id": paragraph.id, "revision_id": revision.id,
+                      "revision_number": revision.revision_number,
+                      "change_type": revision.change_type,
+                      "paragraph_version": paragraph.version,
+                      "draft_version": draft.version,
+                      "source_links_marked_needs_review": marked})
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+    return DraftParagraphRevisionActionResponse(
+        paragraph_id=paragraph.id,
+        revision=_revision_resp(revision, current=True),
+        verification_status=paragraph.verification_status,
+        paragraph_version=paragraph.version,
+        draft_version=draft.version,
+        source_links_marked_needs_review=marked,
+    )
+
+
+@router.get("/{draft_id}/paragraphs/{paragraph_id}/revisions",
+            response_model=list[DraftParagraphRevisionResponse],
+            operation_id="draft_paragraph_revisions")
+async def list_paragraph_revisions(
+    case_id: str,
+    draft_id: str,
+    paragraph_id: str,
+    ctx: SecurityContext = Depends(require_case_read),
+    db: AsyncSession = Depends(get_session),
+) -> list[DraftParagraphRevisionResponse]:
+    await _authorized_case(db, ctx, case_id, write=False)
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    paragraph = await _load_paragraph(db, ctx, case_id, draft.id, paragraph_id)
+    revisions = await DraftParagraphRevisionRepository.list_for_paragraph(
+        db, ctx.tenant_id, paragraph.id)
+    latest_number = revisions[-1].revision_number if revisions else 0
+    return [
+        _revision_resp(revision, current=revision.revision_number == latest_number)
+        for revision in revisions
+    ]
+
+
+@router.post("/{draft_id}/paragraphs/{paragraph_id}/revisions/{revision_id}/restore",
+             response_model=DraftParagraphRevisionActionResponse, status_code=201,
+             operation_id="draft_paragraph_revision_restore")
+async def restore_paragraph_revision(
+    case_id: str,
+    draft_id: str,
+    paragraph_id: str,
+    revision_id: str,
+    body: DraftParagraphRestoreRequest,
+    ctx: SecurityContext = Depends(require_case_write),
+    db: AsyncSession = Depends(get_session),
+) -> DraftParagraphRevisionActionResponse:
+    await _authorized_case(db, ctx, case_id, write=True)
+    draft, paragraph = await _load_editable_paragraph(
+        db, ctx, case_id, draft_id, paragraph_id,
+        draft_version=body.draft_version, paragraph_version=body.paragraph_version)
+    source = await DraftParagraphRevisionRepository.get(
+        db, ctx.tenant_id, case_id, paragraph.id, revision_id)
+    if source is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Revision not found")
+    try:
+        # The old row is never mutated or re-pointed; restoring appends a NEW
+        # immutable revision carrying the old text forward.
+        revision = await _append_paragraph_revision(
+            db, ctx, draft, paragraph, new_text=source.text,
+            change_type="restored_revision")
+        paragraph.text = source.text
+        paragraph.verification_status = "pending_review"
+        paragraph.version += 1
+        marked = await _mark_source_links_needs_review(db, ctx, paragraph)
+        draft.version += 1
+        await _audit(db, ctx, case_id, "draft_paragraph_revision_restored",
+                     {"resource": "draft_paragraph_revision", "draft_id": draft.id,
+                      "paragraph_id": paragraph.id, "revision_id": revision.id,
+                      "restored_from_revision_id": source.id,
+                      "revision_number": revision.revision_number,
+                      "paragraph_version": paragraph.version,
+                      "draft_version": draft.version,
+                      "source_links_marked_needs_review": marked})
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+    return DraftParagraphRevisionActionResponse(
+        paragraph_id=paragraph.id,
+        revision=_revision_resp(revision, current=True),
+        verification_status=paragraph.verification_status,
+        paragraph_version=paragraph.version,
+        draft_version=draft.version,
+        source_links_marked_needs_review=marked,
+    )
+
+# ---------------------------------------------------------------------------
+# P2.9C1 — Review decisions (accept / request-changes)
+# ---------------------------------------------------------------------------
+async def _load_latest_revision_for_review(
+    db: AsyncSession, ctx: SecurityContext, case_id: str,
+    paragraph, revision_id: str,
+):
+    """Bootstrap if needed and require ``revision_id`` to be the latest."""
+    await DraftParagraphRevisionRepository.ensure_bootstrap(db, paragraph)
+    latest = await DraftParagraphRevisionRepository.latest_for_paragraph(
+        db, ctx.tenant_id, paragraph.id)
+    revision = await DraftParagraphRevisionRepository.get(
+        db, ctx.tenant_id, case_id, paragraph.id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Revision not found")
+    if latest is None or revision.id != latest.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Revision is not the latest revision")
+    if revision.text_hash != source_text_hash(paragraph.text or ""):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Revision does not match the current paragraph text")
+    return revision
+
+
+@router.post("/{draft_id}/paragraphs/{paragraph_id}/accept",
+             response_model=DraftReviewActionResponse,
+             operation_id="draft_paragraph_accept")
+async def accept_paragraph(
+    case_id: str,
+    draft_id: str,
+    paragraph_id: str,
+    body: DraftParagraphAcceptRequest,
+    ctx: SecurityContext = Depends(require_case_write),
+    db: AsyncSession = Depends(get_session),
+) -> DraftReviewActionResponse:
+    await _authorized_case(db, ctx, case_id, write=True)
+    draft, paragraph = await _load_editable_paragraph(
+        db, ctx, case_id, draft_id, paragraph_id,
+        draft_version=body.draft_version, paragraph_version=body.paragraph_version)
+    if paragraph.verification_status not in {"pending_review", "needs_review"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Paragraph is not awaiting review")
+    revision = await _load_latest_revision_for_review(
+        db, ctx, case_id, paragraph, body.revision_id)
+
+    source_links = await DraftParagraphSourceLinkRepository.list_for_paragraphs(
+        db, ctx.tenant_id, [paragraph.id])
+    for link in source_links:
+        if link.verification_status != "verified":
+            raise HTTPException(
+                status_code=422,
+                detail="All source links must be re-verified before acceptance",
+            )
+        record, version, source_paragraph = await _resolve_exact_source(
+            db, link.source_record_id, link.source_version_id, link.source_paragraph_id)
+        await _require_draft_trust_eligible(db, record, version)
+        _require_exact_quote_hash(link.quote_hash, source_paragraph)
+    issue_links = await DraftParagraphIssueLinkRepository.list_for_paragraphs(
+        db, ctx.tenant_id, [paragraph.id])
+    for link in issue_links:
+        issue = (await db.execute(select(LegalIssue).where(
+            LegalIssue.id == link.legal_issue_id,
+            LegalIssue.tenant_id == ctx.tenant_id,
+            LegalIssue.case_id == case_id,
+            LegalIssue.deleted_at.is_(None),
+        ))).scalar_one_or_none()
+        if issue is None:
+            raise HTTPException(
+                status_code=422,
+                detail="A linked legal issue is no longer available in this case",
+            )
+
+    try:
+        paragraph.verification_status = "accepted"
+        paragraph.version += 1
+        draft.version += 1
+        event = await DraftParagraphReviewEventRepository.create(
+            db, tenant_id=ctx.tenant_id, case_id=case_id,
+            draft_document_id=draft.id, draft_paragraph_id=paragraph.id,
+            paragraph_revision_id=revision.id, decision="accepted",
+            reviewer_user_id=ctx.actor_id, paragraph_version=paragraph.version,
+        )
+        await _audit(db, ctx, case_id, "draft_paragraph_accepted",
+                     {"resource": "draft_paragraph_review", "draft_id": draft.id,
+                      "paragraph_id": paragraph.id, "revision_id": revision.id,
+                      "revision_number": revision.revision_number,
+                      "decision": "accepted",
+                      "paragraph_version": paragraph.version,
+                      "draft_version": draft.version})
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+    return DraftReviewActionResponse(
+        paragraph_id=paragraph.id, verification_status=paragraph.verification_status,
+        paragraph_version=paragraph.version, draft_version=draft.version,
+        review_event=_review_event_resp(event),
+    )
+
+
+@router.post("/{draft_id}/paragraphs/{paragraph_id}/request-changes",
+             response_model=DraftReviewActionResponse,
+             operation_id="draft_paragraph_request_changes")
+async def request_paragraph_changes(
+    case_id: str,
+    draft_id: str,
+    paragraph_id: str,
+    body: DraftParagraphRequestChangesRequest,
+    ctx: SecurityContext = Depends(require_case_write),
+    db: AsyncSession = Depends(get_session),
+) -> DraftReviewActionResponse:
+    await _authorized_case(db, ctx, case_id, write=True)
+    if body.reason_code not in DRAFT_REVIEW_REASON_CODES:
+        raise HTTPException(status_code=422, detail="Invalid review reason code")
+    draft, paragraph = await _load_editable_paragraph(
+        db, ctx, case_id, draft_id, paragraph_id,
+        draft_version=body.draft_version, paragraph_version=body.paragraph_version)
+    revision = await _load_latest_revision_for_review(
+        db, ctx, case_id, paragraph, body.revision_id)
+    try:
+        # Text and revisions stay untouched; only the review state changes.
+        paragraph.verification_status = "needs_review"
+        paragraph.version += 1
+        draft.version += 1
+        event = await DraftParagraphReviewEventRepository.create(
+            db, tenant_id=ctx.tenant_id, case_id=case_id,
+            draft_document_id=draft.id, draft_paragraph_id=paragraph.id,
+            paragraph_revision_id=revision.id, decision="changes_requested",
+            reason_code=body.reason_code, reviewer_user_id=ctx.actor_id,
+            paragraph_version=paragraph.version,
+        )
+        await _audit(db, ctx, case_id, "draft_paragraph_changes_requested",
+                     {"resource": "draft_paragraph_review", "draft_id": draft.id,
+                      "paragraph_id": paragraph.id, "revision_id": revision.id,
+                      "revision_number": revision.revision_number,
+                      "decision": "changes_requested",
+                      "reason_code": body.reason_code,
+                      "paragraph_version": paragraph.version,
+                      "draft_version": draft.version})
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+    return DraftReviewActionResponse(
+        paragraph_id=paragraph.id, verification_status=paragraph.verification_status,
+        paragraph_version=paragraph.version, draft_version=draft.version,
+        review_event=_review_event_resp(event),
+    )
+
+
+@router.get("/{draft_id}/paragraphs/{paragraph_id}/reviews",
+            response_model=list[DraftReviewEventResponse],
+            operation_id="draft_paragraph_reviews")
+async def list_paragraph_reviews(
+    case_id: str,
+    draft_id: str,
+    paragraph_id: str,
+    ctx: SecurityContext = Depends(require_case_read),
+    db: AsyncSession = Depends(get_session),
+) -> list[DraftReviewEventResponse]:
+    await _authorized_case(db, ctx, case_id, write=False)
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    paragraph = await _load_paragraph(db, ctx, case_id, draft.id, paragraph_id)
+    events = await DraftParagraphReviewEventRepository.list_for_paragraph(
+        db, ctx.tenant_id, paragraph.id)
+    return [_review_event_resp(event) for event in events]

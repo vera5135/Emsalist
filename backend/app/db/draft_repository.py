@@ -15,8 +15,11 @@ from app.db.models import (
     DraftDocument,
     DraftParagraph,
     DraftParagraphIssueLink,
+    DraftParagraphReviewEvent,
+    DraftParagraphRevision,
     DraftParagraphSourceLink,
 )
+from app.services.source_paragraphs import text_hash as normalized_text_hash
 
 
 def _now() -> datetime:
@@ -350,3 +353,163 @@ class DraftParagraphSourceLinkRepository:
             )
         )
         return list(result.scalars().all())
+
+
+class DraftParagraphRevisionRepository:
+    """P2.9C1 — Append-only revision history (rows are never mutated)."""
+
+    @staticmethod
+    async def create(
+        session: AsyncSession,
+        *,
+        tenant_id: str,
+        case_id: str,
+        draft_document_id: str,
+        draft_paragraph_id: str,
+        revision_number: int,
+        base_paragraph_version: int,
+        text: str,
+        change_type: str,
+        created_by: str,
+    ) -> DraftParagraphRevision:
+        revision = DraftParagraphRevision(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            draft_document_id=draft_document_id,
+            draft_paragraph_id=draft_paragraph_id,
+            revision_number=revision_number,
+            base_paragraph_version=base_paragraph_version,
+            text=text,
+            text_hash=normalized_text_hash(text),
+            change_type=change_type,
+            created_by=created_by,
+        )
+        session.add(revision)
+        await session.flush()
+        return revision
+
+    @staticmethod
+    async def get(
+        session: AsyncSession, tenant_id: str, case_id: str,
+        draft_paragraph_id: str, revision_id: str,
+    ) -> DraftParagraphRevision | None:
+        result = await session.execute(
+            select(DraftParagraphRevision).where(
+                DraftParagraphRevision.id == revision_id,
+                DraftParagraphRevision.tenant_id == tenant_id,
+                DraftParagraphRevision.case_id == case_id,
+                DraftParagraphRevision.draft_paragraph_id == draft_paragraph_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def list_for_paragraph(
+        session: AsyncSession, tenant_id: str, draft_paragraph_id: str,
+    ) -> list[DraftParagraphRevision]:
+        result = await session.execute(
+            select(DraftParagraphRevision).where(
+                DraftParagraphRevision.tenant_id == tenant_id,
+                DraftParagraphRevision.draft_paragraph_id == draft_paragraph_id,
+            ).order_by(DraftParagraphRevision.revision_number.asc())
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def latest_for_paragraph(
+        session: AsyncSession, tenant_id: str, draft_paragraph_id: str,
+    ) -> DraftParagraphRevision | None:
+        result = await session.execute(
+            select(DraftParagraphRevision).where(
+                DraftParagraphRevision.tenant_id == tenant_id,
+                DraftParagraphRevision.draft_paragraph_id == draft_paragraph_id,
+            ).order_by(DraftParagraphRevision.revision_number.desc()).limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def ensure_bootstrap(
+        session: AsyncSession, paragraph: DraftParagraph,
+    ) -> DraftParagraphRevision:
+        """Deterministic lazy bootstrap for pre-revision paragraphs.
+
+        Idempotent: reruns return the existing revision 1 instead of
+        duplicating it.
+        """
+        latest = await DraftParagraphRevisionRepository.latest_for_paragraph(
+            session, paragraph.tenant_id, paragraph.id)
+        if latest is not None:
+            return latest
+        change_type = ("initial_generation" if paragraph.generated_by == "ai"
+                       else "manual_creation")
+        return await DraftParagraphRevisionRepository.create(
+            session,
+            tenant_id=paragraph.tenant_id,
+            case_id=paragraph.case_id,
+            draft_document_id=paragraph.draft_document_id,
+            draft_paragraph_id=paragraph.id,
+            revision_number=1,
+            base_paragraph_version=paragraph.version,
+            text=paragraph.text,
+            change_type=change_type,
+            created_by="",
+        )
+
+
+class DraftParagraphReviewEventRepository:
+    """P2.9C1 — Append-only accept / request-changes review events."""
+
+    @staticmethod
+    async def create(
+        session: AsyncSession,
+        *,
+        tenant_id: str,
+        case_id: str,
+        draft_document_id: str,
+        draft_paragraph_id: str,
+        paragraph_revision_id: str,
+        decision: str,
+        reviewer_user_id: str,
+        paragraph_version: int,
+        reason_code: str | None = None,
+    ) -> DraftParagraphReviewEvent:
+        event = DraftParagraphReviewEvent(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            draft_document_id=draft_document_id,
+            draft_paragraph_id=draft_paragraph_id,
+            paragraph_revision_id=paragraph_revision_id,
+            decision=decision,
+            reason_code=reason_code,
+            reviewer_user_id=reviewer_user_id,
+            paragraph_version=paragraph_version,
+        )
+        session.add(event)
+        await session.flush()
+        return event
+
+    @staticmethod
+    async def list_for_paragraph(
+        session: AsyncSession, tenant_id: str, draft_paragraph_id: str,
+    ) -> list[DraftParagraphReviewEvent]:
+        result = await session.execute(
+            select(DraftParagraphReviewEvent).where(
+                DraftParagraphReviewEvent.tenant_id == tenant_id,
+                DraftParagraphReviewEvent.draft_paragraph_id == draft_paragraph_id,
+            ).order_by(DraftParagraphReviewEvent.created_at.asc(),
+                       DraftParagraphReviewEvent.id.asc())
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def latest_for_paragraph(
+        session: AsyncSession, tenant_id: str, draft_paragraph_id: str,
+    ) -> DraftParagraphReviewEvent | None:
+        result = await session.execute(
+            select(DraftParagraphReviewEvent).where(
+                DraftParagraphReviewEvent.tenant_id == tenant_id,
+                DraftParagraphReviewEvent.draft_paragraph_id == draft_paragraph_id,
+            ).order_by(DraftParagraphReviewEvent.created_at.desc(),
+                       DraftParagraphReviewEvent.id.desc()).limit(1)
+        )
+        return result.scalar_one_or_none()

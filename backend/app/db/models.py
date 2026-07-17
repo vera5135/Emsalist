@@ -2193,3 +2193,120 @@ class DraftParagraphSourceLink(Base):
             "source_record_id", "source_version_id", "source_paragraph_id",
         ),
     )
+
+
+# ── P2.9C1 — Immutable paragraph revision history + review decisions ────────
+DRAFT_REVISION_CHANGE_TYPES = frozenset({
+    "initial_generation", "user_edit", "manual_creation", "restored_revision",
+})
+
+DRAFT_REVIEW_DECISIONS = frozenset({"accepted", "changes_requested"})
+
+DRAFT_REVIEW_REASON_CODES = frozenset({
+    "factual_correction_required",
+    "legal_reasoning_revision_required",
+    "citation_revision_required",
+    "source_support_insufficient",
+    "chronology_revision_required",
+    "language_revision_required",
+    "formatting_revision_required",
+    "other_review_required",
+})
+
+
+class DraftParagraphRevision(Base):
+    """P2.9C1 — Immutable snapshot of a draft paragraph text version.
+
+    Rows are append-only: never updated, never soft-deleted. No prompt,
+    raw model response or reasoning content is ever stored here.
+    """
+
+    __tablename__ = "draft_paragraph_revisions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    draft_document_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    draft_paragraph_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    base_paragraph_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    change_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("draft_paragraph_id", "revision_number",
+                         name="uq_draft_paragraph_revisions_number"),
+        CheckConstraint(
+            f"change_type IN ({', '.join(repr(s) for s in sorted(DRAFT_REVISION_CHANGE_TYPES))})",
+            name="ck_draft_paragraph_revisions_change_type",
+        ),
+        CheckConstraint("revision_number >= 1",
+                        name="ck_draft_paragraph_revisions_number_min"),
+        CheckConstraint("length(text_hash) = 64",
+                        name="ck_draft_paragraph_revisions_text_hash_len"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "draft_document_id"],
+            ["draft_documents.tenant_id", "draft_documents.case_id", "draft_documents.id"],
+            name="fk_draft_paragraph_revisions_draft_document",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "draft_paragraph_id"],
+            ["draft_paragraphs.tenant_id", "draft_paragraphs.case_id", "draft_paragraphs.id"],
+            name="fk_draft_paragraph_revisions_paragraph",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_draft_paragraph_revisions_paragraph",
+              "draft_paragraph_id", "revision_number"),
+        Index("ix_draft_paragraph_revisions_tenant_case", "tenant_id", "case_id"),
+    )
+
+
+class DraftParagraphReviewEvent(Base):
+    """P2.9C1 — Immutable accept / request-changes review decision."""
+
+    __tablename__ = "draft_paragraph_review_events"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), ForeignKey("tenants.id"), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(32), ForeignKey("cases.id"), nullable=False)
+    draft_document_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    draft_paragraph_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    paragraph_revision_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("draft_paragraph_revisions.id", ondelete="RESTRICT"),
+        nullable=False)
+    decision: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    reviewer_user_id: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    paragraph_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            f"decision IN ({', '.join(repr(s) for s in sorted(DRAFT_REVIEW_DECISIONS))})",
+            name="ck_draft_paragraph_review_events_decision",
+        ),
+        CheckConstraint(
+            "reason_code IS NULL OR reason_code IN ("
+            + ", ".join(repr(s) for s in sorted(DRAFT_REVIEW_REASON_CODES)) + ")",
+            name="ck_draft_paragraph_review_events_reason_code",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "draft_document_id"],
+            ["draft_documents.tenant_id", "draft_documents.case_id", "draft_documents.id"],
+            name="fk_draft_paragraph_review_events_draft_document",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "draft_paragraph_id"],
+            ["draft_paragraphs.tenant_id", "draft_paragraphs.case_id", "draft_paragraphs.id"],
+            name="fk_draft_paragraph_review_events_paragraph",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_draft_paragraph_review_events_paragraph",
+              "draft_paragraph_id", "created_at"),
+        Index("ix_draft_paragraph_review_events_tenant_case", "tenant_id", "case_id"),
+    )

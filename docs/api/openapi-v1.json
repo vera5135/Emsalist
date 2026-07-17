@@ -2974,6 +2974,33 @@
         "title": "DraftListResponse",
         "type": "object"
       },
+      "DraftParagraphAcceptRequest": {
+        "properties": {
+          "draft_version": {
+            "minimum": 1.0,
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "paragraph_version": {
+            "minimum": 1.0,
+            "title": "Paragraph Version",
+            "type": "integer"
+          },
+          "revision_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Revision Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_version",
+          "paragraph_version",
+          "revision_id"
+        ],
+        "title": "DraftParagraphAcceptRequest",
+        "type": "object"
+      },
       "DraftParagraphCreateRequest": {
         "properties": {
           "paragraph_order": {
@@ -3000,6 +3027,33 @@
           "text"
         ],
         "title": "DraftParagraphCreateRequest",
+        "type": "object"
+      },
+      "DraftParagraphEditRequest": {
+        "properties": {
+          "draft_version": {
+            "minimum": 1.0,
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "paragraph_version": {
+            "minimum": 1.0,
+            "title": "Paragraph Version",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 50000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_version",
+          "paragraph_version",
+          "text"
+        ],
+        "title": "DraftParagraphEditRequest",
         "type": "object"
       },
       "DraftParagraphIssueLinkRequest": {
@@ -3053,6 +3107,40 @@
           "version"
         ],
         "title": "DraftParagraphIssueLinkResponse",
+        "type": "object"
+      },
+      "DraftParagraphRequestChangesRequest": {
+        "properties": {
+          "draft_version": {
+            "minimum": 1.0,
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "paragraph_version": {
+            "minimum": 1.0,
+            "title": "Paragraph Version",
+            "type": "integer"
+          },
+          "reason_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "revision_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Revision Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_version",
+          "paragraph_version",
+          "revision_id",
+          "reason_code"
+        ],
+        "title": "DraftParagraphRequestChangesRequest",
         "type": "object"
       },
       "DraftParagraphResponse": {
@@ -3130,6 +3218,116 @@
           "version"
         ],
         "title": "DraftParagraphResponse",
+        "type": "object"
+      },
+      "DraftParagraphRestoreRequest": {
+        "properties": {
+          "draft_version": {
+            "minimum": 1.0,
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "paragraph_version": {
+            "minimum": 1.0,
+            "title": "Paragraph Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "draft_version",
+          "paragraph_version"
+        ],
+        "title": "DraftParagraphRestoreRequest",
+        "type": "object"
+      },
+      "DraftParagraphRevisionActionResponse": {
+        "properties": {
+          "draft_version": {
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "paragraph_id": {
+            "title": "Paragraph Id",
+            "type": "string"
+          },
+          "paragraph_version": {
+            "title": "Paragraph Version",
+            "type": "integer"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/DraftParagraphRevisionResponse"
+          },
+          "source_links_marked_needs_review": {
+            "default": 0,
+            "title": "Source Links Marked Needs Review",
+            "type": "integer"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paragraph_id",
+          "revision",
+          "verification_status",
+          "paragraph_version",
+          "draft_version"
+        ],
+        "title": "DraftParagraphRevisionActionResponse",
+        "type": "object"
+      },
+      "DraftParagraphRevisionResponse": {
+        "properties": {
+          "change_type": {
+            "title": "Change Type",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "default": "",
+            "title": "Created By",
+            "type": "string"
+          },
+          "current_revision": {
+            "default": false,
+            "title": "Current Revision",
+            "type": "boolean"
+          },
+          "draft_paragraph_id": {
+            "title": "Draft Paragraph Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "revision_number": {
+            "title": "Revision Number",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "text_hash": {
+            "title": "Text Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "draft_paragraph_id",
+          "revision_number",
+          "change_type",
+          "created_at",
+          "text_hash",
+          "text"
+        ],
+        "title": "DraftParagraphRevisionResponse",
         "type": "object"
       },
       "DraftParagraphSourceLinkRequest": {
@@ -3543,6 +3741,92 @@
           "version"
         ],
         "title": "DraftResponse",
+        "type": "object"
+      },
+      "DraftReviewActionResponse": {
+        "properties": {
+          "draft_version": {
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "paragraph_id": {
+            "title": "Paragraph Id",
+            "type": "string"
+          },
+          "paragraph_version": {
+            "title": "Paragraph Version",
+            "type": "integer"
+          },
+          "review_event": {
+            "$ref": "#/components/schemas/DraftReviewEventResponse"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paragraph_id",
+          "verification_status",
+          "paragraph_version",
+          "draft_version",
+          "review_event"
+        ],
+        "title": "DraftReviewActionResponse",
+        "type": "object"
+      },
+      "DraftReviewEventResponse": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "draft_paragraph_id": {
+            "title": "Draft Paragraph Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "paragraph_revision_id": {
+            "title": "Paragraph Revision Id",
+            "type": "string"
+          },
+          "paragraph_version": {
+            "title": "Paragraph Version",
+            "type": "integer"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "reviewer_user_id": {
+            "default": "",
+            "title": "Reviewer User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "draft_paragraph_id",
+          "paragraph_revision_id",
+          "decision",
+          "paragraph_version",
+          "created_at"
+        ],
+        "title": "DraftReviewEventResponse",
         "type": "object"
       },
       "DraftUpdateRequest": {
@@ -15065,6 +15349,81 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/accept": {
+      "post": {
+        "operationId": "draft_paragraph_accept",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphAcceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftReviewActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Accept Paragraph",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/issues": {
       "post": {
         "operationId": "draft_paragraph_issue_link_create",
@@ -15202,6 +15561,376 @@
           }
         ],
         "summary": "Delete Paragraph Issue Link",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/request-changes": {
+      "post": {
+        "operationId": "draft_paragraph_request_changes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphRequestChangesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftReviewActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request Paragraph Changes",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/reviews": {
+      "get": {
+        "operationId": "draft_paragraph_reviews",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DraftReviewEventResponse"
+                  },
+                  "title": "Response Draft Paragraph Reviews",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Paragraph Reviews",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/revisions": {
+      "get": {
+        "operationId": "draft_paragraph_revisions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DraftParagraphRevisionResponse"
+                  },
+                  "title": "Response Draft Paragraph Revisions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Paragraph Revisions",
+        "tags": [
+          "Drafts"
+        ]
+      },
+      "post": {
+        "operationId": "draft_paragraph_edit_revision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftParagraphRevisionActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Paragraph Edit Revision",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/paragraphs/{paragraph_id}/revisions/{revision_id}/restore": {
+      "post": {
+        "operationId": "draft_paragraph_revision_restore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "paragraph_id",
+            "required": true,
+            "schema": {
+              "title": "Paragraph Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "title": "Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftParagraphRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftParagraphRevisionActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Paragraph Revision",
         "tags": [
           "Drafts"
         ]

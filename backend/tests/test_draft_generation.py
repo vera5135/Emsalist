@@ -32,6 +32,8 @@ from app.db.models import (
     DraftDocument,
     DraftParagraph,
     DraftParagraphIssueLink,
+    DraftParagraphReviewEvent,
+    DraftParagraphRevision,
     DraftParagraphSourceLink,
     Evidence,
     EvidenceClaimLink,
@@ -89,7 +91,8 @@ async def _cleanup(session) -> None:
     tenants = [TENANT, OTHER_TENANT]
     await session.execute(update(DraftDocument).where(
         DraftDocument.tenant_id.in_(tenants)).values(supersedes_draft_id=None))
-    for model in (DraftParagraphSourceLink, DraftParagraphIssueLink, DraftParagraph,
+    for model in (DraftParagraphReviewEvent, DraftParagraphRevision,
+                  DraftParagraphSourceLink, DraftParagraphIssueLink, DraftParagraph,
                   DraftDocument, SourceUsage, EvidenceSufficiencyAssessment,
                   EvidenceClaimLink, Evidence, Claim, Contradiction,
                   MissingInformation, TimelineEvent, CaseFact, LegalIssue):
@@ -967,8 +970,11 @@ def test_migration_single_head_is_generation_revision():
 
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND_DIR / "app" / "db" / "migrations"))
-    heads = ScriptDirectory.from_config(cfg).get_heads()
-    assert heads == ["c2d3e4f5a6b7"]
+    script = ScriptDirectory.from_config(cfg)
+    heads = script.get_heads()
+    assert len(heads) == 1
+    revisions = {rev.revision for rev in script.walk_revisions()}
+    assert "c2d3e4f5a6b7" in revisions
 
 
 def test_migration_downgrade_reupgrade_roundtrip(tmp_path):
