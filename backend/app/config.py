@@ -56,6 +56,14 @@ class Settings(BaseModel):
     deepseek_batch_concurrency: int = 2
     deepseek_max_paragraphs_per_source: int = 3
     deepseek_max_source_chars: int = 6000
+    # ── P2.9B Grounded draft generation (production fail-closed default) ──
+    ai_draft_generation_provider: str = ""  # "" | deepseek | deterministic
+    deepseek_drafting_max_tokens: int = 8192
+    deepseek_drafting_timeout_seconds: int = 120
+    deepseek_draft_section_batch_size: int = 3
+    deepseek_draft_batch_concurrency: int = 2
+    deepseek_draft_max_source_paragraphs: int = 24
+    deepseek_draft_max_source_chars: int = 48000
     # ── P2.7 Hybrid Search ───────────────────────────────────────
     search_semantic_enabled: bool = False
     search_embedding_model: str = "gemini-embedding-001"
@@ -269,6 +277,13 @@ def get_settings() -> Settings:
         deepseek_batch_concurrency=int(getenv("DEEPSEEK_BATCH_CONCURRENCY", "2")),
         deepseek_max_paragraphs_per_source=int(getenv("DEEPSEEK_MAX_PARAGRAPHS_PER_SOURCE", "3")),
         deepseek_max_source_chars=int(getenv("DEEPSEEK_MAX_SOURCE_CHARS", "6000")),
+        ai_draft_generation_provider=getenv("AI_DRAFT_GENERATION_PROVIDER", "").strip().lower(),
+        deepseek_drafting_max_tokens=int(getenv("DEEPSEEK_DRAFTING_MAX_TOKENS", "8192")),
+        deepseek_drafting_timeout_seconds=int(getenv("DEEPSEEK_DRAFTING_TIMEOUT_SECONDS", "120")),
+        deepseek_draft_section_batch_size=int(getenv("DEEPSEEK_DRAFT_SECTION_BATCH_SIZE", "3")),
+        deepseek_draft_batch_concurrency=int(getenv("DEEPSEEK_DRAFT_BATCH_CONCURRENCY", "2")),
+        deepseek_draft_max_source_paragraphs=int(getenv("DEEPSEEK_DRAFT_MAX_SOURCE_PARAGRAPHS", "24")),
+        deepseek_draft_max_source_chars=int(getenv("DEEPSEEK_DRAFT_MAX_SOURCE_CHARS", "48000")),
         search_semantic_enabled=getenv("EMSALIST_SEARCH_SEMANTIC_ENABLED", "false").lower() in {"1", "true", "yes"},
         search_embedding_model=getenv("EMSALIST_SEARCH_EMBEDDING_MODEL", "gemini-embedding-001"),
         search_embedding_version=getenv("EMSALIST_SEARCH_EMBEDDING_VERSION", "p2.7-embedding-1"),

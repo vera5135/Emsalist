@@ -2032,6 +2032,8 @@ class DraftParagraph(Base):
     verification_status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending_review")
     generated_by: Mapped[str] = mapped_column(String(20), nullable=False, default="user")
     model_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    generation_run_id: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    generation_input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
