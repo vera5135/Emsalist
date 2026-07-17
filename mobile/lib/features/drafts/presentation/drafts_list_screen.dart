@@ -163,7 +163,7 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-final List<Map<String, String>> _draftTypes = const <Map<String, String>>[
+const List<Map<String, String>> _draftTypes = <Map<String, String>>[
   <String, String>{'value': 'aciklama_metni', 'label': 'Açıklama Metni'},
   <String, String>{'value': 'bilir_kisi_raporu', 'label': 'Bilirkişi Raporu'},
   <String, String>{'value': 'cevap_dilekcesi', 'label': 'Cevap Dilekçesi'},
@@ -229,7 +229,7 @@ void _showCreateDraftSheet(BuildContext context, WidgetRef ref, String caseId) {
               ),
               const SizedBox(height: AppConstants.spacingMd),
               DropdownButtonFormField<String>(
-                value: selectedType,
+                initialValue: selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Taslak Türü',
                   border: OutlineInputBorder(),
@@ -276,16 +276,19 @@ void _showCreateDraftSheet(BuildContext context, WidgetRef ref, String caseId) {
                           );
 
                       ref.invalidate(caseDraftsProvider(caseId));
+                      if (!sheetContext.mounted) return;
                       Navigator.of(sheetContext).pop();
 
                       if (context.mounted) {
                         context.push('/cases/$caseId/drafts/${result.id}');
                       }
                     } on ApiException catch (e) {
+                      if (!sheetContext.mounted) return;
                       ScaffoldMessenger.of(
                         sheetContext,
                       ).showSnackBar(SnackBar(content: Text(e.message)));
                     } on Object {
+                      if (!sheetContext.mounted) return;
                       ScaffoldMessenger.of(sheetContext).showSnackBar(
                         const SnackBar(content: Text('Taslak oluşturulamadı.')),
                       );

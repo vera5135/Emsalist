@@ -37,24 +37,28 @@ void showRequestChangesSheet(
                     style: Theme.of(ctx).textTheme.titleLarge,
                   ),
                   const SizedBox(height: AppConstants.spacingMd),
-                  ..._reasonCodes.map((Map<String, String> rc) {
-                    final String code = rc['code']!;
-                    final String label = rc['label']!;
-                    return RadioListTile<String>(
-                      title: Text(label),
-                      value: code,
-                      groupValue: selectedCode,
-                      onChanged: (String? value) {
-                        if (value != null) {
-                          setSheetState(() => selectedCode = value);
-                          Navigator.of(sheetContext).pop();
-                          onConfirm(selectedCode);
-                        }
-                      },
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                    );
-                  }),
+                  RadioGroup<String>(
+                    groupValue: selectedCode,
+                    onChanged: (String? value) {
+                      if (value != null) {
+                        setSheetState(() => selectedCode = value);
+                        Navigator.of(sheetContext).pop();
+                        onConfirm(selectedCode);
+                      }
+                    },
+                    child: Column(
+                      children: _reasonCodes.map((Map<String, String> rc) {
+                        final String code = rc['code']!;
+                        final String label = rc['label']!;
+                        return RadioListTile<String>(
+                          title: Text(label),
+                          value: code,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        );
+                      }).toList(),
+                    ),
+                  ),
                   const SizedBox(height: AppConstants.spacingMd),
                 ],
               ),

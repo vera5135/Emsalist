@@ -49,7 +49,6 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
         _draftId,
       );
       if (mounted) {
-        setState(() => _readiness = result);
         _showReadinessResult(result);
       }
     } on ApiException catch (e) {
@@ -189,7 +188,6 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
         _draftId,
       );
       if (mounted) {
-        setState(() => _validation = result);
         _showValidationResult(result);
       }
     } on ApiException catch (e) {
@@ -660,8 +658,8 @@ class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
                   ),
                 ),
                 if (draft.paragraphs.isEmpty)
-                  SliverToBoxAdapter(
-                    child: const Padding(
+                  const SliverToBoxAdapter(
+                    child: Padding(
                       padding: EdgeInsets.all(AppConstants.spacingMd),
                       child: EmptyWidget(
                         title: 'Henüz paragraf yok',
