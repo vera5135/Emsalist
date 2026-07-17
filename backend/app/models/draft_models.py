@@ -169,3 +169,67 @@ class DraftValidateResponse(BaseModel):
     blocking_errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     metrics: dict[str, int] = Field(default_factory=dict)
+
+
+class DraftParagraphEditRequest(BaseModel):
+    draft_version: int = Field(ge=1)
+    paragraph_version: int = Field(ge=1)
+    text: str = Field(min_length=1, max_length=50000)
+
+
+class DraftParagraphRevisionResponse(BaseModel):
+    id: str
+    draft_paragraph_id: str
+    revision_number: int
+    change_type: str
+    created_by: str = ""
+    created_at: str
+    text_hash: str
+    current_revision: bool = False
+    text: str
+
+
+class DraftParagraphRevisionActionResponse(BaseModel):
+    paragraph_id: str
+    revision: DraftParagraphRevisionResponse
+    verification_status: str
+    paragraph_version: int
+    draft_version: int
+    source_links_marked_needs_review: int = 0
+
+
+class DraftParagraphRestoreRequest(BaseModel):
+    draft_version: int = Field(ge=1)
+    paragraph_version: int = Field(ge=1)
+
+
+class DraftParagraphAcceptRequest(BaseModel):
+    draft_version: int = Field(ge=1)
+    paragraph_version: int = Field(ge=1)
+    revision_id: str = Field(min_length=1, max_length=32)
+
+
+class DraftParagraphRequestChangesRequest(BaseModel):
+    draft_version: int = Field(ge=1)
+    paragraph_version: int = Field(ge=1)
+    revision_id: str = Field(min_length=1, max_length=32)
+    reason_code: str = Field(min_length=1, max_length=50)
+
+
+class DraftReviewEventResponse(BaseModel):
+    id: str
+    draft_paragraph_id: str
+    paragraph_revision_id: str
+    decision: str
+    reason_code: str | None = None
+    reviewer_user_id: str = ""
+    paragraph_version: int
+    created_at: str
+
+
+class DraftReviewActionResponse(BaseModel):
+    paragraph_id: str
+    verification_status: str
+    paragraph_version: int
+    draft_version: int
+    review_event: DraftReviewEventResponse
