@@ -99,3 +99,108 @@ def render_docx(document: ExportDocument) -> bytes:
     buffer = BytesIO()
     doc.save(buffer)
     return buffer.getvalue()
+
+
+# ── PDF (pymupdf; Unicode-safe system font, selectable text) ────────────────
+_FONT_CANDIDATES = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "C:\\Windows\\Fonts\\arial.ttf",
+    "C:\\Windows\\Fonts\\calibri.ttf",
+)
+
+_PAGE_WIDTH = 595.0  # A4 portrait (points)
+_PAGE_HEIGHT = 842.0
+_MARGIN = 56.7  # 2 cm fixed margins
+_BODY_SIZE = 11.0
+_HEADING_SIZE = 13.0
+_CITATION_SIZE = 9.5
+_LINE_FACTOR = 1.45
+_FOOTER_SIZE = 9.0
+
+
+def resolve_pdf_font_path() -> str:
+    """Explicitly configured system/Docker font; never a committed font file."""
+    override = os.environ.get("EMSALIST_PDF_FONT_PATH", "").strip()
+    candidates = ([override] if override else []) + list(_FONT_CANDIDATES)
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    raise DraftExportError("draft_export_font_unavailable")
+
+
+def _wrap_line(font, text: str, size: float, max_width: float) -> list[str]:
+    words = text.split()
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if not current or font.text_length(candidate, fontsize=size) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def render_pdf(document: ExportDocument) -> bytes:
+    import fitz
+
+    font_path = resolve_pdf_font_path()
+    font = fitz.Font(fontfile=font_path)
+    usable_width = _PAGE_WIDTH - 2 * _MARGIN
+    bottom_limit = _PAGE_HEIGHT - _MARGIN - _FOOTER_SIZE * 2
+
+    # Deterministic layout plan: (size, text, extra_gap_before) line entries.
+    entries: list[tuple[float, str, float]] = [(_HEADING_SIZE + 2, document.title, 0.0)]
+    for paragraph in document.paragraphs:
+        if paragraph.heading:
+            for line in _wrap_line(font, paragraph.heading, _HEADING_SIZE, usable_width):
+                entries.append((_HEADING_SIZE, line, _HEADING_SIZE))
+        first = True
+        for line in _wrap_line(font, paragraph.text, _BODY_SIZE, usable_width):
+            entries.append((_BODY_SIZE, line, _BODY_SIZE * 0.6 if first else 0.0))
+            first = False
+        for citation in paragraph.citations:
+            first = True
+            for line in _wrap_line(font, f"Kaynak: {citation}", _CITATION_SIZE,
+                                   usable_width):
+                entries.append((_CITATION_SIZE, line,
+                                _CITATION_SIZE * 0.5 if first else 0.0))
+                first = False
+
+    pdf = fitz.open()
+    pages: list[list[tuple[float, float, str]]] = [[]]
+    cursor = _MARGIN
+    for size, line, gap_before in entries:
+        line_height = size * _LINE_FACTOR
+        if cursor + gap_before + line_height > bottom_limit:
+            pages.append([])
+            cursor = _MARGIN
+            gap_before = 0.0
+        cursor += gap_before + line_height
+        pages[-1].append((size, cursor, line))
+
+    total_pages = len(pages)
+    for page_number, lines in enumerate(pages, start=1):
+        page = pdf.new_page(width=_PAGE_WIDTH, height=_PAGE_HEIGHT)
+        writer = fitz.TextWriter(page.rect)
+        for size, y_position, line in lines:
+            if line:
+                writer.append((_MARGIN, y_position), line, font=font, fontsize=size)
+        footer = f"Sayfa {page_number} / {total_pages}"
+        footer_width = font.text_length(footer, fontsize=_FOOTER_SIZE)
+        writer.append(((_PAGE_WIDTH - footer_width) / 2, _PAGE_HEIGHT - _MARGIN / 2),
+                      footer, font=font, fontsize=_FOOTER_SIZE)
+        writer.write_text(page)
+
+    # Deterministic, safe metadata only (no creation/mod dates, no producer).
+    pdf.set_metadata({"title": document.title, "author": "Emsalist"})
+    pdf.del_xml_metadata()
+    content = pdf.tobytes(garbage=4, deflate=True)
+    pdf.close()
+    return content

@@ -1703,3 +1703,34 @@ async def export_draft_docx(
         content, export_filename(draft.draft_type, draft.id, "docx"),
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+
+
+@router.get("/{draft_id}/export/pdf", operation_id="draft_export_pdf",
+            response_class=Response)
+async def export_draft_pdf(
+    case_id: str,
+    draft_id: str,
+    ctx: SecurityContext = Depends(require_case_read),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    from app.services.draft_export import (
+        DraftExportError,
+        export_filename,
+        render_pdf,
+    )
+
+    await _authorized_case(db, ctx, case_id, write=False)
+    draft = await _load_draft(db, ctx, case_id, draft_id)
+    document = await _build_export_document(db, ctx, case_id, draft)
+    try:
+        content = render_pdf(document)
+    except DraftExportError as exc:
+        raise HTTPException(status_code=503, detail=exc.code)
+    logger.info(
+        "draft_exported draft_id=%s case_id=%s export_format=pdf size_bytes=%d",
+        draft.id, case_id, len(content),
+    )
+    return _export_response(
+        content, export_filename(draft.draft_type, draft.id, "pdf"),
+        "application/pdf",
+    )

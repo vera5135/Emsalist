@@ -15020,6 +15020,104 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/export/docx": {
+      "get": {
+        "operationId": "draft_export_docx",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Draft Docx",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/drafts/{draft_id}/export/pdf": {
+      "get": {
+        "operationId": "draft_export_pdf",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Draft Pdf",
+        "tags": [
+          "Drafts"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/drafts/{draft_id}/finalize": {
       "post": {
         "operationId": "draft_finalize",
