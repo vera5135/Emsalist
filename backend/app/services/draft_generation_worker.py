@@ -68,6 +68,9 @@ async def start_worker():
     if not settings.draft_generation_job_worker_enabled:
         logger.info("draft_generation_worker disabled_by_config")
         return
+    if settings.environment == "test":
+        logger.info("draft_generation_worker disabled_in_test_env")
+        return
     if _task is not None and not _task.done():
         logger.info("draft_generation_worker already_running")
         return
@@ -151,7 +154,8 @@ async def claim_next_job(
         )
         job = result.scalar_one_or_none()
         if job is None:
-            return None, session
+            await session.close()
+            return None, None
         now = clock()
         job.status = "running"
         job.stage = "preflight"
@@ -161,6 +165,9 @@ async def claim_next_job(
         job.lease_expires_at = now + timedelta(seconds=secs)
         job.attempt_count += 1
         await session.flush()
+        # Persist the claim independently so run_one_claimed_job can
+        # manage its own transaction without undoing the claim on error.
+        await session.commit()
         return job, session
     except Exception:
         await session.rollback()
@@ -179,12 +186,13 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
         job.progress_percent = progress_for(name)
         job.lease_expires_at = _lease()
 
-    def _fail(code: str):
+    async def _fail(code: str):
         job.status = "failed"
         job.stage = "failed"
         job.progress_percent = 0
         job.safe_error_code = code
         job.completed_at = _now()
+        await session.commit()
 
     try:
         # ---- preflight ---------------------------------------------------
@@ -194,16 +202,16 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
             DraftDocument.case_id == job.case_id,
         ))).scalar_one_or_none()
         if draft is None or draft.status not in EDITABLE_DRAFT_STATUSES:
-            return _fail("draft_generation_job_not_editable")
+            await _fail("draft_generation_job_not_editable")
         if draft.version != job.requested_draft_version:
-            return _fail("draft_generation_job_version_conflict")
+            await _fail("draft_generation_job_version_conflict")
         if await DraftParagraphRepository.list_for_draft(
                 session, job.tenant_id, draft.id):
-            return _fail("draft_generation_job_not_empty")
+            await _fail("draft_generation_job_not_empty")
         readiness = await compute_draft_readiness(
             session, job.tenant_id, job.case_id, draft)
         if readiness.status == "blocked":
-            return _fail("draft_generation_job_readiness_blocked")
+            await _fail("draft_generation_job_readiness_blocked")
 
         # ---- preparing input ---------------------------------------------
         _stage("preparing_input")
@@ -217,7 +225,7 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                 selected_source_usage_ids=[],
             )
         except UnknownSelectionError as exc:
-            return _fail(exc.code)
+            await _fail(exc.code)
 
         # ---- provider generation ----------------------------------------
         _stage("provider_generation")
@@ -234,7 +242,7 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
             result = await provider.generate(payload)
         except DraftGenerationError as exc:
             await session.rollback()
-            return _fail(exc.code)
+            await _fail(exc.code)
 
         # ---- validating output ------------------------------------------
         _stage("validating_output")
@@ -246,7 +254,7 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                 ctx = provenance_context.get(key)
                 if ctx is None:
                     await session.rollback()
-                    return _fail("draft_generation_unknown_source")
+                    await _fail("draft_generation_unknown_source")
                 row = (await session.execute(
                     select(SourceRecord.id, SourceRecord.verification_status)
                     .where(SourceRecord.id == key[0],
@@ -255,13 +263,13 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                 )).first()
                 if row is None:
                     await session.rollback()
-                    return _fail("draft_generation_provenance_mismatch")
+                    await _fail("draft_generation_provenance_mismatch")
                 trust = await _resolve_trust(
                     session, row.id, key[1], row.verification_status)
                 if trust not in {"verified_official", "verified_secondary",
                                   "editor_verified"}:
                     await session.rollback()
-                    return _fail("draft_generation_provenance_mismatch")
+                    await _fail("draft_generation_provenance_mismatch")
                 sp = (await session.execute(select(SourceParagraph).where(
                     SourceParagraph.id == key[2],
                     SourceParagraph.source_version_id == key[1],
@@ -269,7 +277,7 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                 if sp is None or (sp.text_hash or "") != ctx.text_hash \
                         or source_text_hash(sp.text or "") != ctx.text_hash:
                     await session.rollback()
-                    return _fail("draft_generation_provenance_mismatch")
+                    await _fail("draft_generation_provenance_mismatch")
 
         # ---- persisting (atomic) ----------------------------------------
         _stage("persisting")

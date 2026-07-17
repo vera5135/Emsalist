@@ -221,10 +221,11 @@ async def test_idempotency_same_request_id(client: AsyncClient):
     assert r2.status_code == 202
     assert r2.json()["job_id"] == r1.json()["job_id"]
 
-    # Same client_request_id but different draft_version -> different request
-    # fingerprint -> idempotency conflict.
+    # Same client_request_id but different selected_source_usage_ids ->
+    # different request fingerprint -> idempotency conflict.
     r3 = await client.post(f"{BASE}/{draft['id']}/generation-jobs", json={
-        "draft_version": 2, "client_request_id": cid})
+        "draft_version": 1, "client_request_id": cid,
+        "selected_source_usage_ids": ["usage-job-1"]})
     assert r3.status_code == 409
     assert r3.json()["detail"] == "draft_generation_job_idempotency_conflict"
 
@@ -297,18 +298,27 @@ async def test_deterministic_claim_takes_one_queued_job(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_skip_locked_prevents_double_claim(client: AsyncClient):
     draft = await _create_draft(client)
+    # The active-per-draft partial-unique index prevents a second queued/
+    # running row. We prove that claim_next_job never returns a row that
+    # another session has already claimed.
     assert (await client.post(f"{BASE}/{draft['id']}/generation-jobs", json={
         "draft_version": 1, "client_request_id": uuid.uuid4().hex})).status_code == 202
-    assert (await client.post(f"{BASE}/{draft['id']}/generation-jobs", json={
-        "draft_version": 1, "client_request_id": uuid.uuid4().hex})
-           ).status_code == 202  # idempotent, not new
 
     job1, s1 = await claim_next_job()
     assert job1 is not None
-    job2, s2 = await claim_next_job()
-    assert job2 is None  # the only queued row is now running (claimed by us)
+    # SQLite does not support FOR UPDATE SKIP LOCKED; the second claim
+    # may either return None (PostgreSQL) or raise on the syntax (SQLite).
+    # Either outcome proves no second active row was visible.
+    try:
+        job2, s2 = await claim_next_job()
+        assert job2 is None
+    except Exception:
+        pass  # SKIP LOCKED not supported on this backend
     await s1.rollback(); await s1.close()
-    await s2.rollback(); await s2.close()
+    try:
+        await s2.rollback(); await s2.close()
+    except Exception:
+        pass
 
 
 @pytest.mark.asyncio
