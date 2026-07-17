@@ -20,8 +20,6 @@ import '../features/drafts/presentation/drafts_list_screen.dart';
 import '../features/legal_reasoning/presentation/legal_reasoning_workspace_screen.dart';
 import '../features/sources/presentation/search_screen.dart';
 import '../features/sources/presentation/sources_screen.dart';
-import '../features/drafts/presentation/draft_detail_screen.dart';
-import '../features/drafts/presentation/drafts_list_screen.dart';
 
 class AppRoutes {
   const AppRoutes._();
@@ -305,34 +303,6 @@ class _DraftsHomeScreen extends ConsumerWidget {
             },
           );
         },
-      ),
-    );
-  }
-}
-
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({required this.title, required this.icon});
-
-  final String title;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Semantics(
-          label: '$title ekranı yakında',
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(icon, size: 48, color: theme.colorScheme.outline),
-              const SizedBox(height: 16),
-              Text('$title yakında', style: theme.textTheme.titleMedium),
-            ],
-          ),
-        ),
       ),
     );
   }

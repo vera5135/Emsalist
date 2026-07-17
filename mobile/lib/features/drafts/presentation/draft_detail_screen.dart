@@ -27,8 +27,6 @@ class DraftDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _DraftDetailScreenState extends ConsumerState<DraftDetailScreen> {
-  DraftReadinessItem? _readiness;
-  DraftValidationItem? _validation;
   bool _readinessLoading = false;
   bool _validationLoading = false;
   bool _finalizing = false;
