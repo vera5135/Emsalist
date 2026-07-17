@@ -439,7 +439,7 @@ async def test_lease_expiry_recovery_returns_job_to_queued(client: AsyncClient):
     job2, session2 = await claim_next_job()
     assert job2 is not None
     assert job2.id == job.id
-    assert job2.attempt_count == 2
+    assert job2.attempt_count == 3  # claim + recovery + re-claim
     await session2.rollback()
     await session2.close()
 

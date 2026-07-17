@@ -243,6 +243,7 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
         except DraftGenerationError as exc:
             await session.rollback()
             await _fail(exc.code)
+            return
 
         # ---- validating output ------------------------------------------
         _stage("validating_output")
@@ -255,6 +256,7 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                 if ctx is None:
                     await session.rollback()
                     await _fail("draft_generation_unknown_source")
+                    return
                 row = (await session.execute(
                     select(SourceRecord.id, SourceRecord.verification_status)
                     .where(SourceRecord.id == key[0],
@@ -264,12 +266,14 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                 if row is None:
                     await session.rollback()
                     await _fail("draft_generation_provenance_mismatch")
+                    return
                 trust = await _resolve_trust(
                     session, row.id, key[1], row.verification_status)
                 if trust not in {"verified_official", "verified_secondary",
                                   "editor_verified"}:
                     await session.rollback()
                     await _fail("draft_generation_provenance_mismatch")
+                    return
                 sp = (await session.execute(select(SourceParagraph).where(
                     SourceParagraph.id == key[2],
                     SourceParagraph.source_version_id == key[1],
@@ -278,6 +282,7 @@ async def run_one_claimed_job(job: DraftGenerationJob, session):
                         or source_text_hash(sp.text or "") != ctx.text_hash:
                     await session.rollback()
                     await _fail("draft_generation_provenance_mismatch")
+                    return
 
         # ---- persisting (atomic) ----------------------------------------
         _stage("persisting")
