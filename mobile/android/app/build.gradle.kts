@@ -1,8 +1,34 @@
+import org.gradle.api.GradleException
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
+fun signingValue(name: String): String? =
+    (project.findProperty(name) as String?)
+        ?: keystoreProperties.getProperty(name)
+        ?: System.getenv(name)
+
+val releaseKeystorePath = signingValue("EMSALIST_ANDROID_KEYSTORE_FILE")
+val releaseKeyAlias = signingValue("EMSALIST_ANDROID_KEY_ALIAS")
+val releaseKeyPassword = signingValue("EMSALIST_ANDROID_KEY_PASSWORD")
+val releaseStorePassword = signingValue("EMSALIST_ANDROID_STORE_PASSWORD")
+val hasReleaseSigning =
+    !releaseKeystorePath.isNullOrBlank() &&
+        !releaseKeyAlias.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank() &&
+        !releaseStorePassword.isNullOrBlank()
+val isReleaseTaskRequested =
+    gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
 
 android {
     namespace = "com.emsalist.emsalist_mobile"
@@ -20,6 +46,17 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     flavorDimensions += "environment"
@@ -42,9 +79,15 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (!hasReleaseSigning && isReleaseTaskRequested) {
+                throw GradleException(
+                    "Release signing is required. Provide EMSALIST_ANDROID_KEYSTORE_FILE, " +
+                        "EMSALIST_ANDROID_KEY_ALIAS, EMSALIST_ANDROID_KEY_PASSWORD, and " +
+                        "EMSALIST_ANDROID_STORE_PASSWORD through environment variables, " +
+                        "Gradle properties, or android/key.properties."
+                )
+            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
