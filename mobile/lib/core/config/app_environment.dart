@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'platform_info.dart';
 
 /// Deployment environment (native flavor) the app runs against.
 enum AppEnvironment {
@@ -74,11 +74,7 @@ class _SystemPlatformInfo extends PlatformInfo {
 
   @override
   bool get isAndroid {
-    try {
-      return Platform.isAndroid;
-    } on Object {
-      return false;
-    }
+    return isAndroidPlatform();
   }
 }
 

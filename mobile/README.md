@@ -19,6 +19,22 @@ flutter run --flavor development
 
 The app launches with mock data.
 
+### Chrome preview
+
+```powershell
+# Terminal 1
+cd ..
+.\start-backend.ps1
+
+# Terminal 2
+cd mobile
+flutter run -d chrome --web-port 5173 --dart-define=APP_ENVIRONMENT=development --dart-define=API_BASE_URL=http://127.0.0.1:8000
+```
+
+The backend allows `http://localhost:5173` and `http://127.0.0.1:5173` in local
+development CORS defaults, including the PATCH preflights used by legal issue
+actions.
+
 ## Flavors
 
 Flavors are real native build flavors (iOS schemes/build configurations and Android
