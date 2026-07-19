@@ -152,6 +152,46 @@ class ReadinessContractTests(unittest.TestCase):
         self.assertNotIn("password", content)
 
 
+class CorsContractTests(unittest.TestCase):
+    """Local browser preview CORS contract."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+
+    def test_local_web_preview_origin_allows_login_preflight(self):
+        resp = self.client.options(
+            "/api/v1/auth/login",
+            headers={
+                "Origin": "http://127.0.0.1:5173",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,x-correlation-id",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.headers.get("access-control-allow-origin"),
+            "http://127.0.0.1:5173",
+        )
+        self.assertIn("POST", resp.headers.get("access-control-allow-methods", ""))
+
+    def test_local_web_preview_origin_allows_patch_preflight(self):
+        resp = self.client.options(
+            "/api/v1/legal-issues/issue-1",
+            headers={
+                "Origin": "http://127.0.0.1:5173",
+                "Access-Control-Request-Method": "PATCH",
+                "Access-Control-Request-Headers": "content-type,authorization,x-correlation-id",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.headers.get("access-control-allow-origin"),
+            "http://127.0.0.1:5173",
+        )
+        self.assertIn("PATCH", resp.headers.get("access-control-allow-methods", ""))
+
+
 class StartupLifecycleTests(unittest.TestCase):
     """P1.13 — Application imports and basic lifecycle."""
 

@@ -86,12 +86,13 @@ if settings.cors_allow_origins:
     cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
 else:
     cors_origins = ["http://localhost:8000", "http://127.0.0.1:8000",
-                    "http://localhost:4096", "http://127.0.0.1:4096"]
+                    "http://localhost:4096", "http://127.0.0.1:4096",
+                    "http://localhost:5173", "http://127.0.0.1:5173"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Correlation-ID"],
 )
 
