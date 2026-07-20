@@ -43,6 +43,21 @@ flutter build apk --flavor staging
 flutter build appbundle --flavor production
 ```
 
+Production Android builds are fail-closed for signing. A release build will not
+fall back to the debug key. Provide the signing values through environment
+variables, Gradle properties, or `android/key.properties`:
+
+```powershell
+$env:EMSALIST_ANDROID_KEYSTORE_FILE="C:\secure\emsalist-upload.jks"
+$env:EMSALIST_ANDROID_KEY_ALIAS="emsalist-upload"
+$env:EMSALIST_ANDROID_KEY_PASSWORD="<key-password>"
+$env:EMSALIST_ANDROID_STORE_PASSWORD="<store-password>"
+flutter build appbundle --flavor production --release
+```
+
+`android/key.properties`, `*.jks`, and `*.keystore` are intentionally ignored by
+git.
+
 ### Bundle / application ID matrix
 
 | Flavor      | iOS `PRODUCT_BUNDLE_IDENTIFIER` | Android `applicationId`  |
