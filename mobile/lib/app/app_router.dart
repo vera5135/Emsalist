@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/network/api_exception.dart';
+import '../core/widgets/state_widgets.dart';
 import '../features/assistant/assistant_screen.dart';
 import '../features/auth/application/auth_state.dart';
 import '../features/auth/presentation/account_screen.dart';
 import '../features/auth/presentation/auth_loading_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/cases/application/case_providers.dart';
+import '../features/cases/domain/case_item.dart';
 import '../features/cases/presentation/case_chat_screen.dart';
 import '../features/cases/presentation/cases_screen.dart';
 import '../features/case_memory/presentation/case_memory_screen.dart';
 import '../features/documents/presentation/documents_screen.dart';
+import '../features/drafts/presentation/draft_detail_screen.dart';
+import '../features/drafts/presentation/drafts_list_screen.dart';
 import '../features/legal_reasoning/presentation/legal_reasoning_workspace_screen.dart';
 import '../features/sources/presentation/search_screen.dart';
 import '../features/sources/presentation/sources_screen.dart';
@@ -198,9 +205,21 @@ GoRouter createAppRouter({
             path: AppRoutes.draftsPath,
             name: AppRoutes.drafts,
             builder: (BuildContext context, GoRouterState state) =>
-                const _PlaceholderScreen(
-                  title: 'Taslaklar',
-                  icon: Icons.edit_note_outlined,
+                const _DraftsHomeScreen(),
+          ),
+          GoRoute(
+            path: '/cases/:caseId/drafts',
+            name: 'caseDrafts',
+            builder: (BuildContext context, GoRouterState state) =>
+                DraftsListScreen(caseId: state.pathParameters['caseId']!),
+          ),
+          GoRoute(
+            path: '/cases/:caseId/drafts/:draftId',
+            name: 'draftDetail',
+            builder: (BuildContext context, GoRouterState state) =>
+                DraftDetailScreen(
+                  caseId: state.pathParameters['caseId']!,
+                  draftId: state.pathParameters['draftId']!,
                 ),
           ),
         ],
@@ -245,29 +264,45 @@ class _ScaffoldWithNavBar extends StatelessWidget {
   }
 }
 
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({required this.title, required this.icon});
-
-  final String title;
-  final IconData icon;
+class _DraftsHomeScreen extends ConsumerWidget {
+  const _DraftsHomeScreen();
 
   @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cases = ref.watch(activeCasesProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Semantics(
-          label: '$title ekranı yakında',
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(icon, size: 48, color: theme.colorScheme.outline),
-              const SizedBox(height: 16),
-              Text('$title yakında', style: theme.textTheme.titleMedium),
-            ],
-          ),
+      appBar: AppBar(title: const Text('Taslaklar')),
+      body: cases.when(
+        loading: () => const LoadingWidget(message: 'Dosyalar yükleniyor…'),
+        error: (Object error, _) => AppErrorWidget(
+          message: error is ApiException
+              ? error.message
+              : 'Dosyalar yüklenemedi',
+          onRetry: () => ref.invalidate(activeCasesProvider),
         ),
+        data: (List<CaseItem> caseList) {
+          if (caseList.isEmpty) {
+            return const EmptyWidget(
+              title: 'Henüz dosya yok',
+              message: 'Taslak oluşturmak için önce bir dosya açmalısınız.',
+            );
+          }
+          return ListView.builder(
+            itemCount: caseList.length,
+            itemBuilder: (BuildContext context, int index) {
+              final CaseItem c = caseList[index];
+              return Card(
+                child: ListTile(
+                  leading: const Icon(Icons.folder_outlined),
+                  title: Text(c.title),
+                  subtitle: Text(c.legalTopic),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/cases/${c.id}/drafts'),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

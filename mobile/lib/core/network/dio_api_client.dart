@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../config/api_config.dart';
@@ -178,6 +180,33 @@ class DioApiClient implements ApiClient {
         return data;
       }
       throw _errorMapper.unexpected();
+    } on DioException catch (error) {
+      throw _errorMapper.fromDioException(error);
+    } on ApiException {
+      rethrow;
+    } on Object {
+      throw _errorMapper.unexpected();
+    }
+  }
+
+  @override
+  Future<({Uint8List bytes, Map<String, String> headers})> downloadBytes(
+    String path, {
+    Map<String, String>? queryParameters,
+    Object? cancelToken,
+  }) async {
+    try {
+      final Response<Uint8List> response = await _dio.get<Uint8List>(
+        path,
+        queryParameters: queryParameters,
+        cancelToken: cancelToken is CancelToken ? cancelToken : null,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final Map<String, String> headers = <String, String>{};
+      response.headers.forEach((String name, List<String> values) {
+        headers[name.toLowerCase()] = values.join(', ');
+      });
+      return (bytes: response.data!, headers: headers);
     } on DioException catch (error) {
       throw _errorMapper.fromDioException(error);
     } on ApiException {

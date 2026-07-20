@@ -18,7 +18,7 @@ import '../data/token_refresher.dart';
 
 /// Secure, platform-backed session storage.
 final Provider<SecureSessionStore> secureSessionStoreProvider =
-    Provider<SecureSessionStore>((ref) => const FlutterSecureSessionStore());
+    Provider<SecureSessionStore>((ref) => createSecureSessionStore());
 
 /// Refresh-token rotation client (bare Dio, no auth interceptors).
 final Provider<TokenRefresher> tokenRefresherProvider =

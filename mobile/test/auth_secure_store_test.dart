@@ -1,4 +1,4 @@
-import 'package:emsalist_mobile/features/auth/data/secure_session_store.dart';
+import 'package:emsalist_mobile/features/auth/data/secure_session_store_io.dart';
 import 'package:emsalist_mobile/features/auth/domain/auth_session.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
